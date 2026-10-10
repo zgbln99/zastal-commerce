@@ -1,92 +1,93 @@
 "use client";
-import {useEffect,useMemo,useRef,useState} from "react";
-import {ArrowDownToLine,ArrowLeft,ArrowRight,BarChart3,Box,CheckCircle2,ChevronDown,ClipboardList,Clock3,Hash,LayoutDashboard,LogIn,LogOut,Menu,Package,Printer,Search,Settings2,ShoppingBag,SlidersHorizontal,Tag,Truck,Warehouse,X} from "lucide-react";
-import JsBarcode from "jsbarcode";
-import "./admin.css";
-import Operations from "./Operations";
-import {QRCodeSVG} from "qrcode.react";
-import {catalog,fmt,type CatalogItem} from "../../lib/catalog";
 
-type Order={id:number;created:string;items:string;total:number;status:string};
-type Stock={id:number;sku:string;name:string;stock:number;price:number};
-const statusOptions=["nowe","potwierdzone","do_kompletacji","nanoszenie_dtf","kontrola_jakosci","spakowane","wyslane_demo","anulowane"];
-const statusText:Record<string,string>={nowe:"Nowe",potwierdzone:"Potwierdzone",do_kompletacji:"Kompletacja",nanoszenie_dtf:"Nanoszenie DTF",kontrola_jakosci:"Kontrola jakości",spakowane:"Spakowane",wyslane_demo:"Wysłane (demo)",anulowane:"Anulowane"};
-type View="dashboard"|"orders"|"warehouse"|"labels"|"dtf"|"operations";
-function ean13(id:number){
- const base="200"+String(id).padStart(9,"0");let sum=0;
- for(let i=0;i<12;i++)sum+=Number(base[i])*(i%2?3:1);
- return base+((10-sum%10)%10);
-}
-function Barcode({value}:{value:string}){
- const ref=useRef<SVGSVGElement|null>(null);
- useEffect(()=>{if(ref.current){JsBarcode(ref.current,value,{format:"EAN13",displayValue:true,height:54,width:1.7,margin:0,fontSize:12})}},[value]);
- return <svg ref={ref} aria-label={"Kod EAN-13 "+value}/>;
-}
-function dataCsv(rows:Order[]){
- const esc=(v:string)=>'"'+v.replaceAll('"','""')+'"';
- const str="ID;DATA;STATUS;KWOTA_PLN\n"+rows.map(o=>[o.id,esc(o.created),esc(o.status),(o.total/100).toFixed(2)].join(";")).join("\n");
- const url=URL.createObjectURL(new Blob(["\uFEFF"+str],{type:"text/csv;charset=utf-8"}));
- const a=document.createElement("a");a.href=url;a.download="zastal-zamowienia-demo.csv";a.click();URL.revokeObjectURL(url);
-}
-export default function Admin(){
- const [token,setToken]=useState("");
- const [secret,setSecret]=useState("");
- const [authorized,setAuthorized]=useState(false);
- const [view,setView]=useState<View>("dashboard");
- const [orders,setOrders]=useState<Order[]>([]);
- const [stock,setStock]=useState<Stock[]>([]);
- const [msg,setMsg]=useState("");
- const [busy,setBusy]=useState(false);
- const [search,setSearch]=useState("");
- const [labelId,setLabelId]=useState(1);
- const [labelQty,setLabelQty]=useState(1);
- const [sidebar,setSidebar]=useState(false);
- const req=async(path:string,options:RequestInit={},customToken?:string)=>{
-  const r=await fetch("/api"+path,{...options,headers:{"Content-Type":"application/json","Authorization":"Bearer "+(customToken??token),...options.headers}});
-  const d=await r.json();if(!r.ok)throw Error(d.error||"Błąd serwera");return d;
- };
- async function refresh(withToken?:string){
-  setBusy(true);setMsg("");
-  try{
-   const [o,p]=await Promise.all([req("/admin/orders",{},withToken),req("/products",{},withToken)]);
-   setOrders(o);setStock(p);setAuthorized(true);
-  }catch(e){setAuthorized(false);setMsg(e instanceof Error?e.message:"Nie można się zalogować")}
-  finally{setBusy(false)}
- }
- async function login(){setToken(secret);await refresh(secret)}
- async function updateStatus(id:number,status:string){
-  try{await req("/admin/orders/"+id,{method:"PATCH",body:JSON.stringify({status})});await refresh()}
-  catch(e){setMsg(e instanceof Error?e.message:"Nie udało się zmienić statusu")}
- }
- const shown=orders.filter(o=>(o.id+" "+o.status+" "+o.items).toLowerCase().includes(search.toLowerCase()));
- const activeOrders=orders.filter(o=>!["anulowane","wyslane_demo"].includes(o.status)).length;
- const revenue=orders.filter(o=>o.status!=="anulowane").reduce((a,b)=>a+b.total,0);
- const low=stock.filter(p=>p.stock<20).length;
- const sku=catalog.find(x=>x.id===labelId)||catalog[0];
- const labelData=stock.find(x=>x.id===labelId);
- const labelCode=ean13(labelId);
- const tabs:[View,string,React.ReactNode][]= [["dashboard","Przegląd",<LayoutDashboard key="1" size={19}/>],["orders","Zamówienia",<ShoppingBag key="2" size={19}/>],["warehouse","Magazyn",<Warehouse key="3" size={19}/>],["labels","Etykiety EAN / QR",<Tag key="4" size={19}/>],["dtf","Nadruki DTF",<Printer key="5" size={19}/>],["operations","Commerce 360°",<Settings2 key="6" size={19}/>]];
- const nav=<>{tabs.map(([key,title,icon])=><button key={key} className={"admin-navitem "+(view===key?"active":"")} onClick={()=>{setView(key);setSidebar(false)}}>{icon}<span>{title}</span>{view===key&&<ArrowRight size={16} className="nav-right"/>}</button>)}</>;
- if(!authorized)return <div className="login-shell"><div className="login-panel"><a href="/" className="admin-return"><ArrowLeft size={17}/> WRÓĆ DO SKLEPU</a><div className="login-mark">Z<span>.</span></div><span className="section-kicker">ZASTAL COMMERCE OS / DEMO</span><h1>CENTRUM<br/>OPERACYJNE.</h1><p>Panel zarządzania zamówieniami, magazynem i etykietami. Logowanie za pomocą klucza demonstracyjnego.</p><form onSubmit={e=>{e.preventDefault();login()}}><label htmlFor="admin-token">KLUCZ ADMINISTRATORA</label><input id="admin-token" type="password" value={secret} onChange={e=>setSecret(e.target.value)} placeholder="Wprowadź klucz dostępu" autoComplete="current-password"/><button className="button button-dark" disabled={busy} type="submit">{busy?"ŁĄCZENIE...":"OTWÓRZ PANEL"} <LogIn size={17}/></button></form>{msg&&<p className="login-error">{msg}</p>}<p className="login-caption">Panel jest przeznaczony wyłącznie do testów. Nie wprowadzaj prawdziwych danych klientów.</p></div><div className="login-visual"><span>THE GREEN<br/>CULTURE.</span><strong>1946</strong></div></div>;
- return <div className="admin-shell">
-   <aside className={"admin-sidebar "+(sidebar?"is-open":"")}>
-    <div className="admin-brand"><span className="admin-brand-z">Z</span><span><strong>ZASTAL<span className="admin-lime">.</span></strong><small>COMMERCE OS</small></span></div>
-    <div className="admin-sidebar-label">ZARZĄDZANIE</div>{nav}
-    <div className="admin-side-bottom"><div className="admin-demo"><span className="demo-indicator"/> ŚRODOWISKO DEMO</div><a href="/" target="_blank" rel="noreferrer">Przejdź do sklepu <ArrowRight size={15}/></a><button onClick={()=>{setAuthorized(false);setToken("");setSecret("")}}><LogOut size={16}/> Wyloguj</button></div>
-   </aside>
-   <div className="admin-main">
-    <header className="admin-topbar"><button className="admin-mobile-menu" onClick={()=>setSidebar(!sidebar)}><Menu/></button><div className="admin-breadcrumb">ZASTAL STORE <span>/</span> {tabs.find(t=>t[0]===view)?.[1]}</div><div className="admin-top-right"><span className="admin-live"><span/>SYSTEM ONLINE</span><button onClick={()=>refresh()}>ODŚWIEŻ <ArrowRight size={16}/></button></div></header>
-    <div className="admin-page">
-     <div className="admin-page-heading"><div><span className="section-kicker">ZASTAL COMMERCE / MANAGEMENT</span><h1>{view==="dashboard"?"PANEL GŁÓWNY":view==="orders"?"ZAMÓWIENIA":view==="warehouse"?"STANY MAGAZYNOWE":view==="labels"?"ETYKIETY PRODUKTÓW":view==="operations"?"CENTRUM OPERACYJNE":"PRODUKCJA DTF"}<span>.</span></h1><p>{view==="dashboard"?"Przejrzysty obraz działalności sklepu, zamówień i magazynu.":view==="orders"?"Wszystkie testowe zamówienia w jednym miejscu.":view==="warehouse"?"Stan produktów gotowych do sprzedaży i kompletacji.":view==="labels"?"Generuj i drukuj kody EAN-13 oraz QR dla produktów.":view==="operations"?"Pełna operacyjna obsługa wariantów, zamówień i zakupionych transferów DTF.":"Zlecenia nanoszenia gotowych transferów DTF na odzież."}</p></div><span className="admin-version">WERSJA 0.2 / DEMO</span></div>
-     {msg&&<div className="admin-alert">{msg}<button onClick={()=>setMsg("")}><X size={16}/></button></div>}
-     {view==="operations"&&<Operations token={token}/>}
-     {view==="dashboard"&&<><div className="admin-metrics"><div><span>ŁĄCZNA WARTOŚĆ ZAMÓWIEŃ</span><strong>{fmt(revenue)}</strong><small>Wartość zamówień testowych, bez anulowanych</small><BarChart3 size={26}/></div><div><span>ZAMÓWIENIA W TOKU</span><strong>{activeOrders}</strong><small>Wymagają obsługi</small><ClipboardList size={26}/></div><div><span>PRODUKTY</span><strong>{stock.length}</strong><small>Pozycje w katalogu</small><Package size={26}/></div><div><span>NISKIE STANY</span><strong>{low}</strong><small>Produkty poniżej 20 sztuk</small><Warehouse size={26}/></div></div><div className="admin-two-col"><section className="admin-panel"><div className="admin-panel-head"><div><span>OSTATNIA AKTYWNOŚĆ</span><h2>Najnowsze zamówienia</h2></div><button onClick={()=>setView("orders")}>ZOBACZ WSZYSTKIE <ArrowRight size={15}/></button></div>{orders.length?<table className="admin-table"><thead><tr><th>ZAMÓWIENIE</th><th>WARTOŚĆ</th><th>STATUS</th></tr></thead><tbody>{orders.slice(0,7).map(o=><tr key={o.id}><td><b>ZS-{String(o.id).padStart(5,"0")}</b><small>{new Date(o.created).toLocaleString("pl-PL")}</small></td><td>{fmt(o.total)}</td><td><span className={"status-badge status-"+o.status}>{statusText[o.status]||o.status}</span></td></tr>)}</tbody></table>:<div className="admin-empty">Nie ma jeszcze zamówień testowych.</div>}</section><section className="admin-panel"><div className="admin-panel-head"><div><span>OPERACJE</span><h2>Szybkie działania</h2></div></div><div className="admin-quicklinks"><button onClick={()=>setView("orders")}><ShoppingBag size={24}/><span>Obsłuż zamówienia</span><ArrowRight size={17}/></button><button onClick={()=>setView("warehouse")}><Warehouse size={24}/><span>Sprawdź magazyn</span><ArrowRight size={17}/></button><button onClick={()=>setView("labels")}><Tag size={24}/><span>Drukuj etykiety EAN / QR</span><ArrowRight size={17}/></button><button onClick={()=>setView("dtf")}><Printer size={24}/><span>Proces nanoszenia DTF</span><ArrowRight size={17}/></button></div></section></div></>}
-     {view==="orders"&&<section className="admin-panel"><div className="admin-panel-head"><div><span>SPRZEDAŻ / TEST</span><h2>Rejestr zamówień <small>({shown.length})</small></h2></div><button onClick={()=>dataCsv(shown)}><ArrowDownToLine size={17}/> EKSPORT CSV</button></div><div className="admin-search"><Search size={19}/><input placeholder="Szukaj po numerze, statusie lub produkcie..." value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="table-wrap"><table className="admin-table"><thead><tr><th>NUMER / DATA</th><th>POZYCJE</th><th>WARTOŚĆ</th><th>STATUS — ZMIEŃ</th></tr></thead><tbody>{shown.map(o=><tr key={o.id}><td><b>ZS-{String(o.id).padStart(5,"0")}</b><small>{new Date(o.created).toLocaleString("pl-PL")}</small></td><td><span className="admin-item-count">{(()=>{try{return JSON.parse(o.items).length}catch{return 0}})()} poz.</span></td><td><strong>{fmt(o.total)}</strong></td><td><select className="status-select" value={o.status} onChange={e=>updateStatus(o.id,e.target.value)}>{statusOptions.map(s=><option key={s} value={s}>{statusText[s]}</option>)}</select></td></tr>)}</tbody></table>{!shown.length&&<div className="admin-empty">Brak zamówień do wyświetlenia.</div>}</div></section>}
-     {view==="warehouse"&&<section className="admin-panel"><div className="admin-panel-head"><div><span>STANY / SKU</span><h2>Produkty na magazynie</h2></div><button onClick={()=>setView("labels")}><Tag size={17}/> GENERUJ ETYKIETY</button></div><div className="table-wrap"><table className="admin-table"><thead><tr><th>PRODUKT</th><th>SKU</th><th>CENA</th><th>STAN</th><th>STATUS</th></tr></thead><tbody>{stock.map(p=>{let item=catalog.find(x=>x.id===p.id);return <tr key={p.id}><td><div className="admin-product-cell"><img src={item?.image||""} alt=""/><b>{p.name}</b></div></td><td><span className="admin-sku">{p.sku}</span></td><td>{fmt(p.price)}</td><td><strong>{p.stock} szt.</strong></td><td><span className={"status-badge "+(p.stock<20?"low-stock":"in-stock")}>{p.stock<20?"NISKI STAN":"DOSTĘPNY"}</span></td></tr>})}</tbody></table></div><div className="panel-note"><Box size={18}/> To podgląd magazynu demonstracyjnego. Obsługa korekt, przyjęć i rezerwacji per rozmiar zostanie dodana w kolejnym etapie.</div></section>}
-     {view==="labels"&&<div className="labels-layout"><section className="admin-panel"><div className="admin-panel-head"><div><span>MAGAZYN / IDENTYFIKACJA</span><h2>Generator etykiet</h2></div></div><div className="label-form"><label>WYBIERZ PRODUKT</label><select value={labelId} onChange={e=>setLabelId(Number(e.target.value))}>{catalog.map(p=><option key={p.id} value={p.id}>{p.sku} — {p.name}</option>)}</select><label>LICZBA ETYKIET</label><div className="label-qty"><button onClick={()=>setLabelQty(Math.max(1,labelQty-1))}>−</button><input type="number" min={1} max={48} value={labelQty} onChange={e=>setLabelQty(Math.max(1,Math.min(48,Number(e.target.value)||1)))}/><button onClick={()=>setLabelQty(Math.min(48,labelQty+1))}>+</button></div><p>Kod EAN-13 ma wewnętrzny prefiks 200, przeznaczony do identyfikacji w obrębie sklepu. To <strong>nie jest zarejestrowany GTIN firmy</strong>.</p><button className="button button-dark" onClick={()=>window.print()}><Printer size={18}/> DRUKUJ {labelQty} {labelQty===1?"ETYKIETĘ":"ETYKIET"}</button></div></section><section className="admin-panel label-preview-panel"><div className="admin-panel-head"><div><span>PODGLĄD WYDRUKU</span><h2>Etykieta 60 × 40 mm</h2></div></div><div className="label-paper"><div className="printed-label"><div className="printed-label-name"><b>ZASTAL<span>.</span></b><small>STORE / SKU</small></div><strong>{sku.name}</strong><div className="label-codes"><div><Barcode value={labelCode}/></div><QRCodeSVG value={"ZASTAL|"+sku.sku+"|"+labelCode} size={68} marginSize={0}/></div><div className="printed-label-foot"><span>{sku.sku}</span><span>{fmt(labelData?.price??sku.price)}</span></div></div></div><p className="label-info"><CheckCircle2 size={17}/> Kody z kontrolną cyfrą EAN-13 oraz QR można skanować standardowym czytnikiem. Wersja demonstracyjna.</p></section><div className="print-area">{Array.from({length:labelQty},(_,i)=><div key={i} className="printed-label"><div className="printed-label-name"><b>ZASTAL<span>.</span></b><small>STORE / SKU</small></div><strong>{sku.name}</strong><div className="label-codes"><div><Barcode value={labelCode}/></div><QRCodeSVG value={"ZASTAL|"+sku.sku+"|"+labelCode} size={68}/></div><div className="printed-label-foot"><span>{sku.sku}</span><span>{fmt(labelData?.price??sku.price)}</span></div></div>)}</div></div>}
-     {view==="dtf"&&<div className="admin-two-col"><section className="admin-panel"><div className="admin-panel-head"><div><span>PRZYGOTOWANIE ODZIEŻY</span><h2>Nadruki DTF od dostawców</h2></div></div><div className="dtf-steps">{[["01","Zamówienie gotowych transferów","Klub kupuje gotowe nadruki DTF od dostawcy."],["02","Przyjęcie transferów","Ewidencja otrzymanych wzorów i dostępnych sztuk."],["03","Rezerwacja koszulki i nadruku","Sprawdzenie dostępności obu elementów."],["04","Nanoszenie na odzież","Pracownik potwierdza aplikację transferu."],["05","Kontrola jakości i pakowanie","Gotowy produkt zostaje wydany do kompletacji."]].map(x=><div className="dtf-step" key={x[0]}><span>{x[0]}</span><div><strong>{x[1]}</strong><p>{x[2]}</p></div></div>)}</div></section><section className="admin-panel"><div className="admin-panel-head"><div><span>PLANOWANY MODUŁ</span><h2>Centrum produkcyjne</h2></div></div><div className="dtf-note"><Printer size={38}/><h3>Moduł DTF w przygotowaniu</h3><p>Ten ekran przedstawia zatwierdzony proces. Zakupy transferów, partie produkcyjne, pobrania z magazynu i historia operatorów zostaną podłączone do bazy danych w kolejnym wydaniu.</p><button className="button button-dark" onClick={()=>setView("orders")}>PRZEJDŹ DO ZAMÓWIEŃ <ArrowRight size={16}/></button></div></section></div>}
-    </div>
-   </div>
-   {sidebar&&<div className="admin-mobile-backdrop" onClick={()=>setSidebar(false)}/>}
- </div>;
+import {useEffect, useRef, useState, type ReactNode} from "react";
+import {Activity, AlertCircle, ArrowLeft, ArrowRight, ClipboardCheck, LayoutDashboard, LogIn, LogOut, Menu, Package, RefreshCw, ShoppingBag, Tag, Warehouse, X} from "lucide-react";
+import Operations, {AdminApiError, emptyOperationsData, formatDate, formatMoney, isClosedOrder, isClosedTask, loadOperationsData, orderNumber, StatusBadge, type OperationsData, type OperationsTab} from "./Operations";
+import "./admin.css";
+
+const views:{id:OperationsTab; label:string; title:string; description:string; icon:ReactNode}[] = [
+  {id:"dashboard", label:"Przegląd", title:"Przegląd sklepu", description:"Zamówienia i zadania wymagające uwagi.", icon:<LayoutDashboard size={19}/>},
+  {id:"orders", label:"Zamówienia", title:"Zamówienia", description:"Szczegóły, kompletacja i historia realizacji.", icon:<ShoppingBag size={19}/>},
+  {id:"inventory", label:"Magazyn", title:"Magazyn wariantów", description:"Dostępność każdego rozmiaru i korekty z uzasadnieniem.", icon:<Warehouse size={19}/>},
+  {id:"transfers", label:"Zakupy DTF", title:"Zakupy transferów DTF", description:"Gotowe transfery od dostawców i przyjęcia dostaw.", icon:<Package size={19}/>},
+  {id:"production", label:"Nanoszenie DTF", title:"Nanoszenie i kontrola", description:"Przydzielanie transferów do zamówień oraz etapy pracy.", icon:<ClipboardCheck size={19}/>},
+  {id:"labels", label:"Etykiety", title:"Etykiety EAN i QR", description:"Weryfikacja kodów i wydruk dla konkretnych wariantów.", icon:<Tag size={19}/>},
+  {id:"audit", label:"Historia", title:"Historia operacji", description:"Zapisane działania i ruchy magazynowe.", icon:<Activity size={19}/>},
+];
+
+export default function Admin() {
+  const [token, setToken] = useState("");
+  const [secret, setSecret] = useState("");
+  const [activeTab, setActiveTab] = useState<OperationsTab>("dashboard");
+  const [data, setData] = useState<OperationsData>(emptyOperationsData);
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [requestedOrderId, setRequestedOrderId] = useState<number | null>(null);
+  const requestId = useRef(0);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const navigation = useRef<HTMLElement>(null);
+  const currentView = views.find(view => view.id === activeTab) || views[0];
+  const logout = (reason = "") => {
+    requestId.current += 1; setToken(""); setSecret(""); setData(emptyOperationsData); setUpdatedAt("");
+    setSidebarOpen(false); setRequestedOrderId(null); setActiveTab("dashboard"); setMessage(reason); setLoading(false);
+  };
+  const refresh = async (key = token):Promise<boolean> => {
+    const id = ++requestId.current;
+    setLoading(true); setMessage("");
+    try {
+      const snapshot = await loadOperationsData(key);
+      if (id !== requestId.current) return false;
+      setData(snapshot); setUpdatedAt(new Date().toISOString()); return true;
+    } catch (exception) {
+      if (id !== requestId.current) return false;
+      if (exception instanceof AdminApiError && [401, 403].includes(exception.status)) logout("Klucz dostępu jest nieprawidłowy lub wygasł. Wprowadź go ponownie.");
+      else setMessage(exception instanceof Error ? exception.message : "Nie można pobrać danych. Spróbuj ponownie.");
+      return false;
+    } finally {if (id === requestId.current) setLoading(false);}
+  };
+  const login = async () => {const key = secret.trim(); if (!key) return; if (await refresh(key)) {setToken(key); setSecret("");}};
+  const selectView = (id:OperationsTab) => {setActiveTab(id); setSidebarOpen(false);};
+  const openOrder = (id:number) => {selectView("orders"); setRequestedOrderId(id);};
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    navigation.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const onKey = (event:KeyboardEvent) => {
+      if (event.key === "Escape") {setSidebarOpen(false); menuButton.current?.focus();}
+      if (event.key !== "Tab" || !navigation.current) return;
+      const controls = Array.from(navigation.current.querySelectorAll<HTMLElement>("button, a[href]")).filter(element => element.getClientRects().length > 0);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {event.preventDefault(); last?.focus();}
+      else if (!event.shiftKey && document.activeElement === last) {event.preventDefault(); first?.focus();}
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {document.body.style.overflow = overflow; document.removeEventListener("keydown", onKey);};
+  }, [sidebarOpen]);
+
+  if (!token) return <main className="admin-login"><section className="admin-login-panel"><a href="/" className="admin-return"><ArrowLeft size={17}/>Wróć do sklepu</a><div className="admin-login-brand"><img src="/assets/zastal-logo.svg" alt="Zastal"/><span>Panel sklepu</span></div><h1>Dostęp do panelu</h1><p>Zarządzaj zamówieniami, wariantami produktów i nanoszeniem transferów DTF.</p><form onSubmit={event => {event.preventDefault(); void login();}}><label htmlFor="admin-token">Klucz dostępu</label><input id="admin-token" type="password" value={secret} onChange={event => setSecret(event.target.value)} placeholder="Wprowadź klucz administratora" autoComplete="off" required/><button className="admin-primary" disabled={loading || !secret.trim()} type="submit">{loading ? "Sprawdzanie dostępu…" : "Otwórz panel"}<LogIn size={18}/></button></form>{message && <p className="admin-login-error" role="alert"><AlertCircle size={17}/>{message}</p>}<p className="admin-login-note">Środowisko testowe. Zamówienia, płatności i wysyłki są symulacjami.</p></section><div className="admin-login-aside" aria-hidden="true"><div className="admin-login-emblem"><img src="/assets/zastal-logo.svg" alt=""/></div><p>Sklep kibica Zastalu</p><span>Zaplecze sklepu w jednym miejscu</span></div></main>;
+
+  const activeOrders = data.orders.filter(order => !isClosedOrder(order.status));
+  const orderValue = data.orders.filter(order => order.status !== "anulowane").reduce((sum, order) => sum + order.total, 0);
+  const lowStock = data.inventory.filter(variant => variant.stock <= 2).sort((first, second) => first.stock - second.stock || first.id - second.id);
+  const activeTasks = data.tasks.filter(task => !isClosedTask(task.status));
+  const availableTransfers = data.batches.reduce((sum, batch) => sum + batch.available, 0);
+  const awaitingTransfers = data.batches.reduce((sum, batch) => sum + Math.max(0, batch.ordered - batch.received), 0);
+  const metrics = [
+    {label:"Zamówienia w toku", value:String(activeOrders.length), note:"Z ostatnich 300 zapisanych zamówień", icon:<ShoppingBag size={20}/>, tab:"orders" as OperationsTab},
+    {label:"Wartość zamówień testowych", value:formatMoney(orderValue), note:"Ostatnie 300 zamówień, bez anulowanych", icon:<LayoutDashboard size={20}/>, tab:"orders" as OperationsTab},
+    {label:"Niskie stany wariantów", value:String(lowStock.length), note:"Dostępność 0–2 szt. w rozmiarze", icon:<Warehouse size={20}/>, tab:"inventory" as OperationsTab},
+    {label:"Nanoszenie w toku", value:String(activeTasks.length), note:"Aktywne zlecenia DTF", icon:<ClipboardCheck size={20}/>, tab:"production" as OperationsTab},
+  ];
+
+  return <div className="admin-shell">
+    {sidebarOpen && <button className="admin-mobile-backdrop" aria-label="Zamknij nawigację" tabIndex={-1} onClick={() => {setSidebarOpen(false); menuButton.current?.focus();}}/>}
+    <aside ref={navigation} className={"admin-sidebar" + (sidebarOpen ? " is-open" : "")} id="admin-navigation" aria-label="Nawigacja panelu"><div className="admin-brand"><img src="/assets/zastal-logo.svg" alt="Zastal"/><div><strong>Zastal</strong><span>Panel sklepu</span></div><button className="admin-sidebar-close" aria-label="Zamknij nawigację" onClick={() => {setSidebarOpen(false); menuButton.current?.focus();}}><X size={20}/></button></div><nav>{views.map(view => <button key={view.id} className={"admin-navitem" + (activeTab === view.id ? " active" : "")} aria-current={activeTab === view.id ? "page" : undefined} onClick={() => selectView(view.id)}>{view.icon}<span>{view.label}</span>{view.id === "orders" && activeOrders.length > 0 && <b>{activeOrders.length}</b>}{view.id === "production" && activeTasks.length > 0 && <b>{activeTasks.length}</b>}</button>)}</nav><div className="admin-side-bottom"><a href="/"><ArrowLeft size={17}/>Przejdź do sklepu</a><button onClick={() => logout()}><LogOut size={17}/>Wyloguj</button></div></aside>
+    <main className="admin-main"><header className="admin-topbar"><div className="admin-topbar-left"><button ref={menuButton} className="admin-mobile-menu" aria-label="Otwórz nawigację" aria-expanded={sidebarOpen} aria-controls="admin-navigation" onClick={() => setSidebarOpen(true)}><Menu size={22}/></button><span className="admin-breadcrumb">Panel sklepu <span>/</span> <strong>{currentView.label}</strong></span></div><div className="admin-topbar-right"><span>{updatedAt ? "Dane z " + formatDate(updatedAt) : ""}</span><button className="admin-refresh" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} className={loading ? "admin-spinning" : ""}/><span>{loading ? "Odświeżanie…" : "Odśwież"}</span></button></div></header><div className="admin-page"><div className="admin-demo-notice"><AlertCircle size={17}/><p>Środowisko testowe. Zamówienia, płatności i wysyłki są symulacjami.</p></div><div className="admin-page-heading"><div><h1>{currentView.title}</h1><p>{currentView.description}</p></div></div>{message && <div className="admin-alert" role="alert"><AlertCircle size={18}/><span>{message} Wyświetlone dane mogą być nieaktualne.</span><button aria-label="Zamknij komunikat" onClick={() => setMessage("")}><X size={17}/></button></div>}
+      {activeTab === "dashboard" && <div className="admin-dashboard" aria-busy={loading}><div className="admin-metrics">{metrics.map(metric => <button key={metric.label} className="admin-metric" onClick={() => selectView(metric.tab)}><div><span>{metric.label}</span>{metric.icon}</div><strong>{metric.value}</strong><small>{metric.note}</small></button>)}</div><div className="admin-dashboard-grid"><section className="admin-panel"><div className="admin-panel-head"><div><h2>Najnowsze zamówienia</h2><p>{activeOrders.length} w toku · {data.orders.length} w pobranych danych</p></div><button className="admin-text-link" onClick={() => selectView("orders")}>Wszystkie<ArrowRight size={15}/></button></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Zamówienie</th><th>Wartość</th><th>Status</th><th><span className="admin-sr-only">Otwórz szczegóły</span></th></tr></thead><tbody>{data.orders.slice(0, 6).map(order => <tr key={order.id}><td><strong>{orderNumber(order.id)}</strong><small>{formatDate(order.created)}</small></td><td className="admin-nowrap">{formatMoney(order.total)}</td><td><StatusBadge status={order.status}/></td><td><button className="admin-row-action" aria-label={"Otwórz " + orderNumber(order.id)} onClick={() => openOrder(order.id)}><ArrowRight size={17}/></button></td></tr>)}</tbody></table></div>{!data.orders.length && <p className="admin-empty">Nie ma jeszcze zamówień testowych.</p>}</section><section className="admin-panel"><div className="admin-panel-head"><div><h2>Warianty do uzupełnienia</h2><p>Stan 0–2 szt. w magazynie</p></div><button className="admin-text-link" onClick={() => selectView("inventory")}>Magazyn<ArrowRight size={15}/></button></div><div className="admin-low-stock">{lowStock.slice(0, 6).map(variant => <div key={variant.id}><div><strong>{variant.name} <span>/ {variant.size}</span></strong><small>{variant.sku}</small></div><b className={variant.stock === 0 ? "admin-no-stock" : ""}>{variant.stock} szt.</b></div>)}{!lowStock.length && <p className="admin-empty">Wszystkie warianty mają zapas powyżej 2 szt.</p>}</div>{lowStock.length > 6 && <button className="admin-panel-footer" onClick={() => selectView("inventory")}>Pozostałe warianty: {lowStock.length - 6}<ArrowRight size={15}/></button>}</section></div><div className="admin-dashboard-secondary"><section className="admin-panel admin-work-summary"><div className="admin-panel-head"><div><h2>Transfery i nanoszenie DTF</h2><p>Gotowe transfery kupowane od dostawców</p></div><Package size={20}/></div><div className="admin-transfer-summary"><button onClick={() => selectView("transfers")}><strong>{availableTransfers}</strong><span>Transferów dostępnych</span><ArrowRight size={16}/></button><button onClick={() => selectView("transfers")}><strong>{awaitingTransfers}</strong><span>Transferów do przyjęcia</span><ArrowRight size={16}/></button><button onClick={() => selectView("production")}><strong>{activeTasks.length}</strong><span>Aktywnych zleceń</span><ArrowRight size={16}/></button></div></section><section className="admin-panel"><div className="admin-panel-head"><div><h2>Ostatnie działania</h2><p>Na podstawie zapisanej historii</p></div><button className="admin-text-link" onClick={() => selectView("audit")}>Historia<ArrowRight size={15}/></button></div><div className="admin-recent-activity">{data.activity.slice(0, 3).map(event => <div key={event.id}><span/><div><p>{event.note}</p><small>{formatDate(event.created)}</small></div></div>)}{!data.activity.length && <p className="admin-empty">Brak zapisanych działań.</p>}</div></section></div></div>}
+      <Operations token={token} activeTab={activeTab} data={data} loading={loading} onRefresh={() => refresh()} onAuthError={() => logout("Dostęp do panelu wygasł. Wprowadź klucz ponownie.")} requestedOrderId={requestedOrderId} onOrderOpened={() => setRequestedOrderId(null)}/>
+    </div></main>
+  </div>;
 }

@@ -1,12 +1,14 @@
-"""Zastal Commerce OS v0.3 – transactional demo API.
+"""Zastal Store v0.4 – transactional demo API.
 
 No live payments, customer identity, or carrier integrations. Uses built-in
 SQLite with explicit transactions, variant stock ledger, purchased DTF transfers,
 production workflow and audit events. Keep behind HTTPS reverse proxy.
 """
 import datetime as dt
+import hashlib
 import json
 import os
+import re
 import secrets
 import sqlite3
 import threading
@@ -26,6 +28,8 @@ VALID_STATUS = (
 PRINT_STATUS = ("oczekuje", "przygotowanie", "nanoszenie", "kontrola", "gotowe", "odrzucone")
 LIMITS = defaultdict(deque)
 RATE_LOCK = threading.Lock()
+SHIPPING = {"odbior": 0, "paczkomat": 1299, "kurier": 1499}
+FREE_SHIPPING = 25000
 
 def stamp():
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
@@ -81,6 +85,11 @@ def init():
         CREATE TABLE IF NOT EXISTS audit_log(
            id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,
            object_id TEXT NOT NULL,note TEXT NOT NULL,created TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS order_receipts(
+           order_id INTEGER PRIMARY KEY,tracking_token TEXT UNIQUE NOT NULL,
+           fulfillment TEXT NOT NULL,shipping_fee INTEGER NOT NULL,subtotal INTEGER NOT NULL,
+           idempotency_key TEXT UNIQUE,fingerprint TEXT NOT NULL,
+           FOREIGN KEY(order_id) REFERENCES orders(id));
         """)
         products = c.execute("SELECT * FROM products ORDER BY id").fetchall()
         for product in products:
@@ -119,7 +128,7 @@ def catalog(c):
 class Invalid(Exception): pass
 
 class Handler(BaseHTTPRequestHandler):
-    server_version="ZastalDemo/0.3"
+    server_version="ZastalDemo/0.4"
     def log_message(self,fmt,*args):
         # Public logs exclude supplied auth credentials and request bodies.
         pass
@@ -162,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path=urlparse(self.path).path
-        if path=="/health":return self.respond(200,{"ok":True,"version":"0.3","demo":True})
+        if path=="/health":return self.respond(200,{"ok":True,"version":"0.4","demo":True})
         if not self.access(path):return
         try:
             with connect() as c:
@@ -172,6 +181,19 @@ class Handler(BaseHTTPRequestHandler):
                     pid=int(path.rsplit("/",1)[1])
                     p=next((x for x in catalog(c) if x["id"]==pid),None)
                     return self.respond(200,p) if p else self.respond(404,{"error":"Produkt nie istnieje"})
+                if path.startswith("/api/orders/"):
+                    try:oid=int(path.rsplit("/",1)[1])
+                    except ValueError:return self.respond(404,{"error":"Nie znaleziono zamówienia"})
+                    token=parse_qs(urlparse(self.path).query).get("token",[""])[0]
+                    receipt=c.execute("SELECT * FROM order_receipts WHERE order_id=?",(oid,)).fetchone()
+                    if not receipt or not secrets.compare_digest(receipt["tracking_token"],token):
+                        return self.respond(404,{"error":"Nie znaleziono zamówienia"})
+                    o=asdict(c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone())
+                    o["items"]=json.loads(o["items"])
+                    o.update({key:receipt[key] for key in ("fulfillment","shipping_fee","subtotal")})
+                    o["events"]=[dict(x) for x in c.execute("SELECT created,status FROM events WHERE order_id=? ORDER BY id",(oid,))]
+                    o["demo"]=True
+                    return self.respond(200,o)
                 if path=="/api/admin/orders":
                     return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM orders ORDER BY id DESC LIMIT 300")])
                 if path.startswith("/api/admin/orders/"):
@@ -180,6 +202,8 @@ class Handler(BaseHTTPRequestHandler):
                     o["items"]=json.loads(o["items"])
                     o["events"]=[dict(x) for x in c.execute("SELECT * FROM events WHERE order_id=? ORDER BY id DESC",(oid,))]
                     o["production"]=[dict(x) for x in c.execute("SELECT * FROM production_tasks WHERE order_id=? ORDER BY id",(oid,))]
+                    receipt=c.execute("SELECT fulfillment,shipping_fee,subtotal FROM order_receipts WHERE order_id=?",(oid,)).fetchone()
+                    if receipt:o.update(dict(receipt))
                     return self.respond(200,o)
                 if path=="/api/admin/inventory":
                     q="""SELECT v.id,v.product_id,v.size,v.sku,v.ean,v.stock,
@@ -219,11 +243,29 @@ class Handler(BaseHTTPRequestHandler):
                 if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele zamówień testowych. Spróbuj później."})
                 lines=data.get("items")
                 if not isinstance(lines,list) or not 1<=len(lines)<=20:raise Invalid("Pusty lub nieprawidłowy koszyk")
+                fulfillment=data.get("fulfillment","odbior")
+                if not isinstance(fulfillment,str) or fulfillment not in SHIPPING:raise Invalid("Nieprawidłowa metoda dostawy")
+                key=data.get("idempotency_key")
+                if key is not None and (not isinstance(key,str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}",key)):raise Invalid("Nieprawidłowy identyfikator zamówienia")
+                normalized=[]
+                for line in lines:
+                    if not isinstance(line,dict):raise Invalid("Nieprawidłowy produkt")
+                    pid=line.get("id",0);qty=line.get("quantity",0)
+                    if isinstance(pid,bool) or not isinstance(pid,int) or isinstance(qty,bool) or not isinstance(qty,int):raise Invalid("Nieprawidłowy produkt lub ilość")
+                    size=str(line.get("size") or "UNI").strip().upper()
+                    if qty<1 or qty>20 or len(size)>10:raise Invalid("Nieprawidłowy rozmiar lub ilość")
+                    normalized.append({"id":pid,"quantity":qty,"size":size})
+                fingerprint=hashlib.sha256(json.dumps({"items":normalized,"fulfillment":fulfillment},sort_keys=True).encode()).hexdigest()
                 result=[]
                 with connect() as c:
                     c.execute("BEGIN IMMEDIATE")
+                    if key:
+                        previous=c.execute("SELECT r.*,o.total FROM order_receipts r JOIN orders o ON o.id=r.order_id WHERE idempotency_key=?",(key,)).fetchone()
+                        if previous:
+                            if previous["fingerprint"]!=fingerprint:return self.respond(409,{"error":"Ten identyfikator jest już przypisany do innego koszyka. Odśwież zamówienie."})
+                            return self.respond(200,{"id":previous["order_id"],"total":previous["total"],"tracking_token":previous["tracking_token"]})
                     total=0
-                    for line in lines:
+                    for line in normalized:
                         if not isinstance(line,dict):raise Invalid("Nieprawidłowy produkt")
                         pid=int(line.get("id",0));qty=int(line.get("quantity",0))
                         size=str(line.get("size") or "UNI").strip().upper()
@@ -238,10 +280,15 @@ class Handler(BaseHTTPRequestHandler):
                         total+=p["price"]*qty
                         result.append({"sku":p["sku"],"variant_sku":v["sku"],"name":p["name"],"size":size,"qty":qty,"unit_price":p["price"]})
                     now=stamp()
+                    subtotal=total
+                    shipping=0 if subtotal>=FREE_SHIPPING else SHIPPING[fulfillment]
+                    total+=shipping
                     cur=c.execute("INSERT INTO orders(created,items,total,status) VALUES(?,?,?,?)",(now,json.dumps(result,ensure_ascii=False),total,"nowe"))
+                    tracking=secrets.token_urlsafe(32)
+                    c.execute("INSERT INTO order_receipts VALUES(?,?,?,?,?,?,?)",(cur.lastrowid,tracking,fulfillment,shipping,subtotal,key,fingerprint))
                     c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(cur.lastrowid,now,"nowe"))
                     audit(c,"order",cur.lastrowid,"Utworzono zamówienie demonstracyjne")
-                return self.respond(201,{"id":cur.lastrowid,"total":total})
+                return self.respond(201,{"id":cur.lastrowid,"total":total,"tracking_token":tracking})
             if path=="/api/admin/transfers":
                 design=str(data.get("design","")).strip()
                 supplier=str(data.get("supplier","")).strip()
@@ -345,5 +392,5 @@ if __name__=="__main__":
     init()
     host=os.environ.get("ZASTAL_HOST","127.0.0.1")
     port=int(os.environ.get("ZASTAL_PORT","8880"))
-    print(f"Zastal Commerce OS demo API listening on {host}:{port}",flush=True)
+    print(f"Zastal Store demo API listening on {host}:{port}",flush=True)
     ThreadingHTTPServer((host,port),Handler).serve_forever()

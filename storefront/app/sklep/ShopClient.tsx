@@ -1,75 +1,43 @@
 "use client";
 import Link from "next/link";
-import {useEffect,useMemo,useState} from "react";
-import {ArrowLeft,ArrowRight,ArrowUpRight,Check,ChevronDown,Grid2X2,Heart,List,Menu,Search,ShoppingBag,SlidersHorizontal,X} from "lucide-react";
-import {catalog,fmt,type CatalogItem} from "../../lib/catalog";
-type Variant={size:string;stock:number};
-type LiveItem={id:number;variants:Variant[]};
-const categories=["Wszystko","Koszulki","Bluzy","Akcesoria","Dzieci"];
-const sizes=["S","M","L","XL","XXL","116","128","140","152","164"];
-export default function ShopClient(){
- const [category,setCategory]=useState("Wszystko");
- const [search,setSearch]=useState("");
- const [sort,setSort]=useState("popular");
- const [maxPrice,setMaxPrice]=useState(250);
- const [sizesSelected,setSizesSelected]=useState<string[]>([]);
- const [available,setAvailable]=useState(false);
- const [list,setList]=useState(false);
- const [drawer,setDrawer]=useState(false);
- const [live,setLive]=useState<Record<number,Variant[]>>({});
- const [favorites,setFavorites]=useState<number[]>([]);
- const [count,setCount]=useState(0);
- useEffect(()=>{
-  const params=new URLSearchParams(location.search);
-  const c=params.get("category");
-  if(c&&categories.includes(c))setCategory(c);
-  const q=params.get("q");if(q)setSearch(q.slice(0,100));
-  try{const arr=JSON.parse(localStorage.getItem("zastal_store_cart_v2")||"[]");setCount(arr.reduce((a:number,b:{quantity:number})=>a+b.quantity,0))}catch{}
-  try{setFavorites(JSON.parse(localStorage.getItem("zastal_store_favs")||"[]"))}catch{}
-  fetch("/api/catalog").then(r=>r.json()).then((arr:LiveItem[])=>setLive(Object.fromEntries(arr.map(x=>[x.id,x.variants])))).catch(()=>{});
- },[]);
- const switchCategory=(c:string)=>{
-  setCategory(c);setDrawer(false);
-  const u=new URL(window.location.href);if(c==="Wszystko")u.searchParams.delete("category");else u.searchParams.set("category",c);
-  history.replaceState(null,"",u.toString());
- };
- const results=useMemo(()=>{
-  let items=catalog.filter(p=>{
-   const variants=live[p.id]||[];
-   const total=variants.length?variants.reduce((a,b)=>a+b.stock,0):p.stock;
-   const isMatch=!search.trim()||[p.name,p.category,p.subtitle,p.sku].join(" ").toLowerCase().includes(search.trim().toLowerCase());
-   const sizeMatch=!sizesSelected.length||sizesSelected.some(s=>variants.some(v=>v.size===s&&v.stock>0));
-   return isMatch&&(category==="Wszystko"||p.category===category)&&p.price<=maxPrice*100&&(!available||total>0)&&sizeMatch;
-  });
-  if(sort==="low")items=[...items].sort((a,b)=>a.price-b.price);
-  if(sort==="high")items=[...items].sort((a,b)=>b.price-a.price);
-  if(sort==="alpha")items=[...items].sort((a,b)=>a.name.localeCompare(b.name,"pl"));
-  return items;
- },[category,search,sort,maxPrice,sizesSelected,available,live]);
- const toggleFavorite=(id:number)=>{
-  let next=favorites.includes(id)?favorites.filter(x=>x!==id):[...favorites,id];
-  setFavorites(next);localStorage.setItem("zastal_store_favs",JSON.stringify(next));
- };
- const reset=()=>{switchCategory("Wszystko");setSearch("");setMaxPrice(250);setAvailable(false);setSizesSelected([])};
- const toggleSize=(s:string)=>setSizesSelected(v=>v.includes(s)?v.filter(x=>x!==s):[...v,s]);
- const filters=<div className="shop-filter-content">
-   <div className="shop-filter-group"><div className="shop-filter-title">KATEGORIE</div>{categories.map(c=><button key={c} className={"shop-filter-category "+(category===c?"on":"")} onClick={()=>switchCategory(c)}><span>{c}</span><span>{c==="Wszystko"?catalog.length:catalog.filter(p=>p.category===c).length}</span></button>)}</div>
-   <div className="shop-filter-group"><div className="shop-filter-title">ROZMIARY</div><div className="shop-filter-sizes">{sizes.map(s=><button key={s} onClick={()=>toggleSize(s)} className={sizesSelected.includes(s)?"on":""}>{s}</button>)}</div></div>
-   <div className="shop-filter-group"><div className="shop-filter-title">CENA MAKSYMALNA <span>{maxPrice} ZŁ</span></div><input type="range" min="25" max="250" step="5" value={maxPrice} onChange={e=>setMaxPrice(Number(e.target.value))} aria-label="Cena maksymalna"/><div className="shop-price-ends"><span>25 ZŁ</span><span>250 ZŁ</span></div></div>
-   <div className="shop-filter-group"><label className="shop-checkbox"><input type="checkbox" checked={available} onChange={e=>setAvailable(e.target.checked)}/><span>Tylko dostępne</span></label></div>
-   <button className="shop-reset" onClick={reset}>WYCZYŚĆ FILTRY <X size={15}/></button>
- </div>;
- return <div className="shop-shell">
-  <div className="shop-notice">ZASTAL STORE / SKLEP DEMONSTRACYJNY — BRAK REALNYCH PŁATNOŚCI</div>
-  <header className="shop-header"><Link href="/" className="shop-brand"><img src="/assets/zastal-logo.svg" alt="Zastal Zielona Góra"/><span>FAN STORE<small>DEMO 2026</small></span></Link><nav><Link href="/">STRONA GŁÓWNA</Link><Link href="/sklep">WSZYSTKIE PRODUKTY</Link><Link href="/#heritage">HERITAGE</Link></nav><div className="shop-header-right"><Link href="/?cart=1"><ShoppingBag size={20}/><span>{count}</span></Link></div></header>
-  <section className="shop-hero"><div><span className="shop-hero-kicker">ZASTAL / THE GREEN CULTURE / STORE 2026</span><h1>W TWOICH<br/><em>BARWACH.</em></h1><p>Znajdź swoją ulubioną rzecz. Produkty, które łączą nas z Zieloną Górą.</p><div className="shop-hero-foot"><span>KOLEKCJA KLUBOWA</span><span>1946 — DZIŚ</span></div></div><span className="shop-hero-ghost" aria-hidden="true">Z.</span></section>
-  <main className="shop-main"><div className="shop-breadcrumb"><Link href="/">HOME</Link><span>/</span><b>SKLEP</b></div><div className="shop-heading"><div><span>01 / SHOP ALL</span><h2>ODKRYJ KOLEKCJĘ<span>.</span></h2></div><p>Wybrane produkty z obecnego sklepu Zastalu.<br/>Stany i zamówienia — środowisko testowe.</p></div>
-  <div className="shop-layout"><aside className="shop-sidebar"><div className="shop-sidebar-heading"><SlidersHorizontal size={19}/> FILTRUJ PRODUKTY</div>{filters}</aside>
-   <section className="shop-results"><div className="shop-toolbar"><div><button className="shop-mobile-filter" onClick={()=>setDrawer(true)}><SlidersHorizontal size={17}/> FILTRY</button><span>{results.length} PRODUKTÓW</span>{category!=="Wszystko"&&<button className="shop-chip" onClick={()=>switchCategory("Wszystko")}>{category} <X size={12}/></button>}</div><div className="shop-sort"><select aria-label="Sortowanie" value={sort} onChange={e=>setSort(e.target.value)}><option value="popular">POLECANE</option><option value="low">CENA ROSNĄCO</option><option value="high">CENA MALEJĄCO</option><option value="alpha">NAZWA A–Z</option></select><ChevronDown size={14}/><button aria-label="Widok siatki" className={!list?"on":""} onClick={()=>setList(false)}><Grid2X2 size={18}/></button><button aria-label="Widok listy" className={list?"on":""} onClick={()=>setList(true)}><List size={19}/></button></div></div>
-   {results.length?<div className={"shop-products "+(list?"list-view":"")}>{results.map(p=><article className="shop-card" key={p.id}><Link href={"/produkt/"+p.id} className="shop-card-image"><img src={p.image} alt={p.name} loading="lazy"/>{p.tag&&<span className="shop-card-tag">{p.tag}</span>}<span className="shop-visual-action">ZOBACZ PRODUKT <ArrowUpRight size={16}/></span></Link><button className={"shop-heart "+(favorites.includes(p.id)?"on":"")} onClick={()=>toggleFavorite(p.id)} aria-label="Ulubione"><Heart size={19} fill={favorites.includes(p.id)?"currentColor":"none"}/></button><div className="shop-card-meta"><span>{p.category.toUpperCase()}</span><span>{live[p.id]?live[p.id].reduce((a,b)=>a+b.stock,0):p.stock} SZT. W DEMO</span></div><Link href={"/produkt/"+p.id} className="shop-card-name">{p.name}</Link><p>{p.subtitle}</p><div className="shop-card-bottom"><b>{fmt(p.price)}</b><Link href={"/produkt/"+p.id}>WYBIERZ OPCJE <ArrowRight size={15}/></Link></div></article>)}</div>:<div className="shop-no-results"><Search size={28}/><h3>Brak produktów</h3><p>Zmień filtry albo wyczyść wyszukiwanie.</p><button onClick={reset}>POKAŻ WSZYSTKIE <ArrowRight size={16}/></button></div>}
-   </section></div>
-  <section className="shop-bottom"><div><span>GREEN CULTURE / 1946</span><h2>ZIELONA GÓRA.<br/>JEDNA <em>DRUŻYNA.</em></h2></div><Link href="/">ODKRYJ HISTORIĘ <ArrowUpRight size={19}/></Link></section></main>
-  <footer className="shop-footer"><b>ZASTAL<span>.</span></b><p>WERSJA DEMONSTRACYJNA / 2026</p><Link href="/admin">CENTRUM ZARZĄDZANIA <ArrowRight size={15}/></Link></footer>
-  {drawer&&<div className="shop-filter-overlay" onClick={()=>setDrawer(false)}><div className="shop-mobile-panel" onClick={e=>e.stopPropagation()}><div><strong>FILTRY</strong><button onClick={()=>setDrawer(false)}><X/></button></div>{filters}<button className="shop-apply" onClick={()=>setDrawer(false)}>POKAŻ {results.length} PRODUKTÓW <Check size={18}/></button></div></div>}
- </div>;
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight, ChevronRight, Search, SlidersHorizontal, X } from "lucide-react";
+import { filterProducts } from "../../lib/commerce.mjs";
+import { useStore } from "../../components/StoreProvider";
+import ProductCard from "../../components/ProductCard";
+import Modal from "../../components/Modal";
+import "./shop.css";
+
+const CATEGORIES = ["Koszulki", "Bluzy", "Akcesoria", "Dzieci"];
+const SIZES = ["S", "M", "L", "XL", "XXL", "116", "128", "140", "152", "164"];
+export default function ShopClient() {
+  const store = useStore(); const params = useSearchParams(); const router = useRouter();
+  const category = CATEGORIES.includes(params.get("category") || "") ? params.get("category") || "" : "";
+  const size = SIZES.includes(params.get("size") || "") ? params.get("size") || "" : "";
+  const sort = params.get("sort") || "recommended";
+  const available = params.get("available") === "1";
+  const urlQuery = params.get("q") || "";
+  const [query, setQuery] = useState(urlQuery);
+  const [min, setMin] = useState(params.get("min") || "");
+  const [max, setMax] = useState(params.get("max") || "");
+  const [mobileFilters, setMobileFilters] = useState(false);
+  useEffect(() => { setQuery(urlQuery); }, [urlQuery]);
+  useEffect(() => { setMin(params.get("min") || ""); setMax(params.get("max") || ""); }, [params]);
+  function update(values: Record<string, string>) {
+    const next = new URLSearchParams(params.toString());
+    for (const [key, value] of Object.entries(values)) { if (value) next.set(key, value); else next.delete(key); }
+    router.replace("/sklep" + (next.toString() ? "?" + next.toString() : ""), { scroll: false });
+  }
+  useEffect(() => {
+    if (query === urlQuery) return;
+    const timer = setTimeout(() => update({ q: query }), 300);
+    return () => clearTimeout(timer);
+  }, [query, urlQuery]);
+  const value = (text: string) => text.trim() && Number.isFinite(Number(text)) && Number(text) >= 0 ? Math.round(Number(text) * 100) : undefined;
+  const rows = filterProducts(store.products, { category, query, size, available, sort, minPrice: value(params.get("min") || ""), maxPrice: value(params.get("max") || "") });
+  const activeCount = [category, size, available, params.get("min"), params.get("max")].filter(Boolean).length;
+  const clear = () => { setQuery(""); setMin(""); setMax(""); router.replace("/sklep", { scroll: false }); };
+  const filters = (mobile = false) => <div className="filter-panel"><div className="filter-panel-heading"><h2>Filtry</h2>{activeCount > 0 && <button onClick={clear}>Wyczyść</button>}</div><fieldset><legend>Kategoria</legend><button className={"category-filter " + (!category ? "selected" : "")} onClick={() => update({ category: "", q: query })}><span>Wszystkie produkty</span><span>{store.products.length}</span></button>{CATEGORIES.map(c => <button key={c} className={"category-filter " + (category === c ? "selected" : "")} onClick={() => update({ category: c, q: query })}><span>{c === "Dzieci" ? "Dla dzieci" : c}</span><span>{store.products.filter(p => p.category === c).length}</span></button>)}</fieldset><fieldset><legend>Rozmiar</legend><div className="filter-sizes">{SIZES.filter(s => category === "Dzieci" ? /^\d/.test(s) : category === "Bluzy" || category === "Koszulki" ? !/^\d/.test(s) : true).map(s => <button key={s} className={size === s ? "selected" : ""} aria-pressed={size === s} onClick={() => update({ size: size === s ? "" : s, q: query })}>{s}</button>)}</div></fieldset><fieldset><legend>Cena (zł)</legend><form onSubmit={e => { e.preventDefault(); update({ min, max, q: query }); }}><div className="price-filter-inputs"><label><span>Od</span><input type="number" min="0" max="10000" step="1" value={min} onChange={e => setMin(e.target.value)} aria-label={mobile ? "Cena minimalna, telefon" : "Cena minimalna"} placeholder="0"/></label><span>—</span><label><span>Do</span><input type="number" min="0" max="10000" step="1" value={max} onChange={e => setMax(e.target.value)} aria-label={mobile ? "Cena maksymalna, telefon" : "Cena maksymalna"} placeholder="200"/></label></div><button className="apply-price" type="submit">Zastosuj zakres <ArrowRight size={13}/></button></form></fieldset><fieldset><legend>Dostępność</legend><label className="availability-filter"><input type="checkbox" checked={available} onChange={e => update({ available: e.target.checked ? "1" : "", q: query })}/><span>Tylko dostępne produkty</span></label><p>Dostępność jest sprawdzana dla wybranego rozmiaru.</p></fieldset><div className="filter-help"><strong>Potrzebujesz pomocy?</strong><p>Sprawdź rozmiary, dostawę i sposób składania zamówienia.</p><Link href="/pomoc" onClick={() => setMobileFilters(false)}>Pomoc w zakupach <ArrowRight size={13}/></Link></div></div>;
+  return <div className="container catalog-page"><div className="breadcrumbs"><Link href="/">Strona główna</Link><ChevronRight size={11}/><span>Sklep</span>{category && <><ChevronRight size={11}/><span>{category === "Dzieci" ? "Dla dzieci" : category}</span></>}</div><div className="catalog-page-heading"><div className="page-heading"><span className="eyebrow">SKLEP ZASTALU</span><h1>{category === "Dzieci" ? "Dla dzieci" : category || "Wszystkie produkty"}</h1><p>{category === "Bluzy" ? "Klasyczna bluza z logo lub powrót do kolekcji Retro." : category === "Koszulki" ? "Koszulki klubowe, kolekcje sezonowe i nadruki zawodnicze." : category === "Akcesoria" ? "Worek sportowy, brelok czy magnes — mały klubowy akcent." : category === "Dzieci" ? "Klubowe koszulki w rozmiarach dla najmłodszych kibiców." : "Odzież i akcesoria Zastalu. Wybierz kategorię lub znajdź swój rozmiar."}</p></div><div className="catalog-search"><Search size={17}/><input aria-label="Szukaj w katalogu" placeholder="Szukaj produktu…" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button aria-label="Wyczyść wyszukiwanie" onClick={() => setQuery("")}><X size={15}/></button>}</div></div><div className="catalog-layout"><aside className="catalog-sidebar" aria-label="Filtry produktów">{filters()}</aside><div className="catalog-results"><div className="catalog-toolbar"><button className="mobile-filter-toggle" onClick={() => setMobileFilters(true)}><SlidersHorizontal size={16}/> Filtry {activeCount > 0 && <b>{activeCount}</b>}</button><span className="catalog-count">Produkty: <strong>{rows.length}</strong></span><label className="catalog-sort"><span>Sortuj:</span><select aria-label="Sortuj produkty" value={sort} onChange={e => update({ sort: e.target.value === "recommended" ? "" : e.target.value, q: query })}><option value="recommended">Domyślnie</option><option value="price-asc">Cena rosnąco</option><option value="price-desc">Cena malejąco</option><option value="name">Nazwa A–Z</option></select></label></div>{(activeCount > 0 || query) && <div className="active-filters">{category && <button onClick={() => update({ category: "" })}>{category} <X size={12}/></button>}{size && <button onClick={() => update({ size: "" })}>Rozmiar {size} <X size={12}/></button>}{available && <button onClick={() => update({ available: "" })}>Dostępne <X size={12}/></button>}{(params.get("min") || params.get("max")) && <button onClick={() => update({ min: "", max: "" })}>{params.get("min") || "0"}–{params.get("max") || "∞"} zł <X size={12}/></button>}{query && <button onClick={() => setQuery("")}>„{query}” <X size={12}/></button>}<button className="clear-all" onClick={clear}>Wyczyść wszystko</button></div>}{rows.length ? <div className="product-grid">{rows.map(p => <ProductCard key={p.id} product={p}/>)}</div> : <div className="empty-state"><Search size={33} strokeWidth={1.2}/><h2>Brak pasujących produktów</h2><p>{store.status === "loading" ? "Jeszcze sprawdzamy dostępność. Wyniki pojawią się za chwilę." : "Zmień rozmiar, kategorię lub zakres cen, aby zobaczyć inne produkty."}</p><button className="button button-dark" onClick={clear}>Wyczyść filtry <ArrowRight size={16}/></button></div>}<div className="catalog-bottom-note"><span>Wszystkie ceny podano w PLN.</span><span>Stany magazynowe i zamówienia w środowisku demonstracyjnym.</span></div></div></div>{mobileFilters && <Modal title="Filtry produktów" drawer onClose={() => setMobileFilters(false)} className="filter-drawer"><div className="modal-title"><h2>Filtry produktów</h2><button className="icon-btn" aria-label="Zamknij filtry" onClick={() => setMobileFilters(false)}><X size={22}/></button></div>{filters(true)}<div className="filter-drawer-bottom"><button className="button button-dark" onClick={() => { update({ min, max, q: query }); setMobileFilters(false); }}>Pokaż produkty ({rows.length}) <ArrowRight size={17}/></button></div></Modal>}</div>;
 }

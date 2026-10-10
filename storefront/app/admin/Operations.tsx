@@ -1,118 +1,211 @@
 "use client";
-import {useEffect,useMemo,useRef,useState} from "react";
-import {Activity,AlertCircle,ArrowDownToLine,ArrowRight,Barcode,CheckCircle2,ClipboardCheck,Clock3,Package,Plus,Printer,RefreshCw,ScanLine,ShoppingCart,Truck,Warehouse,X} from "lucide-react";
+
+import {useEffect, useMemo, useRef, useState, type ReactNode} from "react";
+import {AlertCircle, ArrowDownToLine, ArrowRight, CheckCircle2, Clock3, Plus, Printer, ScanLine, Search, Warehouse, X} from "lucide-react";
 import JsBarcode from "jsbarcode";
 import {QRCodeSVG} from "qrcode.react";
-import {catalog,fmt} from "../../lib/catalog";
+import {applyPackingScan, lineVariantSku, packingRequirements, resolveVariantCode} from "./packing.mjs";
 import "./operations.css";
 
-type Variant={id:number;product_id:number;size:string;sku:string;ean:string;stock:number;name:string;category:string;price:number};
-type Batch={id:number;design:string;supplier:string;reference:string;ordered:number;received:number;available:number;cost_unit:number;created:string};
-type Order={id:number;created:string;items:string;total:number;status:string};
-type OrderDetail=Omit<Order,"items">&{items:{sku:string;variant_sku?:string;name:string;size:string;qty:number;unit_price:number}[];events:{id:number;status:string;created:string}[];production:Task[]};
-type Task={id:number;order_id:number;line_index:number;batch_id:number;design:string;status:string;created:string;updated:string;reference:string;supplier:string};
-type Event={id:number;kind:string;object_id:string;note:string;created:string};
-type Movement={id:number;sku:string;delta:number;reason:string;created:string;source:string};
-type Tab="orders"|"inventory"|"transfers"|"production"|"labels"|"audit";
-const statuses=["nowe","potwierdzone","do_kompletacji","nanoszenie_dtf","kontrola_jakosci","spakowane","wyslane_demo","anulowane"];
-const productions=["oczekuje","przygotowanie","nanoszenie","kontrola","gotowe","odrzucone"];
-const PL:Record<string,string>={nowe:"Nowe",potwierdzone:"Potwierdzone",do_kompletacji:"Kompletacja",nanoszenie_dtf:"Nanoszenie DTF",kontrola_jakosci:"Kontrola jakości",spakowane:"Spakowane",wyslane_demo:"Wysłane • demo",anulowane:"Anulowane",oczekuje:"Oczekuje",przygotowanie:"Przygotowanie",nanoszenie:"Nanoszenie transferu",kontrola:"Kontrola jakości",gotowe:"Gotowe",odrzucone:"Odrzucone"};
-const nice=(iso:string)=>new Date(iso).toLocaleString("pl-PL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-function BarcodeSvg({value}:{value:string}){
- const ref=useRef<SVGSVGElement|null>(null);
- useEffect(()=>{if(ref.current)JsBarcode(ref.current,value,{format:"EAN13",height:48,width:1.3,displayValue:true,fontSize:10,margin:0})},[value]);
- return <svg ref={ref}/>;
-}
-function ScrollTable({children}:{children:React.ReactNode}){return <div className="ops-scroll">{children}</div>}
-export default function Operations({token}:{token:string}){
- const [tab,setTab]=useState<Tab>("orders");
- const [orders,setOrders]=useState<Order[]>([]);
- const [inventory,setInventory]=useState<Variant[]>([]);
- const [batches,setBatches]=useState<Batch[]>([]);
- const [tasks,setTasks]=useState<Task[]>([]);
- const [activity,setActivity]=useState<Event[]>([]);
- const [movements,setMovements]=useState<Movement[]>([]);
- const [loading,setLoading]=useState(true);
- const [error,setError]=useState("");
- const [success,setSuccess]=useState("");
- const [search,setSearch]=useState("");
- const [order,setOrder]=useState<OrderDetail|null>(null);
- const [scanned,setScanned]=useState<string[]>([]);
- const [scan,setScan]=useState("");
- const [stockEdit,setStockEdit]=useState<Variant|null>(null);
- const [delta,setDelta]=useState("");
- const [reason,setReason]=useState("");
- const [batchForm,setBatchForm]=useState({design:"",supplier:"",reference:"",quantity:"",cost:""});
- const [receive,setReceive]=useState<Record<number,string>>({});
- const [prodOrder,setProdOrder]=useState("");
- const [prodLine,setProdLine]=useState("0");
- const [prodBatch,setProdBatch]=useState("");
- const [selectedLabel,setSelectedLabel]=useState(0);
- const [quantity,setQuantity]=useState(6);
- const [saving,setSaving]=useState(false);
- const [scanResult,setScanResult]=useState<Variant|null>(null);
+export type OperationsTab = "dashboard" | "orders" | "inventory" | "transfers" | "production" | "labels" | "audit";
+export type Variant = {id:number; product_id:number; size:string; sku:string; ean:string; stock:number; name:string; category:string; price:number};
+export type Batch = {id:number; design:string; supplier:string; reference:string; ordered:number; received:number; available:number; cost_unit:number; created:string};
+export type Order = {id:number; created:string; items:string; total:number; status:string; fulfillment?:string; shipping_fee?:number; subtotal?:number};
+type OrderLine = {sku:string; variant_sku?:string; name?:string; size?:string; qty:number; unit_price:number};
+type OrderDetail = Omit<Order, "items"> & {items:OrderLine[]; events:{id:number; status:string; created:string}[]; production:Task[]};
+export type Task = {id:number; order_id:number; line_index:number; batch_id:number; design:string; status:string; created:string; updated:string; reference?:string; supplier?:string; order_status?:string};
+export type ActivityEvent = {id:number; kind:string; object_id:string; note:string; created:string};
+export type Movement = {id:number; sku:string; delta:number; reason:string; created:string; source:string};
+export type OperationsData = {orders:Order[]; inventory:Variant[]; batches:Batch[]; tasks:Task[]; activity:ActivityEvent[]; movements:Movement[]};
+export const emptyOperationsData:OperationsData = {orders:[], inventory:[], batches:[], tasks:[], activity:[], movements:[]};
+export const orderStatuses = ["nowe", "potwierdzone", "do_kompletacji", "nanoszenie_dtf", "kontrola_jakosci", "spakowane", "wyslane_demo", "anulowane"];
+const productionStatuses = ["oczekuje", "przygotowanie", "nanoszenie", "kontrola", "gotowe", "odrzucone"];
+export const statusText:Record<string,string> = {nowe:"Nowe", potwierdzone:"Potwierdzone", do_kompletacji:"Kompletacja", nanoszenie_dtf:"Nanoszenie DTF", kontrola_jakosci:"Kontrola jakości", spakowane:"Spakowane", wyslane_demo:"Wysłane (demo)", anulowane:"Anulowane", oczekuje:"Oczekuje", przygotowanie:"Przygotowanie", nanoszenie:"Nanoszenie transferu", kontrola:"Kontrola jakości", gotowe:"Gotowe", odrzucone:"Odrzucone"};
+const activityText:Record<string,string> = {order:"Zamówienie", stock:"Korekta stanu", transfer:"Transfery DTF", production:"Nanoszenie DTF"};
+const sourceText:Record<string,string> = {admin:"Korekta ręczna", checkout:"Zamówienie testowe", orders:"Obsługa zamówienia"};
+export const formatMoney = (value:number) => new Intl.NumberFormat("pl-PL", {style:"currency", currency:"PLN"}).format(value / 100);
+export const formatDate = (value:string) => {const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString("pl-PL", {day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit"});};
+export const orderNumber = (id:number) => "ZS-" + String(id).padStart(5, "0");
+export const isClosedOrder = (status:string) => ["anulowane", "wyslane_demo"].includes(status);
+export const isClosedTask = (status:string) => ["gotowe", "odrzucone"].includes(status);
 
- const api=async(path:string,method="GET",body?:unknown)=>{
-  const r=await fetch("/api/admin/"+path,{method,headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},...(body?{body:JSON.stringify(body)}:{})});
-  const d=await r.json();if(!r.ok)throw new Error(d.error||"Błąd operacji");return d;
- };
- const reload=async()=>{
-  setLoading(true);
-  try{
-   const [o,v,b,t,a,m]=await Promise.all([api("orders"),api("inventory"),api("transfers"),api("production"),api("activity"),api("stock-events")]);
-   setOrders(o);setInventory(v);setBatches(b);setTasks(t);setActivity(a);setMovements(m);
-   setError("");
-  }catch(e){setError(e instanceof Error?e.message:"Nie można pobrać danych")}
-  finally{setLoading(false)}
- };
- useEffect(()=>{reload()},[token]);
- const mutate=async(path:string,method:string,body:unknown,successText:string)=>{
-  setSaving(true);setError("");setSuccess("");
-  try{await api(path,method,body);setSuccess(successText);await reload();return true}catch(e){setError(e instanceof Error?e.message:"Błąd");return false}finally{setSaving(false)}
- };
- const showOrder=async(id:number)=>{
-  try{setScanned([]);setScan("");setOrder(await api("orders/"+id))}catch(e){setError(String(e))}
- };
- const tabs:[Tab,string,React.ReactNode][]=[
-  ["orders","Centrum zamówień",<ShoppingCart size={17} key="a"/>],["inventory","Magazyn wariantów",<Warehouse size={17} key="b"/>],
-  ["transfers","Zakupy transferów DTF",<Package size={17} key="c"/>],["production","Produkcja i kontrola",<ClipboardCheck size={17} key="d"/>],
-  ["labels","Etykiety EAN + QR",<Barcode size={17} key="e"/>],["audit","Historia operacji",<Activity size={17} key="f"/>],
- ];
- const chosen=inventory.find(v=>v.id===selectedLabel)||inventory[0];
- const scannedMatch=(text:string)=>{
-  const candidate=text.trim().replace(/^ZASTAL\|/,"");
-  const v=inventory.find(x=>x.ean===candidate||x.sku.toLowerCase()===candidate.toLowerCase()||x.ean===candidate.split("|")[1]);
-  setScanResult(v||null);
-  return v;
- };
- const productName=(sku:string)=>catalog.find(x=>x.sku===sku)?.name||sku;
- const orderIds=orders.map(o=>String(o.id));
- const chosenOrder=orders.find(o=>String(o.id)===prodOrder);
- const chosenLines=chosenOrder?(()=>{try{return JSON.parse(chosenOrder.items) as {name:string;sku:string;qty:number;size:string}[]}catch{return []}})():[];
- const filteredOrders=orders.filter(o=>(String(o.id)+" "+o.status+" "+o.items).toLowerCase().includes(search.toLowerCase()));
- const filteredVariants=inventory.filter(v=>(v.name+" "+v.sku+" "+v.ean+" "+v.size).toLowerCase().includes(search.toLowerCase()));
- return <div className="ops">
-  <div className="ops-top"><div><span className="ops-eyebrow">OPERATIONS / CONTROL CENTER / V0.3</span><h2>COMMERCE <i>360°</i></h2><p>Zamówienia, magazyn rozmiarów, zakup gotowych transferów DTF i przygotowanie wysyłek.</p></div><button className="ops-refresh" onClick={reload}><RefreshCw size={17}/> {loading?"ŁADOWANIE...":"ODŚWIEŻ DANE"}</button></div>
-  <div className="ops-stats">
-   <div><span>WARIANTY PRODUKTÓW</span><strong>{inventory.length}</strong><small>Rzeczywiste rozmiary i indywidualne SKU</small></div>
-   <div><span>ZAMÓWIENIA DO OBSŁUGI</span><strong>{orders.filter(o=>!["anulowane","wyslane_demo"].includes(o.status)).length}</strong><small>Pozycje w aktywnym procesie</small></div>
-   <div><span>GOTOWE TRANSFERY DTF</span><strong>{batches.reduce((a,b)=>a+b.available,0)}</strong><small>Dostępne do nanoszenia na odzież</small></div>
-   <div><span>NISKIE STANY WARIANTÓW</span><strong>{inventory.filter(v=>v.stock<=2).length}</strong><small>Warianty z zapasem 0–2 szt.</small></div>
-  </div>
-  <div className="ops-tabs">{tabs.map(([id,name,icon])=><button key={id} className={tab===id?"selected":""} onClick={()=>{setTab(id);setSearch("");setError("");setSuccess("")}}>{icon}<span>{name}</span></button>)}</div>
-  {error&&<div className="ops-message ops-error"><AlertCircle size={18}/>{error}<button onClick={()=>setError("")}><X size={15}/></button></div>}
-  {success&&<div className="ops-message ops-success"><CheckCircle2 size={18}/>{success}<button onClick={()=>setSuccess("")}><X size={15}/></button></div>}
-  {(tab==="orders"||tab==="inventory")&&<div className="ops-search"><ScanLine size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={tab==="orders"?"Szukaj zamówienia, produktu lub statusu":"Szukaj po SKU, rozmiarze, EAN lub nazwie produktu"}/><span>SEARCH / FILTER</span></div>}
-  {tab==="orders"&&<section className="ops-panel"><div className="ops-panel-head"><div><span>FULFILLMENT</span><h3>Wszystkie zamówienia <em>({filteredOrders.length})</em></h3></div><small>KAŻDY STATUS ZAPISYWANY W HISTORII</small></div><ScrollTable><table className="ops-table"><thead><tr><th>ZAMÓWIENIE</th><th>POZYCJE</th><th>WARTOŚĆ</th><th>STATUS</th><th>AKCJA</th></tr></thead><tbody>{filteredOrders.map(o=><tr key={o.id}><td><strong>ZS-{String(o.id).padStart(5,"0")}</strong><small>{nice(o.created)}</small></td><td>{(()=>{try{return JSON.parse(o.items).map((x:{name?:string;sku:string;qty:number;size:string})=>x.qty+" × "+(x.name||productName(x.sku))+" / "+x.size).join(", ")}catch{return "—"}})()}</td><td><strong>{fmt(o.total)}</strong></td><td><span className={"ops-pill "+o.status}>{PL[o.status]||o.status}</span></td><td><button className="ops-action" onClick={()=>showOrder(o.id)}>OTWÓRZ <ArrowRight size={15}/></button></td></tr>)}</tbody></table></ScrollTable>{!filteredOrders.length&&<p className="ops-empty">Brak zamówień spełniających kryteria.</p>}</section>}
-  {tab==="inventory"&&<section className="ops-panel"><div className="ops-panel-head"><div><span>STOCK MANAGEMENT</span><h3>Stany według rozmiaru <em>({filteredVariants.length})</em></h3></div><small>EAN / SKU / ŚLAD MAGAZYNOWY</small></div><ScrollTable><table className="ops-table"><thead><tr><th>PRODUKT</th><th>WARIANT</th><th>IDENTYFIKATOR EAN</th><th>STAN</th><th>OPERACJE</th></tr></thead><tbody>{filteredVariants.map(v=><tr key={v.id}><td><strong>{v.name}</strong><small>{v.category}</small></td><td><span className="ops-code">{v.size}</span><small>{v.sku}</small></td><td><span className="ops-monospaced">{v.ean}</span></td><td><span className={"ops-quantity "+(v.stock<=2?"warning":"")}>{v.stock} szt.</span></td><td><button className="ops-action" onClick={()=>{setStockEdit(v);setDelta("");setReason("")}}>KOREKTA <Plus size={15}/></button></td></tr>)}</tbody></table></ScrollTable></section>}
-  {tab==="transfers"&&<div className="ops-two"><section className="ops-panel"><div className="ops-panel-head"><div><span>SUPPLIER / PROCUREMENT</span><h3>Zamów nową partię</h3></div></div><form className="ops-form" onSubmit={async e=>{e.preventDefault();const ok=await mutate("transfers","POST",{design:batchForm.design,supplier:batchForm.supplier,reference:batchForm.reference,quantity:Number(batchForm.quantity),cost_unit:Math.round(Number(batchForm.cost)*100)},"Zapisano zamówienie transferów. Oczekuje na dostawę.");if(ok)setBatchForm({design:"",supplier:"",reference:"",quantity:"",cost:""})}}><label>NAZWA PROJEKTU / WZORU<input required maxLength={100} value={batchForm.design} onChange={e=>setBatchForm({...batchForm,design:e.target.value})} placeholder="Np. Zastal Classic / przód"/></label><label>DOSTAWCA<input required maxLength={100} value={batchForm.supplier} onChange={e=>setBatchForm({...batchForm,supplier:e.target.value})} placeholder="Nazwa dostawcy DTF"/></label><label>NUMER ZAMÓWIENIA U DOSTAWCY<input value={batchForm.reference} maxLength={80} onChange={e=>setBatchForm({...batchForm,reference:e.target.value})} placeholder="DTF-2026-001"/></label><div className="ops-form-cols"><label>LICZBA TRANSFERÓW<input type="number" required min={1} max={100000} value={batchForm.quantity} onChange={e=>setBatchForm({...batchForm,quantity:e.target.value})}/></label><label>KOSZT 1 SZT. / PLN<input type="number" min={0} step=".01" value={batchForm.cost} onChange={e=>setBatchForm({...batchForm,cost:e.target.value})}/></label></div><button className="ops-primary" disabled={saving}>UTWÓRZ ZAMÓWIENIE <Plus size={18}/></button></form><div className="ops-info">Klub kupuje gotowe nadruki od dostawcy. System ewidencjonuje zamówienie i osobno potwierdza fizyczne przyjęcie. Nie drukujemy transferów na miejscu.</div></section><section className="ops-panel"><div className="ops-panel-head"><div><span>DTF STOCK / DELIVERY</span><h3>Partie i dostawy <em>({batches.length})</em></h3></div></div><div className="ops-batch-list">{batches.map(b=><article className="ops-batch" key={b.id}><div><strong>#{String(b.id).padStart(3,"0")} / {b.design}</strong><small>{b.supplier} · {b.reference||"Bez referencji"}</small></div><div className="ops-batch-chips"><span>ZAMÓWIONE <b>{b.ordered}</b></span><span>PRZYJĘTE <b>{b.received}</b></span><span>DOSTĘPNE <b>{b.available}</b></span></div>{b.received<b.ordered&&<form className="ops-receive" onSubmit={async e=>{e.preventDefault();const ok=await mutate("transfers/"+b.id+"/receive","PATCH",{quantity:Number(receive[b.id]||0)},"Potwierdzono przyjęcie nadruków.");if(ok)setReceive(x=>({...x,[b.id]:""}))}}><input type="number" min={1} max={b.ordered-b.received} value={receive[b.id]||""} onChange={e=>setReceive(x=>({...x,[b.id]:e.target.value}))} placeholder={"Max "+(b.ordered-b.received)}/><button disabled={saving}>PRZYJMIJ DOSTAWĘ <ArrowDownToLine size={16}/></button></form>}</article>)}</div></section></div>}
-  {tab==="production"&&<div className="ops-two"><section className="ops-panel"><div className="ops-panel-head"><div><span>ORDER → HEAT PRESS → QC</span><h3>Nowe zlecenie nanoszenia</h3></div></div><form className="ops-form" onSubmit={async e=>{e.preventDefault();const ok=await mutate("production","POST",{order_id:Number(prodOrder),line_index:Number(prodLine),batch_id:Number(prodBatch)},"Zlecenie utworzone i transfery zarezerwowane.");if(ok){setProdOrder("");setProdBatch("");setProdLine("0")}}}><label>ZAMÓWIENIE TESTOWE<select required value={prodOrder} onChange={e=>{setProdOrder(e.target.value);setProdLine("0")}}><option value="">Wybierz zamówienie</option>{orders.filter(o=>!["wyslane_demo","anulowane"].includes(o.status)).map(o=><option key={o.id} value={o.id}>ZS-{String(o.id).padStart(5,"0")} · {PL[o.status]}</option>)}</select></label><label>POZYCJA ZAMÓWIENIA<select value={prodLine} onChange={e=>setProdLine(e.target.value)}>{chosenLines.map((l,i)=><option key={i} value={i}>{i+1}. {l.name||productName(l.sku)} / {l.size} × {l.qty}</option>)}</select></label><label>GOTOWY TRANSFER / PARTIA<select required value={prodBatch} onChange={e=>setProdBatch(e.target.value)}><option value="">Wybierz partię</option>{batches.filter(b=>b.available>0).map(b=><option key={b.id} value={b.id}>#{b.id} {b.design} · {b.available} szt. dostępnych</option>)}</select></label><button className="ops-primary" disabled={saving||!prodOrder||!prodBatch}>PRZYDZIEL TRANSFER <ArrowRight size={17}/></button></form><div className="ops-info">Zlecenie rezerwuje liczbę transferów odpowiadającą ilości produktu w zamówieniu. Stany są pomniejszane transakcyjnie.</div></section><section className="ops-panel"><div className="ops-panel-head"><div><span>PRODUCTION BOARD</span><h3>Kolejka produkcji <em>({tasks.length})</em></h3></div></div><div className="ops-tasks">{tasks.map(t=><article className="ops-task" key={t.id}><div><strong>DTF-{String(t.id).padStart(4,"0")}</strong><span className={"ops-pill "+t.status}>{PL[t.status]||t.status}</span></div><h4>{t.design}</h4><p>Zamówienie ZS-{String(t.order_id).padStart(5,"0")} / poz. {t.line_index+1}<br/>{t.supplier} · {t.reference}</p><label>ETAP ZLECENIA<select value={t.status} disabled={saving||["gotowe","odrzucone"].includes(t.status)} onChange={e=>mutate("production/"+t.id,"PATCH",{status:e.target.value},"Zaktualizowano etap produkcji.")}>{productions.map(v=><option key={v} value={v}>{PL[v]}</option>)}</select></label></article>)}{!tasks.length&&<p className="ops-empty">Brak zleceń produkcyjnych.</p>}</div></section></div>}
-  {tab==="labels"&&<div className="ops-two"><section className="ops-panel"><div className="ops-panel-head"><div><span>LABEL STATION / GS1 RESTRICTED</span><h3>Druk etykiet produktów</h3></div></div><div className="ops-form"><label>WARIANT / SKU<select value={selectedLabel} onChange={e=>setSelectedLabel(Number(e.target.value))}>{inventory.map(v=><option key={v.id} value={v.id}>{v.sku} · {v.name}</option>)}</select></label><label>LICZBA ETYKIET A4<input type="number" min={1} max={48} value={quantity} onChange={e=>setQuantity(Math.max(1,Math.min(48,Number(e.target.value)||1)))}/></label><button className="ops-primary" onClick={()=>window.print()} disabled={!chosen}><Printer size={18}/> DRUKUJ {quantity} ETYKIET</button></div><div className="ops-scan"><label>SKANER / WERYFIKACJA KODU<input value={scan} onChange={e=>setScan(e.target.value)} onKeyDown={e=>e.key==="Enter"&&scannedMatch(scan)} placeholder="Zeskanuj EAN lub wpisz SKU"/></label><button onClick={()=>scannedMatch(scan)}><ScanLine size={17}/> WERYFIKUJ</button>{scanResult&&<p><CheckCircle2 size={16}/> {scanResult.name}, rozmiar {scanResult.size}, stan: {scanResult.stock} szt.</p>}</div><div className="ops-info">Prefiks EAN-13 200 służy wyłącznie do identyfikacji wewnętrznej. Kody nie są globalnymi numerami GTIN z GS1.</div></section><section className="ops-panel"><div className="ops-panel-head"><div><span>THERMAL / A4 PRINT PREVIEW</span><h3>Etykieta 60 × 40 mm</h3></div></div><div className="ops-label-stage">{chosen&&<Label variant={chosen}/>}</div>{chosen&&<div className="ops-label-detail"><b>{chosen.name}</b><span>{chosen.sku} / {chosen.size} / {chosen.ean}</span></div>}</section><div className="print-area">{chosen&&Array.from({length:quantity},(_,i)=><Label key={i} variant={chosen}/>)}</div></div>}
-  {tab==="audit"&&<div className="ops-two"><section className="ops-panel"><div className="ops-panel-head"><div><span>CHANGELOG / AUDIT</span><h3>Historia działań</h3></div></div><div className="ops-log">{activity.map(e=><div key={e.id}><Clock3 size={16}/><span><b>{e.kind.toUpperCase()} #{e.object_id}</b>{e.note}<small>{nice(e.created)}</small></span></div>)}{!activity.length&&<p className="ops-empty">Brak operacji.</p>}</div></section><section className="ops-panel"><div className="ops-panel-head"><div><span>INVENTORY LEDGER</span><h3>Ruchy magazynowe</h3></div></div><div className="ops-log">{movements.map(m=><div key={m.id}><Warehouse size={16}/><span><b>{m.sku} <em>{m.delta>0?"+":""}{m.delta}</em></b>{m.reason}<small>{nice(m.created)} · {m.source}</small></span></div>)}{!movements.length&&<p className="ops-empty">Brak ruchów magazynowych.</p>}</div></section></div>}
-  {stockEdit&&<div className="ops-overlay" onClick={()=>setStockEdit(null)}><div className="ops-modal ops-stock-modal" onClick={e=>e.stopPropagation()}><button className="ops-close" onClick={()=>setStockEdit(null)}><X/></button><span className="ops-eyebrow">INVENTORY / ADJUSTMENT</span><h2>KOREKTA STANU.</h2><h3>{stockEdit.name} / {stockEdit.size}</h3><p>SKU: {stockEdit.sku} • stan bieżący: {stockEdit.stock} szt.</p><form onSubmit={async e=>{e.preventDefault();const ok=await mutate("inventory/"+stockEdit.id,"PATCH",{delta:Number(delta),reason},"Zapisano ruch magazynowy i zaktualizowano dostępność.");if(ok)setStockEdit(null)}}><label>ZMIANA W SZTUKACH<input type="number" required min={-5000} max={5000} value={delta} onChange={e=>setDelta(e.target.value)} placeholder="+10 lub -2"/></label><label>UZASADNIENIE<input required minLength={3} maxLength={150} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Dostawa, remanent, uszkodzenie..."/></label><button disabled={saving} className="ops-primary">ZAPISZ KOREKTĘ <CheckCircle2 size={17}/></button></form></div></div>}
-  {order&&<div className="ops-overlay" onClick={()=>setOrder(null)}><div className="ops-modal ops-order-modal" onClick={e=>e.stopPropagation()}><button className="ops-close" onClick={()=>setOrder(null)}><X/></button><span className="ops-eyebrow">ORDER DETAIL / TRACEABILITY</span><h2>ZAMÓWIENIE<br/>ZS-{String(order.id).padStart(5,"0")}.</h2><p>Utworzono {nice(order.created)} · wartość {fmt(order.total)}</p><div className="ops-order-status"><label>STATUS REALIZACJI</label><select value={order.status} onChange={async e=>{const ok=await mutate("orders/"+order.id,"PATCH",{status:e.target.value},"Zmiana statusu zapisana w historii.");if(ok)showOrder(order.id)}}>{statuses.map(x=><option key={x} value={x}>{PL[x]}</option>)}</select></div><h3>POZYCJE W ZAMÓWIENIU</h3>{order.items.map((l,i)=><div className="ops-order-line" key={i}><div><strong>{l.name||productName(l.sku)}</strong><small>{l.variant_sku||l.sku} / {l.size||"UNI"}</small></div><b>{l.qty} × {fmt(l.unit_price)}</b></div>)}<h3>SKANOWANIE DO PAKOWANIA</h3><p>Wpisz lub zeskanuj SKU lub EAN wariantu. Każde dopasowanie oznacza zweryfikowaną pozycję w tej sesji.</p><div className="ops-scan-order"><input value={scan} onChange={e=>setScan(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){const v=scannedMatch(scan);if(v&&order.items.some(l=>l.variant_sku===v.sku||l.sku===v.sku||l.sku===v.sku.split("-").slice(0,-1).join("-")))setScanned(x=>[...x,v.sku]);setScan("")}}} placeholder="EAN / SKU i Enter"/><ScanLine size={19}/></div><p className="ops-verified">{new Set(scanned).size} wariantów zweryfikowanych w tej sesji.</p><h3>HISTORIA ZAMÓWIENIA</h3><div className="ops-timeline">{order.events.map(e=><div key={e.id}><span/><p><b>{PL[e.status]||e.status}</b><small>{nice(e.created)}</small></p></div>)}</div><button className="ops-primary" onClick={()=>setOrder(null)}>ZAMKNIJ SZCZEGÓŁY <ArrowRight size={17}/></button></div></div>}
- </div>;
+export class AdminApiError extends Error {
+  constructor(message:string, public status:number) {super(message); this.name = "AdminApiError";}
 }
-function Label({variant}:{variant:Variant}){
- return <div className="printed-label"><div className="printed-label-name"><b>ZASTAL<span>.</span></b><small>STOCK LABEL</small></div><strong>{variant.name} / {variant.size}</strong><div className="label-codes"><div><BarcodeSvg value={variant.ean}/></div><QRCodeSVG value={["ZASTAL",variant.sku,variant.ean].join("|")} size={68}/></div><div className="printed-label-foot"><span>{variant.sku}</span><span>{fmt(variant.price)}</span></div></div>;
+export async function adminRequest<T>(token:string, path:string, method = "GET", body?:unknown):Promise<T> {
+  let response:Response;
+  try {
+    response = await fetch("/api/admin/" + path, {
+      method, cache:"no-store", headers:{"Content-Type":"application/json", Authorization:"Bearer " + token},
+      ...(body !== undefined ? {body:JSON.stringify(body)} : {}),
+    });
+  } catch {throw new AdminApiError("Nie można połączyć się z serwerem. Spróbuj ponownie.", 0);}
+  const result = await response.json().catch(() => null);
+  if (!response.ok) throw new AdminApiError(result?.error || (response.status === 403 ? "Klucz dostępu jest nieprawidłowy lub wygasł." : "Nie udało się wykonać operacji. Spróbuj ponownie."), response.status);
+  if (result === null) throw new AdminApiError("Serwer zwrócił nieprawidłową odpowiedź.", response.status);
+  return result as T;
+}
+export async function loadOperationsData(token:string):Promise<OperationsData> {
+  const [orders, inventory, batches, tasks, activity, movements] = await Promise.all([
+    adminRequest<Order[]>(token, "orders"), adminRequest<Variant[]>(token, "inventory"),
+    adminRequest<Batch[]>(token, "transfers"), adminRequest<Task[]>(token, "production"),
+    adminRequest<ActivityEvent[]>(token, "activity"), adminRequest<Movement[]>(token, "stock-events"),
+  ]);
+  if (![orders, inventory, batches, tasks, activity, movements].every(Array.isArray)) throw new AdminApiError("Serwer zwrócił nieprawidłowe dane panelu.", 200);
+  return {orders, inventory, batches, tasks, activity, movements};
+}
+export function parseOrderLines(items:string | OrderLine[]):OrderLine[] {
+  try {const result = typeof items === "string" ? JSON.parse(items) : items; return Array.isArray(result) ? result.filter(line => line && typeof line.sku === "string" && Number.isInteger(line.qty) && line.qty > 0) : [];} catch {return [];}
+}
+function exportCsv(filename:string, headers:string[], rows:(string | number)[][]) {
+  const cell = (value:string | number) => {
+    let text = String(value);
+    if (typeof value === "string" && /^[=+\-@\t\r]/.test(text)) text = "'" + text;
+    return '"' + text.replaceAll('"', '""') + '"';
+  };
+  const csv = [headers, ...rows].map(row => row.map(cell).join(";")).join("\r\n");
+  const url = URL.createObjectURL(new Blob(["\uFEFF" + csv], {type:"text/csv;charset=utf-8"}));
+  const link = document.createElement("a"); link.href = url; link.download = filename; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+export function StatusBadge({status}:{status:string}) {return <span className={"ops-pill " + status}>{statusText[status] || status}</span>;}
+function ScrollTable({children}:{children:ReactNode}) {return <div className="ops-scroll">{children}</div>;}
+function Dialog({titleId, onClose, children, wide = false}:{titleId:string; onClose:() => void; children:ReactNode; wide?:boolean}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose); closeRef.current = onClose;
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const onKey = (event:KeyboardEvent) => {
+      if (event.key === "Escape") {event.preventDefault(); closeRef.current();}
+      if (event.key !== "Tab" || !ref.current) return;
+      const controls = Array.from(ref.current.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]')).filter(element => element.getClientRects().length > 0);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) {event.preventDefault(); ref.current.focus();}
+      else if (event.shiftKey && document.activeElement === first) {event.preventDefault(); last.focus();}
+      else if (!event.shiftKey && document.activeElement === last) {event.preventDefault(); first.focus();}
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {document.removeEventListener("keydown", onKey); document.body.style.overflow = overflow; previous?.focus();};
+  }, []);
+  return <div className="ops-overlay" onMouseDown={event => {if (event.target === event.currentTarget) onClose();}}><div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={"ops-modal" + (wide ? " ops-modal-wide" : "")}><button className="ops-close" type="button" aria-label="Zamknij okno" onClick={onClose}><X size={20}/></button>{children}</div></div>;
+}
+
+type Props = {token:string; activeTab:OperationsTab; data:OperationsData; loading:boolean; onRefresh:() => Promise<boolean>; onAuthError:() => void; requestedOrderId:number | null; onOrderOpened:() => void};
+export default function Operations({token, activeTab, data, loading, onRefresh, onAuthError, requestedOrderId, onOrderOpened}:Props) {
+  const {orders, inventory, batches, tasks, activity, movements} = data;
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [lowOnly, setLowOnly] = useState(false);
+  const [taskFilter, setTaskFilter] = useState("active");
+  const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [openingOrder, setOpeningOrder] = useState(false);
+  const detailRequest = useRef(0);
+  const [scanned, setScanned] = useState<Record<string,number>>({});
+  const [orderScan, setOrderScan] = useState("");
+  const [packingNotice, setPackingNotice] = useState<{text:string; valid:boolean} | null>(null);
+  const [stockEdit, setStockEdit] = useState<Variant | null>(null);
+  const [delta, setDelta] = useState("");
+  const [reason, setReason] = useState("");
+  const [batchForm, setBatchForm] = useState({design:"", supplier:"", reference:"", quantity:"", cost:""});
+  const [receive, setReceive] = useState<Record<number,string>>({});
+  const [prodOrder, setProdOrder] = useState("");
+  const [prodLine, setProdLine] = useState("0");
+  const [prodBatch, setProdBatch] = useState("");
+  const [selectedLabel, setSelectedLabel] = useState(0);
+  const [quantity, setQuantity] = useState(6);
+  const [saving, setSaving] = useState(false);
+  const [labelScan, setLabelScan] = useState("");
+  const [scanResult, setScanResult] = useState<Variant | null>(null);
+  const [labelScanError, setLabelScanError] = useState("");
+  useEffect(() => {setSearch(""); setError(""); setSuccess(""); setOrder(null); setStockEdit(null); setOpeningOrder(false); detailRequest.current += 1;}, [activeTab]);
+  const handleError = (exception:unknown) => {
+    if (exception instanceof AdminApiError && [401, 403].includes(exception.status)) {onAuthError(); return;}
+    setError(exception instanceof Error ? exception.message : "Nie udało się wykonać operacji.");
+  };
+  const mutate = async (path:string, method:string, body:unknown, message:string) => {
+    setSaving(true); setError(""); setSuccess("");
+    try {await adminRequest(token, path, method, body); setSuccess(message); await onRefresh(); return true;}
+    catch (exception) {handleError(exception); return false;}
+    finally {setSaving(false);}
+  };
+  const showOrder = async (id:number, resetScans = true) => {
+    const requestId = ++detailRequest.current;
+    setOpeningOrder(true); setError("");
+    if (resetScans) {setOrder(null); setScanned({}); setOrderScan(""); setPackingNotice(null);}
+    try {const result = await adminRequest<OrderDetail>(token, "orders/" + id); if (requestId === detailRequest.current) setOrder(result);}
+    catch (exception) {if (requestId === detailRequest.current) handleError(exception);}
+    finally {if (requestId === detailRequest.current) setOpeningOrder(false);}
+  };
+  useEffect(() => {
+    if (requestedOrderId !== null) {void showOrder(requestedOrderId); onOrderOpened();}
+    // The request is consumed once; snapshots and other form state must not reopen it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedOrderId]);
+  const chosen = inventory.find(variant => variant.id === selectedLabel) || inventory[0];
+  const productName = (sku:string) => inventory.find(variant => variant.sku === sku || variant.sku.slice(0, -(variant.size.length + 1)) === sku)?.name || sku;
+  const linesSummary = (value:string) => parseOrderLines(value).map(line => `${line.qty} × ${line.name || productName(line.sku)} / ${line.size || "UNI"}`).join(", ") || "Dane pozycji niedostępne";
+  const filteredOrders = orders.filter(item => (!statusFilter || item.status === statusFilter) && `${item.id} ${orderNumber(item.id)} ${statusText[item.status]} ${item.items}`.toLowerCase().includes(search.toLowerCase()));
+  const filteredVariants = inventory.filter(variant => (!lowOnly || variant.stock <= 2) && `${variant.name} ${variant.sku} ${variant.ean} ${variant.size}`.toLowerCase().includes(search.toLowerCase()));
+  const chosenOrder = orders.find(item => String(item.id) === prodOrder);
+  const chosenLines = chosenOrder ? parseOrderLines(chosenOrder.items) : [];
+  const selectedLine = chosenLines[Number(prodLine)];
+  const assignedLine = tasks.some(task => String(task.order_id) === prodOrder && task.line_index === Number(prodLine));
+  const selectedBatch = batches.find(batch => String(batch.id) === prodBatch);
+  const canAssign = !!selectedLine && !!selectedBatch && !assignedLine && !isClosedOrder(chosenOrder?.status || "") && selectedBatch.available >= selectedLine.qty;
+  const visibleTasks = tasks.filter(task => taskFilter === "all" || (taskFilter === "active" ? !isClosedTask(task.status) : task.status === taskFilter));
+  const required = useMemo(() => packingRequirements(order?.items || [], inventory), [order?.items, inventory]);
+  const unitsRequired = Object.values(required).reduce((sum, count) => sum + count, 0);
+  const unitsScanned = Object.entries(required).reduce((sum, [sku, count]) => sum + Math.min(scanned[sku] || 0, count), 0);
+  const verifyOrderScan = () => {
+    if (!order || isClosedOrder(order.status)) return;
+    const result = applyPackingScan(orderScan, inventory, required, scanned);
+    setScanned(result.counts); setPackingNotice({text:result.text, valid:result.valid});
+    setOrderScan("");
+  };
+  const verifyLabelScan = () => {
+    const variant = resolveVariantCode(labelScan, inventory);
+    setScanResult(variant || null); setLabelScanError(variant ? "" : "Nie znaleziono wariantu dla podanego kodu.");
+    if (variant) setSelectedLabel(variant.id);
+  };
+  const exportOrders = () => exportCsv("zastal-zamowienia-demo.csv", ["Zamówienie", "Data", "Pozycje", "Status", "Wartość PLN"], filteredOrders.map(item => [orderNumber(item.id), item.created, linesSummary(item.items), statusText[item.status] || item.status, (item.total / 100).toFixed(2)]));
+  const exportInventory = () => exportCsv("zastal-magazyn-wariantow.csv", ["Produkt", "Rozmiar", "SKU", "EAN", "Stan", "Cena PLN"], filteredVariants.map(variant => [variant.name, variant.size, variant.sku, variant.ean, variant.stock, (variant.price / 100).toFixed(2)]));
+  const closeOrder = () => {detailRequest.current += 1; setOrder(null); setOpeningOrder(false);};
+  if (activeTab === "dashboard") return null;
+
+  return <div className="ops" aria-busy={loading || saving}>
+    {error && <div className="ops-message ops-error" role="alert"><AlertCircle size={18}/><span>{error}</span><button aria-label="Zamknij komunikat" onClick={() => setError("")}><X size={16}/></button></div>}
+    {success && <div className="ops-message ops-success" role="status"><CheckCircle2 size={18}/><span>{success}</span><button aria-label="Zamknij komunikat" onClick={() => setSuccess("")}><X size={16}/></button></div>}
+    {openingOrder && <p className="ops-loading" role="status">Pobieranie szczegółów zamówienia…</p>}
+    {(activeTab === "orders" || activeTab === "inventory") && <div className="ops-toolbar"><label className="ops-search"><Search size={18}/><input aria-label={activeTab === "orders" ? "Szukaj zamówień" : "Szukaj wariantów"} value={search} onChange={event => setSearch(event.target.value)} placeholder={activeTab === "orders" ? "Numer, produkt lub status zamówienia" : "Nazwa, rozmiar, SKU lub EAN"}/>{search && <button aria-label="Wyczyść wyszukiwanie" type="button" onClick={() => setSearch("")}><X size={16}/></button>}</label>{activeTab === "orders" ? <select className="ops-filter" aria-label="Filtr statusu zamówienia" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">Wszystkie statusy</option>{orderStatuses.map(status => <option key={status} value={status}>{statusText[status]}</option>)}</select> : <label className="ops-checkbox"><input type="checkbox" checked={lowOnly} onChange={event => setLowOnly(event.target.checked)}/>Tylko stany 0–2 szt.</label>}<button className="ops-action" onClick={activeTab === "orders" ? exportOrders : exportInventory} disabled={loading}><ArrowDownToLine size={16}/>Eksport CSV</button></div>}
+
+    {activeTab === "orders" && <section className="ops-panel"><div className="ops-panel-head"><h2>Zamówienia <span>{filteredOrders.length}</span></h2><p>Ostatnie 300 zapisanych zamówień</p></div><ScrollTable><table className="ops-table ops-orders-table"><thead><tr><th>Zamówienie</th><th>Pozycje</th><th>Wartość</th><th>Status</th><th><span className="ops-sr-only">Szczegóły</span></th></tr></thead><tbody>{filteredOrders.map(item => <tr key={item.id}><td><strong>{orderNumber(item.id)}</strong><small>{formatDate(item.created)}</small></td><td>{linesSummary(item.items)}</td><td className="ops-nowrap">{formatMoney(item.total)}</td><td><StatusBadge status={item.status}/></td><td><button className="ops-action" aria-label={"Otwórz " + orderNumber(item.id)} onClick={() => void showOrder(item.id)} disabled={openingOrder}>Szczegóły<ArrowRight size={15}/></button></td></tr>)}</tbody></table></ScrollTable>{!filteredOrders.length && <p className="ops-empty">{search || statusFilter ? "Brak zamówień spełniających kryteria." : "Nie ma jeszcze zamówień testowych."}</p>}</section>}
+
+    {activeTab === "inventory" && <section className="ops-panel"><div className="ops-panel-head"><h2>Warianty produktów <span>{filteredVariants.length}</span></h2><p>Korekty z uzasadnieniem trafiają do historii</p></div><ScrollTable><table className="ops-table"><thead><tr><th>Produkt</th><th>Rozmiar i SKU</th><th>EAN</th><th>Stan</th><th><span className="ops-sr-only">Korekta</span></th></tr></thead><tbody>{filteredVariants.map(variant => <tr key={variant.id}><td><strong>{variant.name}</strong><small>{variant.category}</small></td><td><b className="ops-size">{variant.size}</b><small className="ops-monospaced">{variant.sku}</small></td><td className="ops-monospaced">{variant.ean}</td><td><span className={"ops-quantity" + (variant.stock <= 2 ? " warning" : "")}>{variant.stock} szt.</span></td><td><button className="ops-action" onClick={() => {setStockEdit(variant); setError(""); setDelta(""); setReason("");}}>Korekta<Plus size={15}/></button></td></tr>)}</tbody></table></ScrollTable>{!filteredVariants.length && <p className="ops-empty">Brak wariantów spełniających kryteria.</p>}</section>}
+
+    {activeTab === "transfers" && <div className="ops-two"><section className="ops-panel"><div className="ops-panel-head"><h2>Zakup gotowych transferów</h2></div><form className="ops-form" onSubmit={async event => {event.preventDefault(); const ok = await mutate("transfers", "POST", {design:batchForm.design.trim(), supplier:batchForm.supplier.trim(), reference:batchForm.reference.trim(), quantity:Number(batchForm.quantity), cost_unit:Math.round(Number(batchForm.cost) * 100)}, "Zapisano zakup transferów. Partia oczekuje na przyjęcie."); if (ok) setBatchForm({design:"", supplier:"", reference:"", quantity:"", cost:""});}}><label>Nazwa wzoru<input required maxLength={100} value={batchForm.design} onChange={event => setBatchForm({...batchForm, design:event.target.value})} placeholder="Np. Zastal Classic — przód"/></label><label>Dostawca<input required maxLength={100} value={batchForm.supplier} onChange={event => setBatchForm({...batchForm, supplier:event.target.value})} placeholder="Nazwa dostawcy"/></label><label>Numer zamówienia u dostawcy <span className="ops-optional">(opcjonalnie)</span><input maxLength={80} value={batchForm.reference} onChange={event => setBatchForm({...batchForm, reference:event.target.value})} placeholder="Numer referencyjny"/></label><div className="ops-form-cols"><label>Liczba transferów<input type="number" required min={1} max={100000} step={1} value={batchForm.quantity} onChange={event => setBatchForm({...batchForm, quantity:event.target.value})}/></label><label>Koszt 1 szt. (zł)<input type="number" min={0} step="0.01" value={batchForm.cost} onChange={event => setBatchForm({...batchForm, cost:event.target.value})} placeholder="0,00"/></label></div><button className="ops-primary" disabled={saving || loading}>Zapisz zakup<Plus size={17}/></button></form><p className="ops-info">DTF to gotowe transfery kupowane od zewnętrznego dostawcy i nanoszone na odzież. Zakup i fizyczne przyjęcie dostawy zapisuje się osobno.</p></section><section className="ops-panel"><div className="ops-panel-head"><h2>Partie i przyjęcia <span>{batches.length}</span></h2><p>{batches.reduce((sum, batch) => sum + batch.available, 0)} szt. dostępnych</p></div><div className="ops-batch-list">{batches.map(batch => <article className="ops-batch" key={batch.id}><div className="ops-batch-title"><span className="ops-batch-id">#{String(batch.id).padStart(3, "0")}</span><div><h3>{batch.design}</h3><p>{batch.supplier}{batch.reference ? " · " + batch.reference : ""}</p><small>{formatDate(batch.created)} · {formatMoney(batch.cost_unit)} / szt.</small></div></div><dl className="ops-batch-counts"><div><dt>Zamówione</dt><dd>{batch.ordered}</dd></div><div><dt>Przyjęte</dt><dd>{batch.received}</dd></div><div><dt>Dostępne</dt><dd>{batch.available}</dd></div></dl>{batch.received < batch.ordered ? <form className="ops-receive" onSubmit={async event => {event.preventDefault(); const ok = await mutate("transfers/" + batch.id + "/receive", "PATCH", {quantity:Number(receive[batch.id])}, "Zapisano przyjęcie transferów do magazynu."); if (ok) setReceive(previous => ({...previous, [batch.id]:""}));}}><label><span>Przyjmij do {batch.ordered - batch.received} szt.</span><input aria-label={"Liczba przyjmowanych transferów z partii " + batch.id} type="number" required min={1} max={batch.ordered - batch.received} step={1} value={receive[batch.id] || ""} onChange={event => setReceive(previous => ({...previous, [batch.id]:event.target.value}))} placeholder="Liczba sztuk"/></label><button className="ops-action" disabled={saving || loading}><ArrowDownToLine size={16}/>Przyjmij</button></form> : <p className="ops-received"><CheckCircle2 size={15}/>Dostawa przyjęta w całości</p>}</article>)}{!batches.length && <p className="ops-empty">Nie zapisano jeszcze zakupów transferów.</p>}</div></section></div>}
+
+    {activeTab === "production" && <div className="ops-two"><section className="ops-panel"><div className="ops-panel-head"><h2>Nowe zlecenie nanoszenia</h2></div><form className="ops-form" onSubmit={async event => {event.preventDefault(); if (!canAssign) return; const ok = await mutate("production", "POST", {order_id:Number(prodOrder), line_index:Number(prodLine), batch_id:Number(prodBatch)}, "Zlecenie utworzone. Transfery zostały zarezerwowane."); if (ok) {setProdOrder(""); setProdBatch(""); setProdLine("0");}}}><label>Zamówienie<select required value={prodOrder} onChange={event => {const next = orders.find(item => String(item.id) === event.target.value); const firstFree = next ? parseOrderLines(next.items).findIndex((_, index) => !tasks.some(task => task.order_id === next.id && task.line_index === index)) : 0; setProdOrder(event.target.value); setProdLine(String(Math.max(0, firstFree))); setProdBatch("");}}><option value="">Wybierz zamówienie</option>{orders.filter(item => !isClosedOrder(item.status)).map(item => <option key={item.id} value={item.id}>{orderNumber(item.id)} · {statusText[item.status] || item.status}</option>)}</select></label><label>Pozycja zamówienia<select value={prodLine} disabled={!chosenLines.length} onChange={event => {setProdLine(event.target.value); setProdBatch("");}}>{!chosenLines.length && <option value="0">Najpierw wybierz zamówienie</option>}{chosenLines.map((line, index) => <option key={index} value={index} disabled={tasks.some(task => task.order_id === chosenOrder?.id && task.line_index === index)}>{index + 1}. {line.name || productName(line.sku)} / {line.size || "UNI"} × {line.qty}{tasks.some(task => task.order_id === chosenOrder?.id && task.line_index === index) ? " — zlecenie istnieje" : ""}</option>)}</select></label><label>Partia gotowych transferów<select required value={prodBatch} onChange={event => setProdBatch(event.target.value)}><option value="">Wybierz partię</option>{batches.filter(batch => batch.available > 0).map(batch => <option key={batch.id} value={batch.id} disabled={!!selectedLine && batch.available < selectedLine.qty}>#{batch.id} {batch.design} · {batch.available} szt. dostępnych</option>)}</select></label>{assignedLine && <p className="ops-form-note">Ta pozycja ma już zlecenie nanoszenia.</p>}<button className="ops-primary" disabled={saving || loading || !canAssign}>Przydziel transfery<ArrowRight size={17}/></button></form><p className="ops-info">Zlecenie rezerwuje po jednym transferze na każdą sztukę z wybranej pozycji zamówienia. Etapy nanoszenia i kontroli zapisują się w historii.</p></section><section className="ops-panel"><div className="ops-panel-head ops-queue-head"><h2>Kolejka nanoszenia <span>{visibleTasks.length}</span></h2><select className="ops-filter" aria-label="Filtr kolejki nanoszenia" value={taskFilter} onChange={event => setTaskFilter(event.target.value)}><option value="active">Aktywne zlecenia</option><option value="all">Wszystkie zlecenia</option>{productionStatuses.map(status => <option key={status} value={status}>{statusText[status]}</option>)}</select></div><div className="ops-tasks">{visibleTasks.map(task => <article className="ops-task" key={task.id}><div className="ops-task-heading"><strong>DTF-{String(task.id).padStart(4, "0")}</strong><StatusBadge status={task.status}/></div><h3>{task.design}</h3><button className="ops-text-link" onClick={() => void showOrder(task.order_id)}>{orderNumber(task.order_id)} · pozycja {task.line_index + 1}<ArrowRight size={14}/></button><p>{task.supplier}{task.reference ? " · " + task.reference : ""}</p><small>Aktualizacja: {formatDate(task.updated)}</small><label>Etap zlecenia<select value={task.status} disabled={saving || loading || isClosedTask(task.status)} onChange={event => void mutate("production/" + task.id, "PATCH", {status:event.target.value}, "Zapisano etap nanoszenia.")}>{productionStatuses.map(status => <option key={status} value={status}>{statusText[status]}</option>)}</select></label></article>)}{!visibleTasks.length && <p className="ops-empty">Brak zleceń w wybranym etapie.</p>}</div></section></div>}
+
+    {activeTab === "labels" && <div className="ops-two"><section className="ops-panel"><div className="ops-panel-head"><h2>Druk etykiet wariantów</h2></div><div className="ops-form"><label>Produkt i rozmiar<select value={chosen?.id || ""} onChange={event => setSelectedLabel(Number(event.target.value))}>{!inventory.length && <option value="">Brak wariantów</option>}{inventory.map(variant => <option key={variant.id} value={variant.id}>{variant.name} / {variant.size} · {variant.sku}</option>)}</select></label><label>Liczba etykiet<input type="number" min={1} max={48} step={1} value={quantity} onChange={event => setQuantity(Math.max(1, Math.min(48, Math.trunc(Number(event.target.value)) || 1)))}/></label><button className="ops-primary" onClick={() => window.print()} disabled={!chosen || loading}><Printer size={17}/>Drukuj {quantity} etykiet</button></div><form className="ops-scan" onSubmit={event => {event.preventDefault(); verifyLabelScan();}}><label>Sprawdź kod EAN, QR lub SKU<input value={labelScan} onChange={event => setLabelScan(event.target.value)} placeholder="Zeskanuj kod lub wpisz SKU" autoComplete="off"/></label><button className="ops-action" disabled={!inventory.length}><ScanLine size={17}/>Sprawdź</button>{scanResult && <p className="ops-scan-feedback" role="status"><CheckCircle2 size={16}/>{scanResult.name}, rozmiar {scanResult.size} · {scanResult.stock} szt.</p>}{labelScanError && <p className="ops-scan-error" role="alert">{labelScanError}</p>}</form><p className="ops-info">EAN-13 z prefiksem 200 służy do obiegu wewnętrznego. Nie jest globalnym numerem GTIN zarejestrowanym w GS1. Kod QR zawiera SKU i EAN tego samego wariantu.</p></section><section className="ops-panel"><div className="ops-panel-head"><h2>Podgląd etykiety</h2><p>60 × 40 mm · arkusz A4</p></div><div className="ops-label-stage">{chosen ? <Label variant={chosen}/> : <p className="ops-empty">Brak danych wariantów do wydruku.</p>}</div>{chosen && <div className="ops-label-detail"><strong>{chosen.name} / {chosen.size}</strong><span>{chosen.sku}</span><span>EAN {chosen.ean}</span></div>}</section><div className="ops-print-area">{chosen && Array.from({length:quantity}, (_, index) => <Label key={index} variant={chosen}/>)}</div></div>}
+
+    {activeTab === "audit" && <><div className="ops-audit-toolbar"><p>Ostatnie 80 działań i 100 ruchów magazynowych</p><button className="ops-action" onClick={() => exportCsv("zastal-historia.csv", ["Typ", "Obiekt", "Opis", "Data"], [...activity.map(event => [activityText[event.kind] || event.kind, event.object_id, event.note, event.created]), ...movements.map(movement => ["Ruch magazynowy", movement.sku, `${movement.delta > 0 ? "+" : ""}${movement.delta} szt. · ${movement.reason}`, movement.created])])}><ArrowDownToLine size={16}/>Eksport CSV</button></div><div className="ops-two"><section className="ops-panel"><div className="ops-panel-head"><h2>Historia działań <span>{activity.length}</span></h2></div><div className="ops-log">{activity.map(event => <article key={event.id}><Clock3 size={17}/><div><h3>{activityText[event.kind] || event.kind} <span>#{event.object_id}</span></h3><p>{event.note}</p><small>{formatDate(event.created)}</small></div></article>)}{!activity.length && <p className="ops-empty">Brak zapisanych działań.</p>}</div></section><section className="ops-panel"><div className="ops-panel-head"><h2>Ruchy magazynowe <span>{movements.length}</span></h2></div><div className="ops-log">{movements.map(movement => <article key={movement.id}><Warehouse size={17}/><div><h3 className="ops-monospaced">{movement.sku}<span className={movement.delta < 0 ? "ops-negative" : "ops-positive"}>{movement.delta > 0 ? "+" : ""}{movement.delta} szt.</span></h3><p>{movement.reason}</p><small>{formatDate(movement.created)} · {sourceText[movement.source] || movement.source}</small></div></article>)}{!movements.length && <p className="ops-empty">Brak ruchów magazynowych.</p>}</div></section></div></>}
+
+    {stockEdit && <Dialog titleId="stock-dialog-title" onClose={() => setStockEdit(null)}><p className="ops-dialog-eyebrow">Magazyn wariantów</p><h2 id="stock-dialog-title">Korekta stanu</h2><h3>{stockEdit.name} / {stockEdit.size}</h3><p className="ops-dialog-description">{stockEdit.sku} · aktualnie {stockEdit.stock} szt.</p><form className="ops-form ops-modal-form" onSubmit={async event => {event.preventDefault(); const value = Number(delta); if (!Number.isInteger(value) || !value || stockEdit.stock + value < 0) {setError("Podaj zmianę różną od zera. Stan po korekcie nie może być ujemny."); return;} const ok = await mutate("inventory/" + stockEdit.id, "PATCH", {delta:value, reason:reason.trim()}, "Zapisano korektę i ruch magazynowy."); if (ok) setStockEdit(null);}}><label>Zmiana liczby sztuk<input type="number" required min={Math.max(-5000, -stockEdit.stock)} max={5000} step={1} value={delta} onChange={event => setDelta(event.target.value)} placeholder="Np. 10 lub -2"/><span className="ops-field-hint">Stan po korekcie: {stockEdit.stock + (Number(delta) || 0)} szt.</span></label><label>Powód korekty<input required minLength={3} maxLength={150} value={reason} onChange={event => setReason(event.target.value)} placeholder="Dostawa, remanent, uszkodzenie…"/></label>{error && <p className="ops-form-error" role="alert">{error}</p>}<button className="ops-primary" disabled={saving || loading || !Number(delta)}>Zapisz korektę<CheckCircle2 size={17}/></button></form></Dialog>}
+
+    {order && <Dialog titleId="order-dialog-title" onClose={closeOrder} wide><p className="ops-dialog-eyebrow">Szczegóły zamówienia</p><h2 id="order-dialog-title">{orderNumber(order.id)}</h2><p className="ops-dialog-description">{formatDate(order.created)} · {formatMoney(order.total)}</p><div className="ops-order-status"><label htmlFor="order-status-select">Status realizacji</label><select id="order-status-select" value={order.status} disabled={saving || openingOrder || isClosedOrder(order.status)} onChange={async event => {const id = order.id; const pendingDetail = detailRequest.current; const ok = await mutate("orders/" + id, "PATCH", {status:event.target.value}, "Zmiana statusu zapisana w historii."); if (ok && pendingDetail === detailRequest.current) await showOrder(id, false);}}>{orderStatuses.map(status => <option key={status} value={status}>{statusText[status]}</option>)}</select></div>{error && <p className="ops-form-error" role="alert">{error}</p>}<h3 className="ops-detail-title">Pozycje zamówienia</h3><div className="ops-order-lines">{order.items.map((line, index) => <div className="ops-order-line" key={index}><div><strong>{line.name || productName(line.sku)}</strong><small>{lineVariantSku(line, inventory)} / {line.size || "UNI"}</small></div><span>{line.qty} × {formatMoney(line.unit_price)}</span></div>)}</div>{order.fulfillment && <p className="ops-order-delivery">Dostawa: {({odbior:"Odbiór osobisty", paczkomat:"Paczkomat", kurier:"Kurier"} as Record<string,string>)[order.fulfillment] || order.fulfillment}{typeof order.shipping_fee === "number" ? " · " + formatMoney(order.shipping_fee) : ""} (symulacja)</p>}<section className="ops-packing"><div className="ops-packing-heading"><h3>Kontrola do pakowania</h3><span className={unitsRequired > 0 && unitsScanned === unitsRequired ? "ops-packed" : ""}>{unitsScanned}/{unitsRequired} szt.</span></div><p>Każdy skan potwierdza jedną sztukę i właściwy rozmiar. Wynik jest przechowywany tylko w tej sesji okna.</p><form className="ops-packing-scan" onSubmit={event => {event.preventDefault(); verifyOrderScan();}}><input aria-label="Kod wariantu do pakowania" value={orderScan} onChange={event => setOrderScan(event.target.value)} placeholder="EAN, QR lub SKU" autoComplete="off"/><button className="ops-action" disabled={!orderScan.trim() || isClosedOrder(order.status)}><ScanLine size={17}/>Potwierdź sztukę</button></form>{packingNotice && <p className={packingNotice.valid ? "ops-scan-feedback" : "ops-scan-error"} role="status">{packingNotice.valid ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>} {packingNotice.text}</p>}<ul className="ops-packing-lines">{Object.entries(required).map(([sku, count]) => <li key={sku}><span className="ops-monospaced">{sku}</span><span className={(scanned[sku] || 0) >= count ? "ops-packed" : ""}>{Math.min(scanned[sku] || 0, count)}/{count} szt.</span></li>)}</ul>{unitsScanned > 0 && <button type="button" className="ops-text-link" onClick={() => {setScanned({}); setPackingNotice(null);}}>Wyzeruj kontrolę</button>}</section>{order.production.length > 0 && <><h3 className="ops-detail-title">Zlecenia nanoszenia</h3><div className="ops-detail-production">{order.production.map(task => <div key={task.id}><span>DTF-{String(task.id).padStart(4, "0")} · {task.design} · poz. {task.line_index + 1}</span><StatusBadge status={task.status}/></div>)}</div></>}<h3 className="ops-detail-title">Historia zamówienia</h3><ol className="ops-timeline">{order.events.map(event => <li key={event.id}><strong>{statusText[event.status] || event.status}</strong><small>{formatDate(event.created)}</small></li>)}</ol><button className="ops-action ops-dialog-done" onClick={closeOrder}>Zamknij szczegóły<ArrowRight size={16}/></button></Dialog>}
+  </div>;
+}
+function BarcodeSvg({value}:{value:string}) {
+  const ref = useRef<SVGSVGElement | null>(null);
+  const [invalid, setInvalid] = useState(false);
+  useEffect(() => {if (!ref.current) return; try {JsBarcode(ref.current, value, {format:"EAN13", height:42, width:1.2, displayValue:true, fontSize:10, margin:0}); setInvalid(false);} catch {setInvalid(true);}}, [value]);
+  return <><svg ref={ref} role="img" aria-label={"EAN-13 " + value} style={invalid ? {display:"none"} : undefined}/>{invalid && <span>Nieprawidłowy EAN: {value}</span>}</>;
+}
+function Label({variant}:{variant:Variant}) {
+  return <div className="ops-printed-label"><div className="ops-label-brand"><strong>Zastal</strong><span>{variant.size}</span></div><div className="ops-label-name">{variant.name}</div><div className="ops-label-codes"><div><BarcodeSvg value={variant.ean}/></div><QRCodeSVG value={["ZASTAL", variant.sku, variant.ean].join("|")} size={60}/></div><div className="ops-label-foot"><span>{variant.sku}</span><strong>{formatMoney(variant.price)}</strong></div></div>;
 }

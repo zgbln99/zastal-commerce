@@ -1,0 +1,13 @@
+import type { CatalogItem } from './catalog';
+export type CartLine = { id: number; size: string; quantity: number };
+export type Variant = { id: number; product_id: number; size: string; sku: string; ean: string; stock: number };
+export type Product = CatalogItem & { variants: Variant[]; verified: boolean };
+export type Filters = { category?: string; query?: string; minPrice?: number; maxPrice?: number; size?: string; available?: boolean; sort?: string };
+export const FREE_SHIPPING: number;
+export function shippingCost(method: string, subtotal: number): number;
+export function normalizeCart(raw: unknown, products: CatalogItem[]): CartLine[];
+export function normalizeFavorites(raw: unknown, products: CatalogItem[]): number[];
+export function availableQty(product: Product | undefined, size: string): number;
+export function canCheckout(cart: CartLine[], products: Product[]): boolean;
+export function filterProducts(products: Product[], filters?: Filters): Product[];
+export function removePurchased(cart: CartLine[], submitted: CartLine[]): CartLine[];
