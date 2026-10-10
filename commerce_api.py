@@ -1,0 +1,349 @@
+"""Zastal Commerce OS v0.3 – transactional demo API.
+
+No live payments, customer identity, or carrier integrations. Uses built-in
+SQLite with explicit transactions, variant stock ledger, purchased DTF transfers,
+production workflow and audit events. Keep behind HTTPS reverse proxy.
+"""
+import datetime as dt
+import json
+import os
+import secrets
+import sqlite3
+import threading
+import time
+from collections import defaultdict, deque
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+ROOT = Path(__file__).resolve().parent
+DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
+TOKEN = os.environ.get("ZASTAL_ADMIN_TOKEN", "")
+VALID_STATUS = (
+    "nowe", "potwierdzone", "do_kompletacji", "nanoszenie_dtf",
+    "kontrola_jakosci", "spakowane", "wyslane_demo", "anulowane",
+)
+PRINT_STATUS = ("oczekuje", "przygotowanie", "nanoszenie", "kontrola", "gotowe", "odrzucone")
+LIMITS = defaultdict(deque)
+RATE_LOCK = threading.Lock()
+
+def stamp():
+    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+def connect():
+    c = sqlite3.connect(DATABASE, timeout=20)
+    c.row_factory = sqlite3.Row
+    c.execute("PRAGMA foreign_keys=ON")
+    c.execute("PRAGMA busy_timeout=20000")
+    return c
+
+def ean13(identifier):
+    """Prefix 200 = internal restricted circulation; not externally assigned GS1 GTIN."""
+    stem = "200" + str(identifier).zfill(9)
+    checksum = (10 - sum(int(c) * (3 if i % 2 else 1) for i,c in enumerate(stem)) % 10) % 10
+    return stem + str(checksum)
+
+def sizes_for(product):
+    if product["category"] == "Dzieci": return ["116", "128", "140", "152", "164"]
+    if product["category"] in ("Bluzy", "Koszulki"): return ["S","M","L","XL","XXL"]
+    return ["UNI"]
+
+def init():
+    DATABASE.parent.mkdir(parents=True, exist_ok=True)
+    with connect() as c:
+        c.executescript("""
+        CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY, name TEXT NOT NULL, sku TEXT UNIQUE NOT NULL, category TEXT, price INTEGER NOT NULL, stock INTEGER NOT NULL DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY AUTOINCREMENT, created TEXT, items TEXT, total INTEGER, status TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, created TEXT, status TEXT);
+        CREATE TABLE IF NOT EXISTS transfers(id INTEGER PRIMARY KEY AUTOINCREMENT, supplier TEXT, design TEXT, purchased INTEGER, available INTEGER, created TEXT);
+        CREATE TABLE IF NOT EXISTS product_variants (
+           id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL,
+           size TEXT NOT NULL, sku TEXT UNIQUE NOT NULL, ean TEXT UNIQUE NOT NULL,
+           stock INTEGER NOT NULL DEFAULT 0 CHECK(stock >= 0),
+           UNIQUE(product_id,size), FOREIGN KEY(product_id) REFERENCES products(id));
+        CREATE TABLE IF NOT EXISTS stock_events (
+           id INTEGER PRIMARY KEY AUTOINCREMENT,variant_id INTEGER NOT NULL,
+           delta INTEGER NOT NULL,reason TEXT NOT NULL,created TEXT NOT NULL,
+           source TEXT DEFAULT 'admin',FOREIGN KEY(variant_id) REFERENCES product_variants(id));
+        CREATE TABLE IF NOT EXISTS dtf_batches (
+           id INTEGER PRIMARY KEY AUTOINCREMENT,
+           design TEXT NOT NULL,supplier TEXT NOT NULL,reference TEXT,
+           ordered INTEGER NOT NULL CHECK(ordered >= 0),
+           received INTEGER NOT NULL DEFAULT 0 CHECK(received >= 0),
+           available INTEGER NOT NULL DEFAULT 0 CHECK(available >= 0),
+           cost_unit INTEGER NOT NULL DEFAULT 0,created TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS production_tasks (
+           id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,
+           line_index INTEGER NOT NULL,batch_id INTEGER NOT NULL,
+           design TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'oczekuje',
+           created TEXT NOT NULL,updated TEXT NOT NULL,
+           UNIQUE(order_id,line_index),FOREIGN KEY(batch_id) REFERENCES dtf_batches(id));
+        CREATE TABLE IF NOT EXISTS audit_log(
+           id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,
+           object_id TEXT NOT NULL,note TEXT NOT NULL,created TEXT NOT NULL);
+        """)
+        products = c.execute("SELECT * FROM products ORDER BY id").fetchall()
+        for product in products:
+            count = c.execute("SELECT COUNT(*) FROM product_variants WHERE product_id=?", (product["id"],)).fetchone()[0]
+            if count: continue
+            sizes = sizes_for(product)
+            quantity = max(0, product["stock"])
+            base,rem = divmod(quantity,len(sizes))
+            for index,size in enumerate(sizes):
+                vsku = product["sku"]+"-"+size
+                c.execute("INSERT INTO product_variants(product_id,size,sku,ean,stock) VALUES(?,?,?,?,?)",
+                  (product["id"],size,vsku,ean13(product["id"]*100+index+1),base+(1 if index<rem else 0)))
+        if not c.execute("SELECT 1 FROM dtf_batches LIMIT 1").fetchone():
+            c.executemany("INSERT INTO dtf_batches(design,supplier,reference,ordered,received,available,cost_unit,created) VALUES(?,?,?,?,?,?,?,?)",[
+                ("Zastal Classic – przód","Dostawca demonstracyjny","DTF-DEMO-001",60,40,40,780,stamp()),
+                ("Zastal 1946 – retro","Dostawca demonstracyjny","DTF-DEMO-002",30,25,25,950,stamp()),
+                ("Zielona Góra – game day","Dostawca demonstracyjny","DTF-DEMO-003",50,20,20,850,stamp()),
+            ])
+
+def asdict(r): return dict(r) if r is not None else None
+
+def audit(c,kind,obj,note):
+    c.execute("INSERT INTO audit_log(kind,object_id,note,created) VALUES(?,?,?,?)",(kind,str(obj),note[:300],stamp()))
+
+def compatible_products(c):
+    return [dict(x) for x in c.execute("SELECT * FROM products ORDER BY id")]
+
+def catalog(c):
+    products = compatible_products(c)
+    variants = [dict(x) for x in c.execute("SELECT id,product_id,size,sku,ean,stock FROM product_variants ORDER BY id")]
+    by_product=defaultdict(list)
+    for v in variants:by_product[v["product_id"]].append(v)
+    for p in products:p["variants"]=by_product[p["id"]]
+    return products
+
+class Invalid(Exception): pass
+
+class Handler(BaseHTTPRequestHandler):
+    server_version="ZastalDemo/0.3"
+    def log_message(self,fmt,*args):
+        # Public logs exclude supplied auth credentials and request bodies.
+        pass
+
+    def respond(self,status,value,content_type="application/json"):
+        if not isinstance(value,(bytes,str)):
+            value=json.dumps(value,ensure_ascii=False)
+        if isinstance(value,str):value=value.encode("utf8")
+        self.send_response(status)
+        self.send_header("Content-Type",content_type+"; charset=utf-8")
+        self.send_header("Content-Length",str(len(value)))
+        self.send_header("Cache-Control","no-store")
+        self.send_header("X-Content-Type-Options","nosniff")
+        self.send_header("Referrer-Policy","strict-origin-when-cross-origin")
+        self.send_header("X-Frame-Options","DENY")
+        self.end_headers()
+        self.wfile.write(value)
+
+    def authorized(self):
+        supplied=self.headers.get("Authorization","").removeprefix("Bearer ")
+        return bool(TOKEN) and secrets.compare_digest(TOKEN,supplied)
+
+    def body(self):
+        length=int(self.headers.get("Content-Length","0"))
+        if length<1 or length>16384:raise Invalid("Nieprawidłowy rozmiar żądania")
+        try:
+            data=json.loads(self.rfile.read(length))
+            if not isinstance(data,dict):raise Invalid("Oczekiwano obiektu")
+            return data
+        except (ValueError,UnicodeError):raise Invalid("Nieprawidłowy JSON")
+
+    def access(self,path):
+        if path.startswith("/api/admin/") and not self.authorized():
+            self.respond(403,{"error":"Brak autoryzacji"})
+            return False
+        return True
+
+    def error(self,ex):
+        self.respond(400,{"error":str(ex)})
+
+    def do_GET(self):
+        path=urlparse(self.path).path
+        if path=="/health":return self.respond(200,{"ok":True,"version":"0.3","demo":True})
+        if not self.access(path):return
+        try:
+            with connect() as c:
+                if path=="/api/products":return self.respond(200,compatible_products(c))
+                if path=="/api/catalog":return self.respond(200,catalog(c))
+                if path.startswith("/api/catalog/"):
+                    pid=int(path.rsplit("/",1)[1])
+                    p=next((x for x in catalog(c) if x["id"]==pid),None)
+                    return self.respond(200,p) if p else self.respond(404,{"error":"Produkt nie istnieje"})
+                if path=="/api/admin/orders":
+                    return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM orders ORDER BY id DESC LIMIT 300")])
+                if path.startswith("/api/admin/orders/"):
+                    oid=int(path.rsplit("/",1)[1]);o=asdict(c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone())
+                    if not o:return self.respond(404,{"error":"Nie znaleziono zamówienia"})
+                    o["items"]=json.loads(o["items"])
+                    o["events"]=[dict(x) for x in c.execute("SELECT * FROM events WHERE order_id=? ORDER BY id DESC",(oid,))]
+                    o["production"]=[dict(x) for x in c.execute("SELECT * FROM production_tasks WHERE order_id=? ORDER BY id",(oid,))]
+                    return self.respond(200,o)
+                if path=="/api/admin/inventory":
+                    q="""SELECT v.id,v.product_id,v.size,v.sku,v.ean,v.stock,
+                     p.name,p.category,p.price FROM product_variants v
+                     JOIN products p ON p.id=v.product_id ORDER BY p.id,v.id"""
+                    return self.respond(200,[dict(x) for x in c.execute(q)])
+                if path=="/api/admin/stock-events":
+                    return self.respond(200,[dict(x) for x in c.execute("SELECT e.*,v.sku FROM stock_events e JOIN product_variants v ON v.id=e.variant_id ORDER BY e.id DESC LIMIT 100")])
+                if path=="/api/admin/transfers":
+                    return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM dtf_batches ORDER BY id DESC")])
+                if path=="/api/admin/production":
+                    q="""SELECT t.*,b.supplier,b.reference,o.status AS order_status
+                       FROM production_tasks t JOIN dtf_batches b ON b.id=t.batch_id
+                       JOIN orders o ON o.id=t.order_id ORDER BY t.id DESC"""
+                    return self.respond(200,[dict(x) for x in c.execute(q)])
+                if path=="/api/admin/activity":
+                    return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 80")])
+            return self.respond(404,{"error":"Nie znaleziono"})
+        except (ValueError,TypeError):return self.respond(400,{"error":"Nieprawidłowy identyfikator"})
+        except sqlite3.Error:return self.respond(500,{"error":"Błąd bazy danych"})
+
+    def public_rate(self):
+        ip=self.client_address[0]
+        now=time.monotonic()
+        with RATE_LOCK:
+            q=LIMITS[ip]
+            while q and q[0]<now-600:q.popleft()
+            if len(q)>=6:return False
+            q.append(now);return True
+
+    def do_POST(self):
+        path=urlparse(self.path).path
+        if not self.access(path):return
+        try:
+            data=self.body()
+            if path=="/api/orders":
+                if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele zamówień testowych. Spróbuj później."})
+                lines=data.get("items")
+                if not isinstance(lines,list) or not 1<=len(lines)<=20:raise Invalid("Pusty lub nieprawidłowy koszyk")
+                result=[]
+                with connect() as c:
+                    c.execute("BEGIN IMMEDIATE")
+                    total=0
+                    for line in lines:
+                        if not isinstance(line,dict):raise Invalid("Nieprawidłowy produkt")
+                        pid=int(line.get("id",0));qty=int(line.get("quantity",0))
+                        size=str(line.get("size") or "UNI").strip().upper()
+                        if qty<1 or qty>20 or len(size)>10:raise Invalid("Nieprawidłowy rozmiar lub ilość")
+                        p=c.execute("SELECT * FROM products WHERE id=?",(pid,)).fetchone()
+                        v=c.execute("SELECT * FROM product_variants WHERE product_id=? AND size=?",(pid,size)).fetchone()
+                        if not p or not v:raise Invalid("Wybierz poprawny wariant produktu")
+                        if v["stock"]<qty:raise Invalid("Niewystarczająca dostępność wariantu "+size)
+                        c.execute("UPDATE product_variants SET stock=stock-? WHERE id=?",(qty,v["id"]))
+                        c.execute("UPDATE products SET stock=stock-? WHERE id=?",(qty,pid))
+                        c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(v["id"],-qty,"zamówienie testowe",stamp(),"checkout"))
+                        total+=p["price"]*qty
+                        result.append({"sku":p["sku"],"variant_sku":v["sku"],"name":p["name"],"size":size,"qty":qty,"unit_price":p["price"]})
+                    now=stamp()
+                    cur=c.execute("INSERT INTO orders(created,items,total,status) VALUES(?,?,?,?)",(now,json.dumps(result,ensure_ascii=False),total,"nowe"))
+                    c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(cur.lastrowid,now,"nowe"))
+                    audit(c,"order",cur.lastrowid,"Utworzono zamówienie demonstracyjne")
+                return self.respond(201,{"id":cur.lastrowid,"total":total})
+            if path=="/api/admin/transfers":
+                design=str(data.get("design","")).strip()
+                supplier=str(data.get("supplier","")).strip()
+                reference=str(data.get("reference","")).strip()
+                quantity=int(data.get("quantity",0));cost=int(data.get("cost_unit",0))
+                if not design or not supplier or len(design)>100 or len(supplier)>100 or len(reference)>80 or not 0<quantity<=100000 or cost<0:raise Invalid("Uzupełnij dane i poprawną ilość")
+                with connect() as c:
+                    cur=c.execute("INSERT INTO dtf_batches(design,supplier,reference,ordered,received,available,cost_unit,created) VALUES(?,?,?,?,?,?,?,?)",(design,supplier,reference,quantity,0,0,cost,stamp()))
+                    audit(c,"transfer",cur.lastrowid,f"Zamówiono {quantity} gotowych transferów od {supplier}")
+                    return self.respond(201,{"id":cur.lastrowid})
+            if path=="/api/admin/production":
+                oid=int(data.get("order_id",0));idx=int(data.get("line_index",-1));bid=int(data.get("batch_id",0))
+                with connect() as c:
+                    c.execute("BEGIN IMMEDIATE")
+                    o=c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone()
+                    b=c.execute("SELECT * FROM dtf_batches WHERE id=?",(bid,)).fetchone()
+                    if not o or o["status"] in ("anulowane","wyslane_demo"):raise Invalid("Brak aktywnego zamówienia")
+                    lines=json.loads(o["items"])
+                    if idx<0 or idx>=len(lines) or not b:raise Invalid("Nieprawidłowa pozycja lub nadruk")
+                    count=int(lines[idx].get("qty",1))
+                    if count<1 or b["available"]<count:raise Invalid("Brak dostępnych nadruków z tej partii")
+                    if c.execute("SELECT 1 FROM production_tasks WHERE order_id=? AND line_index=?",(oid,idx)).fetchone():raise Invalid("Zlecenie dla pozycji już istnieje")
+                    c.execute("UPDATE dtf_batches SET available=available-? WHERE id=?",(count,bid))
+                    cur=c.execute("INSERT INTO production_tasks(order_id,line_index,batch_id,design,status,created,updated) VALUES(?,?,?,?,?,?,?)",(oid,idx,bid,b["design"],"oczekuje",stamp(),stamp()))
+                    audit(c,"production",cur.lastrowid,f"Rezerwacja {count} transferów, zlecenie {oid}, poz. {idx+1}")
+                    return self.respond(201,{"id":cur.lastrowid})
+            return self.respond(404,{"error":"Nie znaleziono"})
+        except (Invalid,ValueError,TypeError,KeyError,sqlite3.IntegrityError) as ex:
+            return self.error(ex)
+        except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
+
+    def do_PATCH(self):
+        path=urlparse(self.path).path
+        if not self.access(path):return
+        try:
+            data=self.body()
+            if path.startswith("/api/admin/orders/"):
+                oid=int(path.rsplit("/",1)[1]);status=data.get("status")
+                if status not in VALID_STATUS:raise Invalid("Nieprawidłowy status")
+                with connect() as c:
+                    c.execute("BEGIN IMMEDIATE")
+                    old=c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone()
+                    if not old:raise Invalid("Nie istnieje takie zamówienie")
+                    if old["status"] in ("wyslane_demo","anulowane") and old["status"]!=status:raise Invalid("Zamówienie zostało już zamknięte")
+                    if status=="anulowane" and old["status"]!="anulowane":
+                        if c.execute("SELECT 1 FROM production_tasks WHERE order_id=? AND status NOT IN ('oczekuje')",(oid,)).fetchone():raise Invalid("Produkcja rozpoczęta — anulowanie wymaga obsługi ręcznej")
+                        if c.execute("SELECT 1 FROM production_tasks WHERE order_id=?",(oid,)).fetchone():raise Invalid("Usuń lub rozlicz rezerwacje DTF przed anulowaniem")
+                        for line in json.loads(old["items"]):
+                            sku=line.get("variant_sku") or line.get("sku","")+"-"+(line.get("size") or "UNI")
+                            v=c.execute("SELECT * FROM product_variants WHERE sku=?",(sku,)).fetchone()
+                            if v:
+                                qty=int(line.get("qty",1))
+                                c.execute("UPDATE product_variants SET stock=stock+? WHERE id=?",(qty,v["id"]))
+                                c.execute("UPDATE products SET stock=stock+? WHERE id=?",(qty,v["product_id"]))
+                                c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(v["id"],qty,"zwrot rezerwacji po anulowaniu",stamp(),"orders"))
+                    if old["status"]!=status:
+                        c.execute("UPDATE orders SET status=? WHERE id=?",(status,oid))
+                        c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(oid,stamp(),status))
+                        audit(c,"order",oid,"Status: "+status)
+                return self.respond(200,{"ok":True,"status":status})
+            if path.startswith("/api/admin/inventory/"):
+                vid=int(path.rsplit("/",1)[1]);delta=int(data.get("delta",0));reason=str(data.get("reason","")).strip()
+                if not delta or abs(delta)>5000 or len(reason)<3 or len(reason)>150:raise Invalid("Podaj zmianę i powód korekty")
+                with connect() as c:
+                    c.execute("BEGIN IMMEDIATE")
+                    v=c.execute("SELECT * FROM product_variants WHERE id=?",(vid,)).fetchone()
+                    if not v or v["stock"]+delta<0:raise Invalid("Nieprawidłowy stan końcowy")
+                    c.execute("UPDATE product_variants SET stock=stock+? WHERE id=?",(delta,vid))
+                    c.execute("UPDATE products SET stock=stock+? WHERE id=?",(delta,v["product_id"]))
+                    c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(vid,delta,reason,stamp(),"admin"))
+                    audit(c,"stock",vid,f"{delta:+} szt. ({reason})")
+                return self.respond(200,{"ok":True})
+            if path.startswith("/api/admin/transfers/") and path.endswith("/receive"):
+                tid=int(path.split("/")[-2]);qty=int(data.get("quantity",0))
+                if qty<1 or qty>100000:raise Invalid("Nieprawidłowa ilość")
+                with connect() as c:
+                    c.execute("BEGIN IMMEDIATE")
+                    row=c.execute("SELECT * FROM dtf_batches WHERE id=?",(tid,)).fetchone()
+                    if not row or row["received"]+qty>row["ordered"]:raise Invalid("Przyjęcie przekracza ilość zamówioną")
+                    c.execute("UPDATE dtf_batches SET received=received+?,available=available+? WHERE id=?",(qty,qty,tid))
+                    audit(c,"transfer",tid,f"Przyjęto {qty} szt. transferów od dostawcy")
+                return self.respond(200,{"ok":True})
+            if path.startswith("/api/admin/production/"):
+                tid=int(path.rsplit("/",1)[1]);status=data.get("status")
+                if status not in PRINT_STATUS:raise Invalid("Nieprawidłowy etap produkcji")
+                with connect() as c:
+                    old=c.execute("SELECT * FROM production_tasks WHERE id=?",(tid,)).fetchone()
+                    if not old:raise Invalid("Nie znaleziono zlecenia")
+                    if old["status"] in ("gotowe","odrzucone") and status!=old["status"]:raise Invalid("Zlecenie zakończone")
+                    if old["status"]!=status:
+                        c.execute("UPDATE production_tasks SET status=?,updated=? WHERE id=?",(status,stamp(),tid))
+                        audit(c,"production",tid,"Etap: "+status)
+                return self.respond(200,{"ok":True})
+            return self.respond(404,{"error":"Nie znaleziono"})
+        except (Invalid,ValueError,TypeError,KeyError) as ex:return self.error(ex)
+        except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
+
+if __name__=="__main__":
+    if not TOKEN:
+        raise SystemExit("ZASTAL_ADMIN_TOKEN required")
+    init()
+    host=os.environ.get("ZASTAL_HOST","127.0.0.1")
+    port=int(os.environ.get("ZASTAL_PORT","8880"))
+    print(f"Zastal Commerce OS demo API listening on {host}:{port}",flush=True)
+    ThreadingHTTPServer((host,port),Handler).serve_forever()
