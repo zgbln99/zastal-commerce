@@ -19,6 +19,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 import commerce_auth as auth
 import commerce_personalization as personalization
+import commerce_launch as launch
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
@@ -95,6 +96,7 @@ def init():
         """)
         auth.init_schema(c, TOKEN)
         personalization.init_schema(c)
+        launch.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -204,11 +206,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path=urlparse(self.path).path
-        if path=="/health":return self.respond(200,{"ok":True,"version":"0.5","demo":True,"accounts":True})
+        if path=="/health":return self.respond(200,{"ok":True,"version":"0.7","sales_phase":"prelaunch","accounts":True})
         if not self.access(path):return
         try:
             with connect() as c:
                 if auth.dispatch(self,path,c):return
+                if path=='/api/store/status':return self.respond(200,launch.snapshot(c,public=True))
+                if path=='/api/admin/launch':return self.respond(200,launch.snapshot(c))
                 if path=='/api/account/orders':
                     auth.require_user(self,'customer')
                     return self.respond(200,account_orders(c,self.request_user['id']))
@@ -297,6 +301,8 @@ class Handler(BaseHTTPRequestHandler):
         path=urlparse(self.path).path
         if not self.access(path):return
         try:
+            if path in ('/api/orders','/api/auth/register'):
+                return self.respond(503,{'error':'Sprzedaż i rejestracja nowych kont zostaną uruchomione po skonfigurowaniu usług sklepu.','code':'store_prelaunch'})
             with connect() as c:
                 if auth.dispatch(self,path,c):return
             data=self.body()
@@ -446,6 +452,14 @@ class Handler(BaseHTTPRequestHandler):
             with connect() as c:
                 if auth.dispatch(self,path,c):return
             data=self.body()
+            if path=='/api/admin/launch':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    changed=launch.update(c,data)
+                    audit(c,'launch','settings','Zmieniono konfigurację uruchomienia: '+','.join(changed.keys()))
+                    result=launch.snapshot(c)
+                    c.commit()
+                    return self.respond(200,result)
             if path.startswith('/api/admin/products/'):
                 pid=int(path.rsplit('/',1)[1])
                 with connect() as c:
