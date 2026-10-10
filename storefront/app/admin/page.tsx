@@ -2,6 +2,7 @@
 import {useEffect,useMemo,useRef,useState} from "react";
 import {ArrowDownToLine,ArrowLeft,ArrowRight,BarChart3,Box,CheckCircle2,ChevronDown,ClipboardList,Clock3,Hash,LayoutDashboard,LogIn,LogOut,Menu,Package,Printer,Search,Settings2,ShoppingBag,SlidersHorizontal,Tag,Truck,Warehouse,X} from "lucide-react";
 import JsBarcode from "jsbarcode";
+import "./admin.css";
 import {QRCodeSVG} from "qrcode.react";
 import {catalog,fmt,type CatalogItem} from "../../lib/catalog";
 
