@@ -11,3 +11,8 @@ __pycache__/
 node_modules/
 .next/
 dist/
+
+.runtime.env
+storefront/.next/
+storefront/node_modules/
+storefront/next-env.d.ts
