@@ -103,7 +103,7 @@ class Handler(BaseHTTPRequestHandler):
                     product=c.execute("SELECT * FROM products WHERE id=?",(identifier,)).fetchone()
                     if product is None or product["stock"]<quantity:raise ValueError("Brak wystarczającego stanu")
                     c.execute("UPDATE products SET stock=stock-? WHERE id=?",(quantity,identifier))
-                    details.append({"sku":product["sku"],"qty":quantity,"unit_price":product["price"]})
+                    details.append({"sku":product["sku"],"name":product["name"],"size":str(item.get("size") or "uni")[:8],"qty":quantity,"unit_price":product["price"]})
                     total+=quantity*product["price"]
                 now=datetime.datetime.now(datetime.timezone.utc).isoformat()
                 cur=c.execute("INSERT INTO orders(created,items,total,status) VALUES(?,?,?,?)",(now,json.dumps(details),total,"nowe"))
