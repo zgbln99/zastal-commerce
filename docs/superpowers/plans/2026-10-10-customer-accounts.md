@@ -76,7 +76,7 @@
 - [x] Request one fresh whole-change review against spec, diff and Review Focus. Fix material findings with reproducing tests first; rerun appropriate suites.
 - [x] Back up current database/source/build, migrate additively, install built assets and restart existing API/store services. Verify database integrity/counts/stock match pre-deploy values and authenticated APIs on an isolated fixture.
 - [x] Verify live public pages/login/registration layout, product/cart behavior and responsive widths. Don't expose credentials or test orders in user data.
-- [ ] Update GitHub using lease, reconcile server source and return existing public link with concise account instructions and test-payment limitation.
+- [x] Update GitHub using lease, reconcile server source and return existing public link with concise account instructions and test-payment limitation.
 
 
 ### Task 5 (added user scope): Jersey personalization and product creation
