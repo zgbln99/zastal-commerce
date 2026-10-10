@@ -4,6 +4,9 @@ No ability to enable real checkout until actual payments, delivery and receipts
 are integrated and independently verified. Public storefront is in prelaunch.
 """
 import re
+import os
+import tempfile
+from pathlib import Path
 from urllib.parse import urlparse
 
 FIELDS = {
@@ -152,3 +155,11 @@ def update(c, data):
         c.execute("INSERT INTO launch_changes(key,old_value,new_value) VALUES(?,?,?)", (key,previous,value))
         changed[key] = True
     return changed
+
+
+def isolated_test_workflow(database_path):
+    """Explicit isolated test-only bypass; never usable with production data path."""
+    root = Path(tempfile.gettempdir()).resolve()
+    db = Path(database_path).resolve()
+    return (os.environ.get("ZASTAL_TEST_MODE") == "isolated-only"
+            and db != root and db.is_relative_to(root))
