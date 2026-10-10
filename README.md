@@ -2,7 +2,15 @@
 
 Polish fan-shop storefront and staff operations workspace for Zastal Zielona Góra.
 
-**v0.6 storefront — club collections carousel, customer/admin accounts and shirt personalization. Orders, payments and deliveries remain test-only. Accounts store a name and email; no card details or shipping addresses are collected.** Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
+**v0.7 — prelaunch build of the Zastal Store.** Public browsing and staff operations are available. The system **does not accept new orders, registration or payments** until real integrations, verified stock, confirmed seller identity and legally reviewed sales information are in place. Previously created test orders are retained as historical records. No card details or shipping addresses are collected. Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
+
+## Sales launch / readiness
+
+The administrator can use the **Uruchomienie sklepu** section to enter the legal seller name, verified NIP, contact and return address, HTTPS links to the sales regulations, privacy notice, withdrawal/returns and shipping policies. The section records club-side confirmations for branding, catalog, counted stock and the purchased DTF supply chain, and tracks technical launch blockers separately. Changes are audited. API: public `GET /api/store/status`; authenticated admin `GET/PATCH /api/admin/launch`.
+
+**Fail-closed:** `/api/orders` and `/api/auth/register` return HTTP 503 with code `store_prelaunch`. New sales cannot be enabled by an administrator checkbox. Payment provider, real shipping, transactional email and fiscal/commercial documentation integrations must be completed and tested before the API is changed to allow real purchases. Existing order confirmation links remain readable.
+
+The restricted environment variable `ZASTAL_TEST_MODE=isolated-only` enables original write integration tests **only when the test database resides under the operating system temporary directory**. Never enable it on AMS production.
 
 ## Pages
 
@@ -73,7 +81,7 @@ The development storefront is at `http://127.0.0.1:8878`. Its `/api/*` requests 
 From the repository root:
 
 ```bash
-python3 -m unittest discover -s tests -v
+ZASTAL_TEST_MODE=isolated-only python3 -m unittest discover -s tests -v
 node --test tests/*.test.mjs
 ```
 
@@ -98,6 +106,6 @@ The runtime credential file and SQLite database remain outside source control. B
 
 ## Scope
 
-This demonstration does not process real payments, dispatch parcels, issue fiscal documents or collect customer addresses. Commercial launch still needs approved product and size information, actual stock and suppliers, payment/delivery integrations, customer-service and returns procedures, email delivery/verification, additional staff roles and applicable commercial policies. Physical label alignment needs checking on the target printer. An Android staff application is a separate future project.
+This is a **prelaunch environment**, not an active e-commerce merchant checkout. The storefront cannot process real payments, dispatch parcels, issue fiscal documents or collect customer addresses. Commercial launch still needs approved product and size information, actual stock and suppliers, payment/delivery integrations, customer-service and returns procedures, email delivery/verification, additional staff roles and applicable commercial policies. Physical label alignment needs checking on the target printer. An Android staff application is a separate future project.
 
 `app.py` is the legacy prototype retained for historical reference. The deployed API is `commerce_api.py`; the deployed interface is `storefront/` (Next.js 16, React 19, TypeScript).
