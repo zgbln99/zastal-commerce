@@ -9,7 +9,7 @@ import "./operations.css";
 import type {OrderPrint} from "../../lib/commerce.mjs";
 import {ApiError,type ApiRequest} from "../../components/AuthProvider";
 
-export type OperationsTab = "dashboard" | "orders" | "inventory" | "transfers" | "production" | "labels" | "audit" | "products" | "customers" | "account" | "players";
+export type OperationsTab = "dashboard" | "orders" | "inventory" | "transfers" | "production" | "labels" | "audit" | "products" | "customers" | "account" | "players" | "launch";
 export type Variant = {id:number; product_id:number; size:string; sku:string; ean:string; stock:number; name:string; category:string; price:number};
 export type Batch = {id:number; design:string; supplier:string; reference:string; ordered:number; received:number; available:number; cost_unit:number; created:string};
 export type Order = {id:number; created:string; items:string; total:number; status:string; fulfillment?:string; shipping_fee?:number; subtotal?:number;customer?:{id:number;identifier:string;name:string}};
