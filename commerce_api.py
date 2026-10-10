@@ -301,7 +301,7 @@ class Handler(BaseHTTPRequestHandler):
         path=urlparse(self.path).path
         if not self.access(path):return
         try:
-            if path in ('/api/orders','/api/auth/register'):
+            if path in ('/api/orders','/api/auth/register') and not launch.isolated_test_workflow(DATABASE):
                 return self.respond(503,{'error':'Sprzedaż i rejestracja nowych kont zostaną uruchomione po skonfigurowaniu usług sklepu.','code':'store_prelaunch'})
             with connect() as c:
                 if auth.dispatch(self,path,c):return
