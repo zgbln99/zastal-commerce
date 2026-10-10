@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 import commerce_api as api
+from http_client import Client
 
 class CommerceTests(unittest.TestCase):
     @classmethod
@@ -14,12 +15,14 @@ class CommerceTests(unittest.TestCase):
         cls.folder=tempfile.TemporaryDirectory()
         api.DATABASE=Path(cls.folder.name)/"test.sqlite3"
         api.TOKEN="integration-test-only"
+        api.auth.clear_limits()
         api.init()
         with api.connect() as c:
             c.execute("INSERT INTO products(id,name,sku,category,price,stock) VALUES(1,'Koszulka Zastal','DEMO-TS','Koszulki',7900,15)")
         api.init()
         cls.server=api.ThreadingHTTPServer(("127.0.0.1",0),api.Handler)
         cls.port=cls.server.server_address[1]
+        cls.admin_client=Client(cls.port)
         cls.thread=threading.Thread(target=cls.server.serve_forever,daemon=True)
         cls.thread.start()
 
@@ -30,8 +33,12 @@ class CommerceTests(unittest.TestCase):
         cls.folder.cleanup()
 
     def request(self,method,path,data=None,authorized=False):
+        if authorized:
+            if not self.admin_client.csrf:
+                code,_=self.admin_client.login('admin','integration-test-only')
+                self.assertEqual(code,200)
+            return self.admin_client.request(method,path,data)
         headers={"Content-Type":"application/json"}
-        if authorized:headers["Authorization"]="Bearer integration-test-only"
         content=json.dumps(data).encode() if data is not None else None
         req=urllib.request.Request("http://127.0.0.1:"+str(self.port)+path,method=method,data=content,headers=headers)
         try:
@@ -75,7 +82,7 @@ class CommerceTests(unittest.TestCase):
 
     def test_03_auth_and_audit(self):
         status,_=self.request("GET","/api/admin/inventory")
-        self.assertEqual(status,403)
+        self.assertEqual(status,401)
         status,data=self.request("GET","/api/admin/inventory",authorized=True)
         self.assertEqual(status,200)
         self.assertEqual(len(data),5)

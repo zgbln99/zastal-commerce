@@ -1,6 +1,6 @@
-"""Zastal Store v0.4 – transactional demo API.
+"""Zastal Store v0.5 – accounts and transactional demo commerce API.
 
-No live payments, customer identity, or carrier integrations. Uses built-in
+No live payments or carrier integrations. Real customer accounts use built-in
 SQLite with explicit transactions, variant stock ledger, purchased DTF transfers,
 production workflow and audit events. Keep behind HTTPS reverse proxy.
 """
@@ -17,6 +17,8 @@ from collections import defaultdict, deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+import commerce_auth as auth
+import commerce_personalization as personalization
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
@@ -91,6 +93,11 @@ def init():
            idempotency_key TEXT UNIQUE,fingerprint TEXT NOT NULL,
            FOREIGN KEY(order_id) REFERENCES orders(id));
         """)
+        auth.init_schema(c, TOKEN)
+        personalization.init_schema(c)
+        if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
+            c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
+        c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
         products = c.execute("SELECT * FROM products ORDER BY id").fetchall()
         for product in products:
             count = c.execute("SELECT COUNT(*) FROM product_variants WHERE product_id=?", (product["id"],)).fetchone()[0]
@@ -115,7 +122,11 @@ def audit(c,kind,obj,note):
     c.execute("INSERT INTO audit_log(kind,object_id,note,created) VALUES(?,?,?,?)",(kind,str(obj),note[:300],stamp()))
 
 def compatible_products(c):
-    return [dict(x) for x in c.execute("SELECT * FROM products ORDER BY id")]
+    products = [dict(x) for x in c.execute("SELECT * FROM products ORDER BY id")]
+    for product in products:
+        product.update(personalization.product_options(c, product['id']))
+        product['sizes'] = [v['size'] for v in c.execute('SELECT size FROM product_variants WHERE product_id=? ORDER BY id', (product['id'],))]
+    return products
 
 def catalog(c):
     products = compatible_products(c)
@@ -127,8 +138,25 @@ def catalog(c):
 
 class Invalid(Exception): pass
 
+def order_detail(c,receipt):
+    o=asdict(c.execute('SELECT * FROM orders WHERE id=?',(receipt['order_id'],)).fetchone())
+    o['items']=json.loads(o['items'])
+    o.update({key:receipt[key] for key in ('fulfillment','shipping_fee','subtotal')})
+    o['events']=[dict(x) for x in c.execute('SELECT created,status FROM events WHERE order_id=? ORDER BY id',(o['id'],))]
+    o['demo']=True
+    return o
+
+def account_orders(c,uid):
+    return [order_detail(c,r) for r in c.execute('SELECT * FROM order_receipts WHERE customer_id=? ORDER BY order_id DESC',(uid,))]
+
+def customers(c):
+    return [dict(r) for r in c.execute("""SELECT u.id,u.identifier,u.name,u.active,u.created,
+       COUNT(o.id) AS order_count,COALESCE(SUM(CASE WHEN o.status!='anulowane' THEN o.total ELSE 0 END),0) AS order_total
+       FROM users u LEFT JOIN order_receipts r ON r.customer_id=u.id LEFT JOIN orders o ON o.id=r.order_id
+       WHERE u.role='customer' GROUP BY u.id ORDER BY u.id DESC""")]
+
 class Handler(BaseHTTPRequestHandler):
-    server_version="ZastalDemo/0.4"
+    server_version="ZastalDemo/0.5"
     def log_message(self,fmt,*args):
         # Public logs exclude supplied auth credentials and request bodies.
         pass
@@ -144,12 +172,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options","nosniff")
         self.send_header("Referrer-Policy","strict-origin-when-cross-origin")
         self.send_header("X-Frame-Options","DENY")
+        for key, header in getattr(self, 'response_headers', []):self.send_header(key, header)
         self.end_headers()
         self.wfile.write(value)
-
-    def authorized(self):
-        supplied=self.headers.get("Authorization","").removeprefix("Bearer ")
-        return bool(TOKEN) and secrets.compare_digest(TOKEN,supplied)
 
     def body(self):
         length=int(self.headers.get("Content-Length","0"))
@@ -161,20 +186,44 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError,UnicodeError):raise Invalid("Nieprawidłowy JSON")
 
     def access(self,path):
-        if path.startswith("/api/admin/") and not self.authorized():
-            self.respond(403,{"error":"Brak autoryzacji"})
+        self.response_headers=[]
+        try:
+            with connect() as c:auth.session(self,c)
+            if path.startswith('/api/admin/'):auth.require_user(self,'admin')
+            elif path.startswith('/api/account/'):auth.require_user(self)
+            if self.command in ('POST','PATCH'):
+                auth.check_origin(self)
+                if path.startswith(('/api/admin/','/api/account/')):auth.require_csrf(self)
+            return True
+        except auth.AuthError as ex:
+            self.respond(ex.status,{'error':str(ex),'code':ex.code})
             return False
-        return True
 
     def error(self,ex):
         self.respond(400,{"error":str(ex)})
 
     def do_GET(self):
         path=urlparse(self.path).path
-        if path=="/health":return self.respond(200,{"ok":True,"version":"0.4","demo":True})
+        if path=="/health":return self.respond(200,{"ok":True,"version":"0.5","demo":True,"accounts":True})
         if not self.access(path):return
         try:
             with connect() as c:
+                if auth.dispatch(self,path,c):return
+                if path=='/api/account/orders':
+                    auth.require_user(self,'customer')
+                    return self.respond(200,account_orders(c,self.request_user['id']))
+                if path.startswith('/api/account/orders/'):
+                    auth.require_user(self,'customer')
+                    oid=int(path.rsplit('/',1)[1])
+                    receipt=c.execute('SELECT * FROM order_receipts WHERE order_id=? AND customer_id=?',(oid,self.request_user['id'])).fetchone()
+                    return self.respond(200,order_detail(c,receipt)) if receipt else self.respond(404,{'error':'Nie znaleziono zamówienia'})
+                if path=='/api/admin/products':return self.respond(200,catalog(c))
+                if path in ('/api/players', '/api/admin/players'):return self.respond(200,personalization.roster(c, path.startswith('/api/admin/')))
+                if path=='/api/admin/customers':return self.respond(200,customers(c))
+                if path.startswith('/api/admin/customers/'):
+                    uid=int(path.rsplit('/',1)[1]);customer=next((x for x in customers(c) if x['id']==uid),None)
+                    if not customer:return self.respond(404,{'error':'Nie znaleziono klienta'})
+                    return self.respond(200,{**customer,'orders':account_orders(c,uid)})
                 if path=="/api/products":return self.respond(200,compatible_products(c))
                 if path=="/api/catalog":return self.respond(200,catalog(c))
                 if path.startswith("/api/catalog/"):
@@ -204,6 +253,8 @@ class Handler(BaseHTTPRequestHandler):
                     o["production"]=[dict(x) for x in c.execute("SELECT * FROM production_tasks WHERE order_id=? ORDER BY id",(oid,))]
                     receipt=c.execute("SELECT fulfillment,shipping_fee,subtotal FROM order_receipts WHERE order_id=?",(oid,)).fetchone()
                     if receipt:o.update(dict(receipt))
+                    customer=c.execute('SELECT u.id,u.identifier,u.name FROM users u JOIN order_receipts r ON r.customer_id=u.id WHERE r.order_id=?',(oid,)).fetchone()
+                    if customer:o['customer']=dict(customer)
                     return self.respond(200,o)
                 if path=="/api/admin/inventory":
                     q="""SELECT v.id,v.product_id,v.size,v.sku,v.ean,v.stock,
@@ -215,13 +266,21 @@ class Handler(BaseHTTPRequestHandler):
                 if path=="/api/admin/transfers":
                     return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM dtf_batches ORDER BY id DESC")])
                 if path=="/api/admin/production":
-                    q="""SELECT t.*,b.supplier,b.reference,o.status AS order_status
+                    q="""SELECT t.*,b.supplier,b.reference,o.status AS order_status,o.items AS order_items
                        FROM production_tasks t JOIN dtf_batches b ON b.id=t.batch_id
                        JOIN orders o ON o.id=t.order_id ORDER BY t.id DESC"""
-                    return self.respond(200,[dict(x) for x in c.execute(q)])
+                    tasks=[]
+                    for row in c.execute(q):
+                        task=dict(row)
+                        line=json.loads(task.pop('order_items'))[task['line_index']]
+                        task.update(product_name=line.get('name','Produkt'),size=line.get('size') or 'UNI',qty=line.get('qty',1))
+                        if line.get('personalization') is not None:task['personalization']=line['personalization']
+                        tasks.append(task)
+                    return self.respond(200,tasks)
                 if path=="/api/admin/activity":
                     return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 80")])
             return self.respond(404,{"error":"Nie znaleziono"})
+        except auth.AuthError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (ValueError,TypeError):return self.respond(400,{"error":"Nieprawidłowy identyfikator"})
         except sqlite3.Error:return self.respond(500,{"error":"Błąd bazy danych"})
 
@@ -238,8 +297,31 @@ class Handler(BaseHTTPRequestHandler):
         path=urlparse(self.path).path
         if not self.access(path):return
         try:
+            with connect() as c:
+                if auth.dispatch(self,path,c):return
             data=self.body()
+            if path=='/api/account/orders/claim':
+                user=auth.require_user(self,'customer')
+                oid=data.get('id');token=data.get('tracking_token')
+                if isinstance(oid,bool) or not isinstance(oid,int) or not isinstance(token,str) or len(token)>128:raise Invalid('Nieprawidłowe zamówienie')
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    receipt=c.execute('SELECT * FROM order_receipts WHERE order_id=?',(oid,)).fetchone()
+                    if not receipt or not secrets.compare_digest(receipt['tracking_token'],token) or receipt['customer_id'] not in (None,user['id']):
+                        return self.respond(404,{'error':'Nie znaleziono zamówienia do przypisania'})
+                    c.execute('UPDATE order_receipts SET customer_id=? WHERE order_id=?',(user['id'],oid))
+                    c.commit()
+                    return self.respond(200,{'ok':True})
             if path=="/api/orders":
+                user=getattr(self,'request_user',None)
+                owner=user['id'] if user and user['role']=='customer' else None
+                if 'account_id' in data:
+                    requested=data['account_id']
+                    if requested is None:owner=None
+                    elif isinstance(requested,bool) or not isinstance(requested,int) or requested<1:raise Invalid('Nieprawidłowe konto zamówienia')
+                    elif not user:raise auth.AuthError(401,'Zaloguj się na konto użyte do tego zamówienia.','checkout_account_required')
+                    elif requested!=owner:raise auth.AuthError(409,'To zamówienie rozpoczęto na innym koncie.','checkout_account_required')
+                if owner:auth.require_csrf(self)
                 if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele zamówień testowych. Spróbuj później."})
                 lines=data.get("items")
                 if not isinstance(lines,list) or not 1<=len(lines)<=20:raise Invalid("Pusty lub nieprawidłowy koszyk")
@@ -254,7 +336,11 @@ class Handler(BaseHTTPRequestHandler):
                     if isinstance(pid,bool) or not isinstance(pid,int) or isinstance(qty,bool) or not isinstance(qty,int):raise Invalid("Nieprawidłowy produkt lub ilość")
                     size=str(line.get("size") or "UNI").strip().upper()
                     if qty<1 or qty>20 or len(size)>10:raise Invalid("Nieprawidłowy rozmiar lub ilość")
-                    normalized.append({"id":pid,"quantity":qty,"size":size})
+                    item = {"id":pid,"quantity":qty,"size":size}
+                    if 'personalization' in line:
+                        item['personalization'] = personalization.normalize_request(line['personalization'])
+                    normalized.append(item)
+                # Retain v0.4 fingerprints for old guest attempts; identity is checked separately.
                 fingerprint=hashlib.sha256(json.dumps({"items":normalized,"fulfillment":fulfillment},sort_keys=True).encode()).hexdigest()
                 result=[]
                 with connect() as c:
@@ -262,6 +348,7 @@ class Handler(BaseHTTPRequestHandler):
                     if key:
                         previous=c.execute("SELECT r.*,o.total FROM order_receipts r JOIN orders o ON o.id=r.order_id WHERE idempotency_key=?",(key,)).fetchone()
                         if previous:
+                            if previous['customer_id']!=owner:return self.respond(409,{'error':'Zaloguj się na konto użyte do tego zamówienia.','code':'checkout_account_required'})
                             if previous["fingerprint"]!=fingerprint:return self.respond(409,{"error":"Ten identyfikator jest już przypisany do innego koszyka. Odśwież zamówienie."})
                             return self.respond(200,{"id":previous["order_id"],"total":previous["total"],"tracking_token":previous["tracking_token"]})
                     total=0
@@ -277,18 +364,49 @@ class Handler(BaseHTTPRequestHandler):
                         c.execute("UPDATE product_variants SET stock=stock-? WHERE id=?",(qty,v["id"]))
                         c.execute("UPDATE products SET stock=stock-? WHERE id=?",(qty,pid))
                         c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(v["id"],-qty,"zamówienie testowe",stamp(),"checkout"))
-                        total+=p["price"]*qty
-                        result.append({"sku":p["sku"],"variant_sku":v["sku"],"name":p["name"],"size":size,"qty":qty,"unit_price":p["price"]})
+                        printed,fee=personalization.snapshot(c,pid,line.get('personalization'))
+                        unit_price=p['price']+fee
+                        total+=unit_price*qty
+                        item={"sku":p["sku"],"variant_sku":v["sku"],"name":p["name"],"size":size,"qty":qty,
+                              "base_unit_price":p['price'],"personalization_fee":fee,"unit_price":unit_price}
+                        if printed is not None:item['personalization']=printed
+                        result.append(item)
                     now=stamp()
                     subtotal=total
                     shipping=0 if subtotal>=FREE_SHIPPING else SHIPPING[fulfillment]
                     total+=shipping
                     cur=c.execute("INSERT INTO orders(created,items,total,status) VALUES(?,?,?,?)",(now,json.dumps(result,ensure_ascii=False),total,"nowe"))
                     tracking=secrets.token_urlsafe(32)
-                    c.execute("INSERT INTO order_receipts VALUES(?,?,?,?,?,?,?)",(cur.lastrowid,tracking,fulfillment,shipping,subtotal,key,fingerprint))
+                    c.execute("INSERT INTO order_receipts(order_id,tracking_token,fulfillment,shipping_fee,subtotal,idempotency_key,fingerprint,customer_id) VALUES(?,?,?,?,?,?,?,?)",(cur.lastrowid,tracking,fulfillment,shipping,subtotal,key,fingerprint,owner))
                     c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(cur.lastrowid,now,"nowe"))
                     audit(c,"order",cur.lastrowid,"Utworzono zamówienie demonstracyjne")
                 return self.respond(201,{"id":cur.lastrowid,"total":total,"tracking_token":tracking})
+            if path=='/api/admin/products':
+                product=personalization.validate_product(data)
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    cur=c.execute('INSERT INTO products(name,sku,category,price,stock) VALUES(?,?,?,?,?)',
+                                  tuple(product[key] for key in ('name','sku','category','price','stock')))
+                    pid=cur.lastrowid
+                    personalization.save_options(c,pid,product)
+                    sizes=sizes_for(product)
+                    base,rem=divmod(product['stock'],len(sizes))
+                    for index,size in enumerate(sizes):
+                        c.execute('INSERT INTO product_variants(product_id,size,sku,ean,stock) VALUES(?,?,?,?,?)',
+                                  (pid,size,product['sku']+'-'+size,ean13(pid*100+index+1),base+(1 if index<rem else 0)))
+                    audit(c,'product',pid,'Utworzono produkt i warianty')
+                    result=next(p for p in catalog(c) if p['id']==pid)
+                    c.commit()
+                    return self.respond(201,result)
+            if path=='/api/admin/players':
+                player=personalization.player_value(data)
+                with connect() as c:
+                    cur=c.execute('INSERT INTO players(name,print_name,number,active) VALUES(?,?,?,?)',
+                                  tuple(player[key] for key in ('name','print_name','number','active')))
+                    audit(c,'player',cur.lastrowid,'Dodano zawodnika do listy nadruków')
+                    result=personalization.player_public(c.execute('SELECT * FROM players WHERE id=?',(cur.lastrowid,)).fetchone(),True)
+                    c.commit()
+                    return self.respond(201,result)
             if path=="/api/admin/transfers":
                 design=str(data.get("design","")).strip()
                 supplier=str(data.get("supplier","")).strip()
@@ -316,6 +434,7 @@ class Handler(BaseHTTPRequestHandler):
                     audit(c,"production",cur.lastrowid,f"Rezerwacja {count} transferów, zlecenie {oid}, poz. {idx+1}")
                     return self.respond(201,{"id":cur.lastrowid})
             return self.respond(404,{"error":"Nie znaleziono"})
+        except auth.AuthError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError,sqlite3.IntegrityError) as ex:
             return self.error(ex)
         except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
@@ -324,7 +443,45 @@ class Handler(BaseHTTPRequestHandler):
         path=urlparse(self.path).path
         if not self.access(path):return
         try:
+            with connect() as c:
+                if auth.dispatch(self,path,c):return
             data=self.body()
+            if path.startswith('/api/admin/products/'):
+                pid=int(path.rsplit('/',1)[1])
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    row=c.execute('SELECT * FROM products WHERE id=?',(pid,)).fetchone()
+                    if not row:return self.respond(404,{'error':'Produkt nie istnieje'})
+                    product=personalization.validate_product(data,{**dict(row),**personalization.product_options(c,pid)})
+                    c.execute('UPDATE products SET name=?,price=? WHERE id=?',(product['name'],product['price'],pid))
+                    personalization.save_options(c,pid,product)
+                    audit(c,'product',pid,'Zmieniono dane produktu i opcje nadruku')
+                    result=next(p for p in catalog(c) if p['id']==pid)
+                    c.commit()
+                    return self.respond(200,result)
+            if path.startswith('/api/admin/players/'):
+                pid=int(path.rsplit('/',1)[1])
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    row=c.execute('SELECT * FROM players WHERE id=?',(pid,)).fetchone()
+                    if not row:return self.respond(404,{'error':'Zawodnik nie istnieje'})
+                    player=personalization.player_value(data,{**dict(row),'active':bool(row['active'])})
+                    c.execute('UPDATE players SET name=?,print_name=?,number=?,active=? WHERE id=?',
+                              (*tuple(player[key] for key in ('name','print_name','number','active')),pid))
+                    audit(c,'player',pid,'Zmieniono dane zawodnika na liście nadruków')
+                    result=personalization.player_public(c.execute('SELECT * FROM players WHERE id=?',(pid,)).fetchone(),True)
+                    c.commit()
+                    return self.respond(200,result)
+            if path.startswith('/api/admin/customers/'):
+                uid=int(path.rsplit('/',1)[1]);active=data.get('active')
+                if not isinstance(active,bool):raise Invalid('Podaj status konta')
+                with connect() as c:
+                    if not c.execute("SELECT 1 FROM users WHERE id=? AND role='customer'",(uid,)).fetchone():return self.respond(404,{'error':'Klient nie istnieje'})
+                    c.execute('UPDATE users SET active=? WHERE id=?',(int(active),uid))
+                    if not active:c.execute('DELETE FROM auth_sessions WHERE user_id=?',(uid,))
+                    audit(c,'customer',uid,'Aktywowano konto' if active else 'Zablokowano konto')
+                    c.commit()
+                    return self.respond(200,{'ok':True})
             if path.startswith("/api/admin/orders/"):
                 oid=int(path.rsplit("/",1)[1]);status=data.get("status")
                 if status not in VALID_STATUS:raise Invalid("Nieprawidłowy status")
@@ -383,6 +540,7 @@ class Handler(BaseHTTPRequestHandler):
                         audit(c,"production",tid,"Etap: "+status)
                 return self.respond(200,{"ok":True})
             return self.respond(404,{"error":"Nie znaleziono"})
+        except auth.AuthError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError) as ex:return self.error(ex)
         except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
 

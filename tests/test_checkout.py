@@ -14,6 +14,7 @@ class CheckoutTests(unittest.TestCase):
         api.DATABASE=Path(self.folder.name)/'checkout.sqlite3'
         api.TOKEN='test-only-admin'
         api.LIMITS.clear()
+        api.auth.clear_limits()
         api.init()
         with api.connect() as c:
             c.execute("INSERT INTO products VALUES(1,'Koszulka','TS','Koszulki',7900,15)")

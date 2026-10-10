@@ -2,7 +2,7 @@
 
 Polish fan-shop storefront and staff operations workspace for Zastal Zielona Góra.
 
-**v0.4 — functional demonstration. Orders, payments and deliveries are test-only. No card details, personal identity or shipping addresses are collected.** Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
+**v0.5 — customer/admin accounts and shirt personalization. Orders, payments and deliveries remain test-only. Accounts store a name and email; no card details or shipping addresses are collected.** Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
 
 ## Pages
 
@@ -12,6 +12,7 @@ Polish fan-shop storefront and staff operations workspace for Zastal Zielona Gó
 - [Favorites](https://zastalstore.51-15-21-164.sslip.io/ulubione)
 - [Checkout](https://zastalstore.51-15-21-164.sslip.io/zamowienie)
 - [Shopping help](https://zastalstore.51-15-21-164.sslip.io/pomoc)
+- [Customer account](https://zastalstore.51-15-21-164.sslip.io/konto)
 - [Staff workspace](https://zastalstore.51-15-21-164.sslip.io/admin)
 
 ## Shopping
@@ -22,15 +23,25 @@ Prices and variant availability come from `/api/catalog`. New purchases are bloc
 
 Checkout uses a retained idempotency key and exact request snapshot. A lost response can be recovered after a reload, including when the attempted purchase exhausted the remaining stock. Reusing a key with different contents is rejected. Completing a purchase removes only the submitted quantities from the cart. Each confirmation URL contains a random token and exposes only that order and its status history.
 
+## Accounts and personalized shirts
+
+Customer registration and login use opaque Secure/HttpOnly cookies, server-side role checks and CSRF validation. Customers can edit their display name, change their password, revoke other sessions and see only their own orders. Guest orders can be attached using their private confirmation token. Checkout records its account identity in the retained request to avoid attaching a recovered attempt to a different account.
+
+There is no email provider. Registration and recovery show a high-entropy personal recovery key once; a used key is replaced and other sessions are revoked. Customers must save that key. The administrator identifier is `admin`; the existing server credential bootstraps its password once, then passwords are managed on the account screen. The previous Bearer route no longer grants access. Never publish the runtime credential.
+
+The product form creates live catalogue entries, variants and internal EANs. It supports an image, short description, optional/required personalization and an integer-groszy print fee. Buyers choose an active player or enter a surname (1–20 letters/punctuation) and a one/two-digit number, including 0 or 00. The initial 12-player roster was checked at https://basketzg.pl/players on 2026-10-10 and is editable in the panel. There is no automatic claim that the roster remains current after that date.
+
+Cart lines distinguish print choices while sharing size stock. Server-calculated names, numbers and fees are saved with each order and shown in confirmations, customer history, staff orders and the DTF queue. Retries retain the original order and charges after catalogue or roster changes. Existing products start with personalization disabled; enable it for a real match-shirt product after adding its details.
+
 ## Staff operations
 
-One navigation covers the overview, orders, variant inventory, DTF transfers, application queue, labels and audit history. Overview counts are derived from the loaded records; bounded order totals are labelled accordingly.
+One navigation covers the overview, products, players, customers, orders, variant inventory, DTF transfers, application queue, labels, account settings and audit history. Overview counts are derived from the loaded records; bounded order totals are labelled accordingly.
 
 - Orders: item and delivery details, status history, cancellation with eligible stock restoration, CSV export and scanner-assisted packing that checks the exact variant and quantity.
 - Inventory: size variants, stock corrections with reasons and a transaction-backed movement ledger.
 - DTF: purchase **finished transfers from external suppliers**, record full or partial receipt, reserve them for order-line application tasks and progress those tasks through the application stages.
 - Labels: internally generated SKU/EAN-13 and QR per variant, printable sheets and individual labels. Prefix 200 is for internal circulation; these EANs are not globally registered GS1 GTINs.
-- Access: existing server-side bearer credential; staff data is fetched only after authentication. The credential is held in memory in the browser.
+- Customers: real registered accounts, order history and blocking/unblocking; blocking revokes active sessions. Staff data is fetched only for an authenticated administrator.
 
 ## Running locally
 
@@ -39,6 +50,7 @@ Python uses the standard library. Set a private token and run the API from the r
 ```bash
 export ZASTAL_ADMIN_TOKEN="your-own-long-random-secret"
 export ZASTAL_PORT=8880
+export ZASTAL_SITE_ORIGIN="https://your-store.example"
 python3 commerce_api.py
 ```
 
@@ -68,7 +80,7 @@ npx tsc --noEmit
 npm run build
 ```
 
-Tests cover server pricing and shipping, variant stock, rollback, checkout retries, protected receipts, saved-cart parsing, checkout recovery, cart reconciliation and scanner quantity checks. Use an isolated database for tests. Do not commit credentials or SQLite files.
+Tests cover cookie accounts/roles/CSRF/session revocation, private order ownership, product/roster validation, authoritative print fees, immutable print snapshots, shared variant stock, rollback, checkout retries, protected receipts, saved-cart parsing, checkout recovery, cart reconciliation and scanner quantity checks. Use an isolated database for tests. Do not commit credentials or SQLite files.
 
 ## Deployment
 
@@ -82,6 +94,6 @@ The runtime credential file and SQLite database remain outside source control. B
 
 ## Scope
 
-This demonstration does not process real payments, dispatch parcels, issue fiscal documents or collect customer addresses. Commercial launch still needs approved product and size information, actual stock and suppliers, payment/delivery integrations, customer-service and returns procedures, staff identity/permissions and applicable commercial policies. Physical label alignment needs checking on the target printer. An Android staff application is a separate future project.
+This demonstration does not process real payments, dispatch parcels, issue fiscal documents or collect customer addresses. Commercial launch still needs approved product and size information, actual stock and suppliers, payment/delivery integrations, customer-service and returns procedures, email delivery/verification, additional staff roles and applicable commercial policies. Physical label alignment needs checking on the target printer. An Android staff application is a separate future project.
 
 `app.py` is the legacy prototype retained for historical reference. The deployed API is `commerce_api.py`; the deployed interface is `storefront/` (Next.js 16, React 19, TypeScript).
