@@ -202,7 +202,7 @@ class Handler(BaseHTTPRequestHandler):
         except sqlite3.Error:return self.respond(500,{"error":"Błąd bazy danych"})
 
     def public_rate(self):
-        ip=self.client_address[0]
+        ip=self.headers.get("X-Real-IP") or self.client_address[0]
         now=time.monotonic()
         with RATE_LOCK:
             q=LIMITS[ip]
