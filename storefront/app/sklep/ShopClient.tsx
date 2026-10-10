@@ -24,7 +24,7 @@ export default function ShopClient(){
   const c=params.get("category");
   if(c&&categories.includes(c))setCategory(c);
   const q=params.get("q");if(q)setSearch(q.slice(0,100));
-  try{const arr=JSON.parse(localStorage.getItem("zastal_store_cart_v2")||"[]");setCount(arr.reduce((a:{quantity:number},b:{quantity:number})=>a+b.quantity,0))}catch{}
+  try{const arr=JSON.parse(localStorage.getItem("zastal_store_cart_v2")||"[]");setCount(arr.reduce((a:number,b:{quantity:number})=>a+b.quantity,0))}catch{}
   try{setFavorites(JSON.parse(localStorage.getItem("zastal_store_favs")||"[]"))}catch{}
   fetch("/api/catalog").then(r=>r.json()).then((arr:LiveItem[])=>setLive(Object.fromEntries(arr.map(x=>[x.id,x.variants])))).catch(()=>{});
  },[]);
