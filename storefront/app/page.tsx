@@ -77,7 +77,7 @@ export default function Home(){
    <header className="site-header">
      <div className="header-inner">
       <button className="mobile-menu icon-btn" onClick={()=>setMenuOpen(true)} aria-label="Otwórz menu"><Menu size={23}/></button>
-      <a href="/" className="wordmark" aria-label="Zastal Store — strona główna"><span className="wordmark-emblem">Z</span><span className="wordmark-text">ZASTAL<span className="wordmark-dot">.</span><small>OFFICIAL STORE / DEMO</small></span></a>
+      <a href="/" className="wordmark" aria-label="Zastal Zielona Góra — Store"><img className="zastal-brand-image" src="/assets/zastal-logo.svg" alt="Zastal Zielona Góra"/><span className="brand-store-sign">FAN STORE <small>DEMO</small></span></a>
       <nav className="main-nav" aria-label="Kategorie">
        <button onClick={()=>chooseCategory("Wszystko")}>NOWOŚCI</button>
        <button onClick={()=>chooseCategory("Koszulki")}>KOSZULKI</button>
