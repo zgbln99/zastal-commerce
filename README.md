@@ -2,7 +2,7 @@
 
 Polish fan-shop storefront and staff operations workspace for Zastal Zielona Góra.
 
-**v0.5 — customer/admin accounts and shirt personalization. Orders, payments and deliveries remain test-only. Accounts store a name and email; no card details or shipping addresses are collected.** Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
+**v0.6 storefront — club collections carousel, customer/admin accounts and shirt personalization. Orders, payments and deliveries remain test-only. Accounts store a name and email; no card details or shipping addresses are collected.** Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
 
 ## Pages
 
@@ -14,6 +14,10 @@ Polish fan-shop storefront and staff operations workspace for Zastal Zielona Gó
 - [Shopping help](https://zastalstore.51-15-21-164.sslip.io/pomoc)
 - [Customer account](https://zastalstore.51-15-21-164.sslip.io/konto)
 - [Staff workspace](https://zastalstore.51-15-21-164.sslip.io/admin)
+
+## Collections and storefront
+
+The homepage has three collection slides using existing club photography and product images. Visitors can navigate using the arrows, numbered selectors, keyboard or horizontal swipes. Automatic rotation pauses for hover, keyboard focus, a hidden tab, open shopping dialogs, an explicit pause or reduced-motion preferences. Manual navigation keeps rotation paused until the visitor resumes it. Four category tiles, a live product grid and a retro collection feature link to the searchable catalogue.
 
 ## Shopping
 
