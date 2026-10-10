@@ -4,7 +4,7 @@ import "./storefront-refresh.css";
 import CommerceRoot from "../components/CommerceRoot";
 export const metadata: Metadata = {
   title: {default: "Zastal Store — sklep kibica", template: "%s | Zastal Store"},
-  description: "Odzież i akcesoria Zastalu Zielona Góra. Nowy sklep kibica z wyborem rozmiarów i dostępnością produktów. Wersja demonstracyjna.",
+  description: "Odzież i akcesoria Zastalu Zielona Góra. Nowy sklep kibica z wyborem rozmiarów i dostępnością produktów. Sprzedaż online w przygotowaniu.",
   robots: {index:false,follow:false},
 };
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
