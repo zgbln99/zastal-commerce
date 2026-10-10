@@ -8,6 +8,7 @@ The website uses club imagery and a selection of photos from the existing store 
 ## Demo
 
 - Storefront: https://zastalstore.51-15-21-164.sslip.io/
+- Full catalog with dynamic filters: https://zastalstore.51-15-21-164.sslip.io/sklep
 - Detailed product page: https://zastalstore.51-15-21-164.sslip.io/produkt/1
 - Staff operations: https://zastalstore.51-15-21-164.sslip.io/admin → **Commerce 360°**
 
