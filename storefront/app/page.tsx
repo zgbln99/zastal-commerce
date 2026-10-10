@@ -79,10 +79,10 @@ export default function Home(){
       <button className="mobile-menu icon-btn" onClick={()=>setMenuOpen(true)} aria-label="Otwórz menu"><Menu size={23}/></button>
       <a href="/" className="wordmark" aria-label="Zastal Zielona Góra — Store"><img className="zastal-brand-image" src="/assets/zastal-logo.svg" alt="Zastal Zielona Góra"/><span className="brand-store-sign">FAN STORE <small>DEMO</small></span></a>
       <nav className="main-nav" aria-label="Kategorie">
-       <button onClick={()=>chooseCategory("Wszystko")}>NOWOŚCI</button>
-       <button onClick={()=>chooseCategory("Koszulki")}>KOSZULKI</button>
-       <button onClick={()=>chooseCategory("Bluzy")}>BLUZY</button>
-       <button onClick={()=>chooseCategory("Akcesoria")}>AKCESORIA</button>
+       <a href="/sklep">SKLEP</a>
+       <a href="/sklep?category=Koszulki">KOSZULKI</a>
+       <a href="/sklep?category=Bluzy">BLUZY</a>
+       <a href="/sklep?category=Akcesoria">AKCESORIA</a>
        <button onClick={()=>document.getElementById("heritage")?.scrollIntoView({behavior:"smooth"})}>HERITAGE <ArrowUpRight size={13}/></button>
       </nav>
       <div className="header-actions">
@@ -112,7 +112,7 @@ export default function Home(){
 
     <section className="section-intro" id="kolekcja">
      <div className="section-kicker"><span className="tiny-cross">✳</span> THE GREEN COLLECTION <span>— 2026</span></div>
-     <div className="section-title-row"><div><h2>STYL, KTÓRY<br/><em>NAS ŁĄCZY.</em></h2><p>Od klasycznych bluz po koszulki, które opowiadają historię klubu.</p></div><a className="section-side-link" href="#products">PRZEJRZYJ PRODUKTY <ArrowUpRight size={18}/></a></div>
+     <div className="section-title-row"><div><h2>STYL, KTÓRY<br/><em>NAS ŁĄCZY.</em></h2><p>Od klasycznych bluz po koszulki, które opowiadają historię klubu.</p></div><a className="section-side-link" href="/sklep">PRZEJRZYJ PRODUKTY <ArrowUpRight size={18}/></a></div>
     </section>
 
     <section className="categories" aria-label="Kategorie produktów">
