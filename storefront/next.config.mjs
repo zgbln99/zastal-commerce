@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   async rewrites() {
-    return [{ source: '/api/:path*', destination: 'http://127.0.0.1:8877/api/:path*' }];
+    return [{ source: '/api/:path*', destination: 'http://127.0.0.1:8880/api/:path*' }];
   },
 };
 export default nextConfig;
