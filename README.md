@@ -1,67 +1,75 @@
 # Zastal Commerce OS
 
-Nowoczesny sklep kibica Zastal Zielona Góra i demonstracyjne zaplecze operacyjne.
-**Status: v0.2 — działające publicznie DEMO, bez realnych płatności i wysyłek.**
+A modern demo storefront and shop operating system for Zastal Zielona Góra.
+
+**Status: v0.3 — public design demo only. No real payments, shipping, or customer data.**
+The website uses club imagery and a selection of photos from the existing store for evaluation, subject to club approval before production.
 
 ## Demo
 
-- Sklep: https://zastalstore.51-15-21-164.sslip.io/
-- Panel administratora: https://zastalstore.51-15-21-164.sslip.io/admin
-- Publiczne API produktów: `GET /api/products`
-- Testowe zamówienia: `POST /api/orders`
-- Panel zamówień: `GET /api/admin/orders` z tokenem `Authorization: Bearer ...`
+- Storefront: https://zastalstore.51-15-21-164.sslip.io/
+- Detailed product page: https://zastalstore.51-15-21-164.sslip.io/produkt/1
+- Staff operations: https://zastalstore.51-15-21-164.sslip.io/admin → **Commerce 360°**
 
-## Architektura
+## Implemented functionality
 
-| Element | Ścieżka | Technologia |
-| --- | --- | --- |
-| Sklep | `storefront/` | Next.js 16, React 19, TypeScript |
-| Panel administracyjny | `storefront/app/admin/` | Next.js, dashboard, lista zamówień, magazyn i etykiety |
-| Demo API / zamówienia | `app.py` | Python standard library + SQLite |
-| Synchronizacja produktów demo | `scripts/sync_demo_catalog.py` | Python |
-| Aplikacja Android | przyszły etap | Kotlin + Jetpack Compose |
+**Store:** responsive landing page, current club logo and real product photos, category browser, search, sorting, full product detail pages, per-size stock availability, favorites, shopping cart, demo checkout and order confirmation.
 
-Wersja 0.2 zawiera dwanaście poglądowych produktów z fotografiami podlinkowanymi z zastal.store. Dane są demonstracyjne. Katalog i grafiki wymagają zatwierdzenia przez klub przed uruchomieniem produkcyjnym.
+**Inventory:** distinct products and variants (sizes), internally generated SKU/EAN-13 and QR, stock adjustment with reason, transaction-backed inventory ledger, availability checked by size at checkout. The internal EAN prefix 200 is for restricted circulation; these are not globally registered GS1 GTINs.
 
-## Uruchomienie lokalne
+**Orders:** persistence, price snapshots, selected sizes, status changes, item details, order history, cancellation with stock restoration where appropriate, on-screen scanner-assisted checking, CSV export.
 
-W osobnym terminalu:
+**DTF:** the club purchases **finished transfers** from external suppliers and applies them to blank apparel. The system supports creating transfer purchase batches, separate receipt of the delivery, availability accounting, allocating transfers to order-line production tasks, stage progression and activity audit. It does not attempt to control any DTF printing hardware or RIP software.
+
+**Operations:** responsive admin UI (Commerce 360°), inventory by variant, DTF purchase + stock intake, order trace, production queue, barcode/QR label sheets, activity log.
+
+**Security:** demo bearer token protected admin endpoints, HTTPS front end, server-side pricing and variant-stock checks, input validation and basic checkout rate limits. This is not production security and does not replace real user accounts, RBAC, CSRF reviews, monitoring and legal compliance.
+
+## Repository
+
+- `storefront/` — Next.js 16, React 19, TypeScript
+- `storefront/app/produkt/[id]/` — dedicated product pages
+- `storefront/app/admin/` — admin and Commerce 360
+- `commerce_api.py` — Python demo API with variant stock, DTF and order workflows
+- `app.py` — legacy prototype kept for historical/rollback purposes
+- `scripts/sync_demo_catalog.py` — demonstration catalog migration
+- `tests/test_commerce_api.py` — isolated API integration tests
+
+## Running locally
+
 ```bash
-python3 app.py
+export ZASTAL_ADMIN_TOKEN="generate-your-own-long-random-secret"
+export ZASTAL_PORT=8880
+python3 commerce_api.py
 ```
 
-W drugim:
+In another terminal:
+
 ```bash
 cd storefront
-npm install
+npm ci
 npm run dev
 ```
 
-W wersji deweloperskiej frontend domyślnie korzysta z API na `127.0.0.1:8880`, a domyślna instancja `python3 app.py` na `8877`. Dla lokalnej pracy uruchom API z `ZASTAL_PORT=8880`, a dla uprawnień administracyjnych ustaw `ZASTAL_ADMIN_TOKEN`.
+Run tests from the repository root:
 
-## Serwer AMS
+```bash
+python3 -m unittest discover -s tests -p 'test_commerce_api.py' -v
+```
 
-Środowisko demonstracyjne działa jako osobne jednostki systemd:
+Never commit secrets, real customer data or the SQLite database. Deploy with a reverse proxy using HTTPS.
 
-- `zastal-storefront.service`: port `127.0.0.1:8879`
-- `zastal-store-api.service`: port `127.0.0.1:8880`
+## AMS deployment
 
-Nginx wystawia HTTPS i kieruje żądania na frontend. Klucz administratora pozostaje na serwerze w ignorowanym przez Git pliku `.runtime.env`. **Nie commituj sekretów ani plików SQLite.**
+- Next.js: `zastal-storefront.service` on `127.0.0.1:8879`
+- Commerce API: `zastal-store-api.service` on `127.0.0.1:8880`
+- Nginx with automated Let's Encrypt certificate on `https://zastalstore.51-15-21-164.sslip.io`
+- Persistent SQLite data file (ignored by Git) and server-only `.runtime.env`
 
-Po aktualizacji repo: `git pull --ff-only`, `cd storefront && npm install && npm run build`, a następnie restart odpowiednich usług. Przed wdrożeniem produkcyjnym wymagane są migracja do PostgreSQL, konta i role, audyt, pełny magazyn wariantów, płatności, integracje dostaw, obsługa RODO oraz testy bezpieczeństwa.
+Before deploying, back up SQLite, run tests and `npm run build`. Restart the two services and verify public API responses.
 
-## Etykiety
+## Not yet production-ready
 
-Panel generuje i drukuje **EAN-13 z prefiksem ograniczonego obiegu 200** oraz kod QR zawierający identyfikator i SKU produktu. To oznaczenia *wewnętrzne*, a nie zarejestrowane globalnie numery GTIN/GS1. Druk etykiet A4 jest dostępny w module „Etykiety EAN / QR”.
+Still required: transactional PostgreSQL migration; granular identity, roles and permissions; size specs approved by the apparel manufacturer; genuine product stock and supplier catalog import; production cost accounting; barcode printer calibration; full backorder/returns workflow; shipping provider integrations; payment processing; fiscal documents and taxes; customer rights and accessibility compliance; real analytics; Android staff application.
 
-## Proces DTF
-
-Klub zamawia **gotowe transfery DTF od zewnętrznego dostawcy** i nanosi je na odzież. Kompletny system ewidencji przyjęć nadruków, partii produkcyjnych i stanów rozmiarowych jest zaplanowany; w v0.2 moduł pokazuje proces, ale jeszcze nie wykonuje tych operacji.
-
-## Status demonstracji
-
-**Działa:** wygląd sklepu, katalog, wyszukiwarka, kategorie i sortowanie, wybór rozmiaru, koszyk, zapisywanie zamówień testowych z rozmiarem, lista zamówień, zmiana statusów, eksport CSV, podgląd stanów, EAN-13 i QR, druk etykiet.
-
-**Do wykonania:** pełne warianty stanów, produkcja DTF, zwroty, dostawy, prawdziwy checkout i płatności, automatyzacje, dostępność i testy e2e, aplikacja Android.
-
-Nie należy przyjmować prawdziwych zamówień klientów na tej wersji.
+No live purchases are accepted in this demonstration.
