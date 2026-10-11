@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, urlparse
 import commerce_auth as auth
 import commerce_personalization as personalization
 import commerce_launch as launch
+import commerce_cms as cms
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
@@ -97,6 +98,7 @@ def init():
         auth.init_schema(c, TOKEN)
         personalization.init_schema(c)
         launch.init_schema(c)
+        cms.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -180,7 +182,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def body(self):
         length=int(self.headers.get("Content-Length","0"))
-        if length<1 or length>16384:raise Invalid("Nieprawidłowy rozmiar żądania")
+        if length<1 or length>(1_900_000 if self.path=="/api/admin/home/media" else 35000):raise Invalid("Nieprawidłowy rozmiar żądania")
         try:
             data=json.loads(self.rfile.read(length))
             if not isinstance(data,dict):raise Invalid("Oczekiwano obiektu")
@@ -206,12 +208,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path=urlparse(self.path).path
-        if path=="/health":return self.respond(200,{"ok":True,"version":"0.7","sales_phase":"prelaunch","accounts":True})
+        if path=="/health":return self.respond(200,{"ok":True,"version":"0.8","sales_phase":"prelaunch","accounts":True,"cms":True})
+        if path.startswith("/api/store/media/"):
+            data=cms.load_media(path.rsplit("/",1)[-1]);return self.respond(200,data,"image/webp") if data is not None else self.respond(404,{"error":"Nie znaleziono zdjęcia"})
         if not self.access(path):return
         try:
             with connect() as c:
                 if auth.dispatch(self,path,c):return
                 if path=='/api/store/status':return self.respond(200,launch.snapshot(c,public=True))
+                if path=='/api/store/home':return self.respond(200,cms.get(c))
+                if path=='/api/admin/home':return self.respond(200,cms.get(c,admin=True))
+                if path=='/api/admin/home/revisions':return self.respond(200,cms.history(c))
                 if path=='/api/admin/launch':return self.respond(200,launch.snapshot(c))
                 if path=='/api/account/orders':
                     auth.require_user(self,'customer')
@@ -306,6 +313,27 @@ class Handler(BaseHTTPRequestHandler):
             with connect() as c:
                 if auth.dispatch(self,path,c):return
             data=self.body()
+            if path=='/api/admin/home/media':
+                try:return self.respond(201,{'url':cms.write_media(data)})
+                except ValueError as ex:return self.error(ex)
+            if path=='/api/admin/home/publish':
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        cms.publish(c,data.get('revision'))
+                        audit(c,'homepage','published','Opublikowano stronę główną')
+                        result=cms.get(c,admin=True)
+                    return self.respond(200,result)
+                except RuntimeError as ex:return self.respond(409,{'error':str(ex)})
+            if path=='/api/admin/home/restore':
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        cms.restore(c,data.get('revision_id'),data.get('revision'))
+                        audit(c,'homepage','restore','Przywrócono szkic poprzedniej wersji')
+                        result=cms.get(c,admin=True)
+                    return self.respond(200,result)
+                except RuntimeError as ex:return self.respond(409,{'error':str(ex)})
             if path=='/api/admin/inventory/import':
                 rows=data.get('rows')
                 reason=data.get('reason')
@@ -487,6 +515,15 @@ class Handler(BaseHTTPRequestHandler):
             with connect() as c:
                 if auth.dispatch(self,path,c):return
             data=self.body()
+            if path=='/api/admin/home':
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        cms.save_draft(c,data.get('config'),data.get('revision'))
+                        audit(c,'homepage','draft','Zapisano szkic strony głównej')
+                        result=cms.get(c,admin=True)
+                    return self.respond(200,result)
+                except RuntimeError as ex:return self.respond(409,{'error':str(ex)})
             if path=='/api/admin/launch':
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
