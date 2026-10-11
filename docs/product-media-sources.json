@@ -1,0 +1,495 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-10-11",
+  "scope": "Existing catalogue covers and two exact-match additional bag photos only. No verified model or lifestyle photography. No CMS publication.",
+  "products": [
+    {
+      "product_id": 1,
+      "expected_sku": "ZS-HD-001",
+      "expected_legacy_image": "/assets/photos/product-1.webp",
+      "source_page": "https://zastal.store/produkt/bluza-z-kapturem-zastal-logo-zielona/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-1-cover",
+            "url": "/assets/photos/product-1.webp",
+            "role": "packshot",
+            "alt": "Bluza Zastal Logo — przód",
+            "illustrative": true,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/04/bluza-LOGO-2.png"
+          },
+          "classification": "official_illustrative_product_visual",
+          "classification_basis": "Flat garment template with composited print; classification is a conservative visual inference, not a provenance claim from the shop.",
+          "view": "front",
+          "source_sha256": "f2b509f3ae71cf4eeec4326839d3736350f4c204a891ab5514fd776830b7c83c",
+          "asset_sha256": "1be462e552a91c4c6e3964ca97e37d73dc6c2826fdbf96e4fe2823e199b91d8b",
+          "source_dimensions": [
+            848,
+            1090
+          ],
+          "asset_dimensions": [
+            848,
+            1090
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": [
+            "Real finished-garment photography unverified. Do not label as a model, lifestyle, or physical-detail photo."
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": 2,
+      "expected_sku": "ZS-HD-002",
+      "expected_legacy_image": "",
+      "source_page": "https://zastal.store/produkt/bluza-z-kapturem-zastal-retro-zielona/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-2-cover",
+            "url": "/assets/photos/product-2.webp",
+            "role": "packshot",
+            "alt": "Bluza Zastal Retro — przód",
+            "illustrative": true,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/04/bluza-retro-1.png"
+          },
+          "classification": "official_illustrative_product_visual",
+          "classification_basis": "Flat garment template with composited print; classification is a conservative visual inference, not a provenance claim from the shop.",
+          "view": "front",
+          "source_sha256": "683389916338b9c7d485da7b7bf28465aa781ac42967dc67eea21e203d243804",
+          "asset_sha256": "37b32fd02fc908522f9e863ac1f63c030098fa5a5e092c6d1722621b583b5b91",
+          "source_dimensions": [
+            848,
+            1090
+          ],
+          "asset_dimensions": [
+            848,
+            1090
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": [
+            "Real finished-garment photography unverified. Do not label as a model, lifestyle, or physical-detail photo."
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": 3,
+      "expected_sku": "ZS-TS-003",
+      "expected_legacy_image": "",
+      "source_page": "https://zastal.store/produkt/koszulka-wicemistrz-polski/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-3-cover",
+            "url": "/assets/photos/product-3.webp",
+            "role": "packshot",
+            "alt": "Koszulka Wicemistrz Polski — przód",
+            "illustrative": true,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/06/5012d617-f03b-4e73-ad54-a0d6019f8eb6.jpeg"
+          },
+          "classification": "official_illustrative_product_visual",
+          "classification_basis": "Flat garment template with composited print; classification is a conservative visual inference, not a provenance claim from the shop.",
+          "view": "front",
+          "source_sha256": "c9bb5e56eaf4fbba3a05cabcb1d6e55f1aee557dac463b48ca389f5e63f47645",
+          "asset_sha256": "abb654e35ccff34ed20ee35724a30bbf8b11bfd3c2fa156673f220285970bbad",
+          "source_dimensions": [
+            1448,
+            2048
+          ],
+          "asset_dimensions": [
+            848,
+            1200
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": [
+            "Real finished-garment photography unverified. Do not label as a model, lifestyle, or physical-detail photo."
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": 4,
+      "expected_sku": "ZS-TS-004",
+      "expected_legacy_image": "",
+      "source_page": "https://zastal.store/produkt/koszulka-final-zastal/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-4-cover",
+            "url": "/assets/photos/product-4.webp",
+            "role": "packshot",
+            "alt": "Koszulka The Final — ciemna — przód",
+            "illustrative": true,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/06/koszulka-final-ciemna.png"
+          },
+          "classification": "official_illustrative_product_visual",
+          "classification_basis": "Flat garment template with composited print; classification is a conservative visual inference, not a provenance claim from the shop.",
+          "view": "front",
+          "source_sha256": "a2e22c67361ace2ac42f6bd07590403bc517a4d27c20c27af8b145807eb3ac12",
+          "asset_sha256": "ec8b6b21eab818ecacbe0704d7a864f3d551809f7db478f26a02fce2a4aa79b6",
+          "source_dimensions": [
+            1242,
+            1560
+          ],
+          "asset_dimensions": [
+            955,
+            1200
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": [
+            "Real finished-garment photography unverified. Do not label as a model, lifestyle, or physical-detail photo."
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": 5,
+      "expected_sku": "ZS-TS-005",
+      "expected_legacy_image": "",
+      "source_page": "https://zastal.store/produkt/koszulka-final-jasnozielona/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-5-cover",
+            "url": "/assets/photos/product-5.webp",
+            "role": "packshot",
+            "alt": "Koszulka The Final — jasna — przód",
+            "illustrative": true,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/06/KOSZULKA-final-jasna.png"
+          },
+          "classification": "official_illustrative_product_visual",
+          "classification_basis": "Flat garment template with composited print; classification is a conservative visual inference, not a provenance claim from the shop.",
+          "view": "front",
+          "source_sha256": "0171e78d20f185b2bb62272170b22226bec72e17cfab1674b402c681e3acc4f7",
+          "asset_sha256": "99d8f051b818d82bf5d9667d803940341b43adc82c393196e845357d7ebcce37",
+          "source_dimensions": [
+            1242,
+            1560
+          ],
+          "asset_dimensions": [
+            955,
+            1200
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": [
+            "Real finished-garment photography unverified. Do not label as a model, lifestyle, or physical-detail photo."
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": 6,
+      "expected_sku": "ZS-TS-006",
+      "expected_legacy_image": "",
+      "source_page": "https://zastal.store/produkt/koszulka-zastal-sulima/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-6-cover",
+            "url": "/assets/photos/product-6.webp",
+            "role": "packshot",
+            "alt": "Koszulka Zastal Sulima — przód",
+            "illustrative": true,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/06/sulima-tee-2.png"
+          },
+          "classification": "official_illustrative_product_visual",
+          "classification_basis": "Flat garment template with composited print; classification is a conservative visual inference, not a provenance claim from the shop.",
+          "view": "front",
+          "source_sha256": "e89c0b69f78a0939c2a2c36e4cbf7030a24530dae4e928fb9433996f082c82ed",
+          "asset_sha256": "3a98a37c8dac752d1d3ca287272c67b79dc222a76ac72423e3082069857e021f",
+          "source_dimensions": [
+            1242,
+            1560
+          ],
+          "asset_dimensions": [
+            955,
+            1200
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": [
+            "Real finished-garment photography unverified. Do not label as a model, lifestyle, or physical-detail photo."
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": 7,
+      "expected_sku": "ZS-TS-007",
+      "expected_legacy_image": "",
+      "source_page": "https://zastal.store/produkt/koszulka-konduktor-zastal-express-meska-jasnozielona/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-7-cover",
+            "url": "/assets/photos/product-7.webp",
+            "role": "packshot",
+            "alt": "Zastal Express — koszulka — przód",
+            "illustrative": true,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/02/zielona-dziecieca-winogrona-rozowe-1.png"
+          },
+          "classification": "official_illustrative_product_visual",
+          "classification_basis": "Flat garment template with composited print; classification is a conservative visual inference, not a provenance claim from the shop.",
+          "view": "front",
+          "source_sha256": "5aac8e38a7696e94a2f62b064e0ebf04aaea00d1d26077d830be1c1626742593",
+          "asset_sha256": "1c53bc9bdff3f1d3116a02b88f5e817e3c1ac76ee85693144f0868d128e1cbbb",
+          "source_dimensions": [
+            1242,
+            1560
+          ],
+          "asset_dimensions": [
+            955,
+            1200
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": [
+            "Real finished-garment photography unverified. Do not label as a model, lifestyle, or physical-detail photo."
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": 8,
+      "expected_sku": "ZS-AC-008",
+      "expected_legacy_image": "",
+      "source_page": "https://zastal.store/produkt/worek-sportowy-zastal-z-kieszonka-sezon-2025-2026/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-8-cover",
+            "url": "/assets/photos/product-8.webp",
+            "role": "packshot",
+            "alt": "Worek sportowy Zastal — przód",
+            "illustrative": false,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/04/20260430_121010-removebg-preview-1.png"
+          },
+          "classification": "real_product_photograph",
+          "classification_basis": "Physical material texture, real directional light/shadows and photographic surface visible.",
+          "view": "front cutout",
+          "source_sha256": "a187dc49d9e9959abcbc1d9c36f383a176ac2fcbd5bdddb84b49e922d9dba75c",
+          "asset_sha256": "64b395f103571c9ed9968d625a69c893b2cf027aaa549e84ecd5374e8b4254b8",
+          "source_dimensions": [
+            864,
+            1152
+          ],
+          "asset_dimensions": [
+            864,
+            1152
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": []
+        },
+        {
+          "image": {
+            "id": "product-8-detail",
+            "url": "/assets/photos/gallery/product-8-detail.webp",
+            "role": "detail",
+            "alt": "Worek sportowy Zastal — detal tkaniny i nadruku",
+            "illustrative": false,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/04/20260430_121025-scaled.jpg"
+          },
+          "classification": "real_product_photograph",
+          "classification_basis": "Physical material texture, real directional light/shadows and photographic surface visible.",
+          "view": "fabric and printed-logo detail",
+          "source_sha256": "b5ccab17c8ed685aa5c93f4c4a853bde2bef0b1fb3f062b40cf7ad46dcb560e7",
+          "asset_sha256": "ac72bbef5a2013718dbbc9a1191746dd79155ca23853ef8d8b2d0cf78ed66741",
+          "source_dimensions": [
+            1920,
+            2560
+          ],
+          "asset_dimensions": [
+            1200,
+            1600
+          ],
+          "transformation": "Lossy WebP quality 88, method 6; metadata stripped; aspect-preserving fit within 1600x1600 without upscaling; no crop, recolour or artwork edits.",
+          "limitations": []
+        },
+        {
+          "image": {
+            "id": "product-8-back",
+            "url": "/assets/photos/gallery/product-8-back.webp",
+            "role": "packshot",
+            "alt": "Worek sportowy Zastal — tył",
+            "illustrative": false,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/04/20260430_121140-removebg-preview.png"
+          },
+          "classification": "real_product_photograph",
+          "classification_basis": "Physical material texture, real directional light/shadows and photographic surface visible.",
+          "view": "back cutout",
+          "source_sha256": "05cb0610d119fa2d8a6c9c5cd61c262708e4b69516854c89bc9a3ac2ec59577f",
+          "asset_sha256": "2fb79bb9d30f9f606bfb28e375cdfb7275a01f75533d7b36551ed44b05b2c7ce",
+          "source_dimensions": [
+            433,
+            577
+          ],
+          "asset_dimensions": [
+            433,
+            577
+          ],
+          "transformation": "Lossy WebP quality 88, method 6; metadata stripped; aspect-preserving fit within 1600x1600 without upscaling; no crop, recolour or artwork edits.",
+          "limitations": [
+            "Original only 433x577; avoid upscaling."
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": 9,
+      "expected_sku": "ZS-KD-009",
+      "expected_legacy_image": "",
+      "source_page": "https://zastal.store/produkt/koszulka-dziecieca-wicemistrz-polski/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-9-cover",
+            "url": "/assets/photos/product-9.webp",
+            "role": "packshot",
+            "alt": "Koszulka dziecięca Wicemistrz — przód",
+            "illustrative": true,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/05/KOSZULKA-wice-dziec-jasna.png"
+          },
+          "classification": "official_illustrative_product_visual",
+          "classification_basis": "Flat garment template with composited print; classification is a conservative visual inference, not a provenance claim from the shop.",
+          "view": "front",
+          "source_sha256": "ff02a15ef8ab9c5e4fb28830ce5abe85aee492ac06262a741ba71c156610326c",
+          "asset_sha256": "665a60f93e66618c03708851a87861a3076aead6038139d961fbf894ceef80c5",
+          "source_dimensions": [
+            1242,
+            1560
+          ],
+          "asset_dimensions": [
+            955,
+            1200
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": [
+            "Real finished-garment photography unverified. Do not label as a model, lifestyle, or physical-detail photo."
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": 10,
+      "expected_sku": "ZS-TS-010",
+      "expected_legacy_image": "",
+      "source_page": "https://zastal.store/produkt/koszulka-zastal-trio/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-10-cover",
+            "url": "/assets/photos/product-10.webp",
+            "role": "packshot",
+            "alt": "Koszulka Zastal Trio — przód",
+            "illustrative": true,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/06/trio-tee.png"
+          },
+          "classification": "official_illustrative_product_visual",
+          "classification_basis": "Flat garment template with composited print; classification is a conservative visual inference, not a provenance claim from the shop.",
+          "view": "front",
+          "source_sha256": "01bf9d88195024e63f70358a567bc7e9c2db7f91fafc230a833f4a9d0c27d964",
+          "asset_sha256": "2557289fcfe9f70416fe88b2ebe037a5a94f6bf209addc343a2bbfd6d39e3008",
+          "source_dimensions": [
+            1242,
+            1560
+          ],
+          "asset_dimensions": [
+            955,
+            1200
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": [
+            "Real finished-garment photography unverified. Do not label as a model, lifestyle, or physical-detail photo."
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": 11,
+      "expected_sku": "ZS-AC-011",
+      "expected_legacy_image": "",
+      "source_page": "https://zastal.store/produkt/brelok-dziczek-3d/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-11-cover",
+            "url": "/assets/photos/product-11.webp",
+            "role": "packshot",
+            "alt": "Brelok Dziczek 3D — przód",
+            "illustrative": false,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/07/ae464cc7-76b9-4827-9350-f6a1f827c7c1.jpeg"
+          },
+          "classification": "real_product_photograph",
+          "classification_basis": "Physical material texture, real directional light/shadows and photographic surface visible.",
+          "view": "front, both eyes open",
+          "source_sha256": "8a5cc6d629c1f08d8d2fd40903d9d4d64c19276b9346082e055706d96221e243",
+          "asset_sha256": "bc6e43c6fcbe97a419903625c270641ea0a096628aa3116c0aaa2d4fe99bba33",
+          "source_dimensions": [
+            1536,
+            2048
+          ],
+          "asset_dimensions": [
+            900,
+            1200
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": []
+        }
+      ]
+    },
+    {
+      "product_id": 12,
+      "expected_sku": "ZS-AC-012",
+      "expected_legacy_image": "",
+      "source_page": "https://zastal.store/produkt/magnes-zastal-dziczek-oczko/",
+      "match_evidence": "Official product title/color/season and visual comparison with the existing catalog image; the first official gallery asset has the same garment/accessory design.",
+      "assets": [
+        {
+          "image": {
+            "id": "product-12-cover",
+            "url": "/assets/photos/product-12.webp",
+            "role": "packshot",
+            "alt": "Magnes Zastal Dziczek — przód",
+            "illustrative": false,
+            "source_url": "https://zastal.store/wp-content/uploads/2026/07/89528fc9-8fb1-4ae4-9134-98a05d412fdb.jpeg"
+          },
+          "classification": "real_product_photograph",
+          "classification_basis": "Physical material texture, real directional light/shadows and photographic surface visible.",
+          "view": "front",
+          "source_sha256": "131aae830c9cbc0cd4b301153217d2cccadd9fbecb676388fc5039416a3ffcbe",
+          "asset_sha256": "a7c764eadc13f21b4b5fe2793dc0ee89d93c7a723a4fac220d8593dfbeae3b47",
+          "source_dimensions": [
+            1536,
+            2048
+          ],
+          "asset_dimensions": [
+            900,
+            1200
+          ],
+          "transformation": "Existing cover retained byte-for-byte; reviewed against official source.",
+          "limitations": []
+        }
+      ]
+    }
+  ],
+  "excluded": [
+    {
+      "source_url": "https://zastal.store/wp-content/uploads/2026/07/1c91e9ce-3550-4ad8-bfd1-2a3c4dfe6a8d.jpeg",
+      "reason": "Different keychain face artwork; exact same-product angle unverified."
+    },
+    {
+      "url": "/assets/photos/fans.webp",
+      "reason": "General club lifestyle; no exact SKU match."
+    }
+  ]
+}

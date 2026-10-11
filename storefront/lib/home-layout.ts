@@ -1,4 +1,4 @@
-export type SectionKind="hero"|"categories"|"products"|"personalization"|"retro"|"accessories"|"banner"|"text"|"services";
+export type SectionKind="hero"|"categories"|"products"|"personalization"|"retro"|"accessories"|"banner"|"text"|"services"|"campaign";
 export type SectionSettings=Record<string,string|number|boolean>;
 export type HomeSection={id:string;type:SectionKind;enabled:boolean;settings:SectionSettings};
 export type HomeConfig={version:1;sections:HomeSection[]};
@@ -7,6 +7,7 @@ export type Field={key:string;label:string;type:"short"|"long"|"image"|"url"|"nu
 const opts=(values:string[])=>values.map(v=>({value:v,label:v}));
 export const categories=["Wszystko","Koszulki","Bluzy","Akcesoria","Dzieci"];
 export const SECTION_DESCRIPTIONS:Record<SectionKind,{name:string;about:string}>={
+ campaign:{name:"Kampania z produktami",about:"Zdjęcie pasujących produktów na modelu lub lifestyle i powiązany katalog"},
  hero:{name:"Baner główny",about:"Zdjęcie kampanii, nagłówek, przyciski i przyciemnienie"},
  categories:{name:"Kolekcje",about:"Wybór kategorii i liczba kolumn"},
  products:{name:"Produkty",about:"Produkty z katalogu, filtry i liczba elementów"},
@@ -28,6 +29,7 @@ const catOptions=opts(categories);
 const cols:Field={key:"columns",label:"Liczba kolumn",type:"select",options:[2,3,4].map(n=>({value:n,label:String(n)}))};
 const count:Field={key:"count",label:"Liczba produktów",type:"number",min:1,max:12};
 export const EDIT_FIELDS:Record<SectionKind,Field[]>={
+ campaign:[eyebrow,heading,desc,{key:"product_ids",label:"Produkty kampanii",type:"short"},image,{key:"image_alt",label:"Opis zdjęcia",type:"short"},{key:"image_role",label:"Rola zdjęcia",type:"select",options:[{value:"model",label:"Na modelu"},{value:"lifestyle",label:"Lifestyle"}]},{key:"image_illustrative",label:"Materiał poglądowy",type:"toggle"},cta,{key:"cta_url",label:"Link przycisku",type:"url"},align],
  hero:[eyebrow,heading,desc,image,cta,{key:"cta_url",label:"Link przycisku",type:"url"},
    {key:"secondary_text",label:"Drugi przycisk",type:"short"},{key:"secondary_url",label:"Drugi link",type:"url"},
    {key:"height",label:"Wysokość banera (px)",type:"number",min:400,max:850},
@@ -65,8 +67,9 @@ export const copyConfig=(config:HomeConfig):HomeConfig=>JSON.parse(JSON.stringif
 export function makeSection(type:SectionKind):HomeSection{
  const defaults=DEFAULT_HOME.sections.find(s=>s.type===type);
  const custom:Record<string,SectionSettings>={
+ campaign:{eyebrow:"ZASTAL / KOLEKCJA",title:"W barwach Zastalu",description:"",image:"",image_alt:"",image_role:"model",image_illustrative:true,product_ids:"",cta_text:"Zobacz kolekcję",cta_url:"/sklep",alignment:"left"},
  banner:{eyebrow:"KOLEKCJA",title:"Nowa kolekcja",description:"",image:"/assets/photos/fans.webp",cta_text:"Zobacz więcej",cta_url:"/sklep",background:"#143e2d",text_color:"#ffffff",alignment:"left"},
  text:{eyebrow:"ZASTAL ZIELONA GÓRA",title:"Historia naszego klubu",description:"",alignment:"left",background:"#f4f5f1",text_color:"#173c2b"}
  };
- return {id:"section-"+crypto.randomUUID().slice(0,8),type,enabled:true,settings:{...(defaults?.settings??custom[type]??{})}};
+ return {id:"section-"+crypto.randomUUID().slice(0,8),type,enabled:type!=="campaign",settings:{...(defaults?.settings??custom[type]??{})}};
 }

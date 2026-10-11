@@ -1,4 +1,5 @@
 import type { CatalogItem } from './catalog';
+export type { ProductMedia, GalleryResponse } from './product-media.mjs';
 export type Personalization = { mode: 'player'; player_id: number } | { mode: 'custom'; name: string; number: string };
 export type PrintDisplay = { name: string; number: string; fee?: number };
 export type Player = { id: number; name: string; print_name: string; number: string };

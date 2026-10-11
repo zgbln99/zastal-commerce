@@ -1,6 +1,7 @@
+import type { ProductMedia } from './product-media.mjs';
 export type CatalogItem = {
   id: number; name: string; sku: string; price: number; stock: number; category: string;
-  image: string; tag?: string; subtitle: string; color?: string; sizes?: string[];
+  image: string; images?: ProductMedia[]; gallery_revision?: number; tag?: string; subtitle: string; color?: string; sizes?: string[];
 };
 export const catalog: CatalogItem[] = [
   {id:1,name:"Bluza Zastal Logo",sku:"ZS-HD-001",price:9900,stock:38,category:"Bluzy",subtitle:"Klasyczna bluza z kapturem • zieleń",image:"/assets/photos/product-1.webp",sizes:["S","M","L","XL","XXL"]},

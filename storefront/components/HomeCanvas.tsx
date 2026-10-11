@@ -3,6 +3,7 @@ import {useState} from "react";
 import Link from "next/link";
 import {ArrowRight,ArrowUpRight,PackageCheck,Ruler,UserRound} from "lucide-react";
 import ProductCard,{ProductImage} from "./ProductCard";
+import CampaignSection from "./CampaignSection";
 import StoreHero from "./StoreHero";
 import {useStore} from "./StoreProvider";
 
@@ -25,6 +26,7 @@ function Block({section}:{section:HomeSection}){
  const active=filter??(text(s,"category")||"Wszystko");
  const links=(x:string)=>"/sklep?category="+encodeURIComponent(x);
  const chosen=products.find(p=>p.id===num(s,"product_id"));
+ if(kind==="campaign")return <CampaignSection section={section}/>;
  if(kind==="hero")return <StoreHero settings={s}/>;
  if(kind==="categories"){
   const cats=text(s,"categories").split(",").map(x=>x.trim()).filter(Boolean);

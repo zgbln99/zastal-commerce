@@ -1,3 +1,4 @@
+import { productImages, safeImageUrl } from './product-media.mjs';
 const METHODS = { odbior: 0, paczkomat: 1299, kurier: 1499 };
 export const FREE_SHIPPING = 25000;
 export function shippingCost(method, subtotal) {
@@ -92,8 +93,10 @@ export function mergeCatalog(rows, fallback = []) {
     const rawSizes = Array.isArray(row.sizes) && row.sizes.length ? row.sizes : old.sizes || (row.variants?.length ? row.variants.map(v => v.size) : ['UNI']);
     const sizes = [...new Set(rawSizes.filter(s => typeof s === 'string' && /^[A-Z0-9_-]{1,20}$/.test(s)))];
     const variants = valid ? row.variants.filter(v => v && sizes.includes(v.size) && Number.isSafeInteger(v.stock) && v.stock >= 0) : [];
-    const image = typeof row.image === 'string' && row.image.trim() ? row.image : old.image || '/assets/product-unavailable.svg';
-    return { ...old, ...row, name: row.name || old.name || 'Produkt', sku: row.sku || old.sku || '', category: row.category || old.category || 'Akcesoria', subtitle: typeof row.subtitle === 'string' ? row.subtitle : old.subtitle || '', image, ...(sizes.length && !(sizes.length === 1 && sizes[0] === 'UNI') ? { sizes } : { sizes: undefined }), price: valid ? row.price : old.price || 0, variants, stock: variants.reduce((sum, v) => sum + v.stock, 0), verified: valid, personalization_enabled: row.personalization_enabled === true, personalization_required: row.personalization_enabled === true && row.personalization_required === true, personalization_fee: Number.isSafeInteger(row.personalization_fee) && row.personalization_fee >= 0 ? row.personalization_fee : 0 };
+    const fallbackImage = safeImageUrl(row.image, true) ? row.image : safeImageUrl(old.image, true) ? old.image : '/assets/product-unavailable.svg';
+    const images = productImages({ ...row, image: fallbackImage });
+    const image = images[0]?.url || fallbackImage;
+    return { ...old, ...row, name: row.name || old.name || 'Produkt', sku: row.sku || old.sku || '', category: row.category || old.category || 'Akcesoria', subtitle: typeof row.subtitle === 'string' ? row.subtitle : old.subtitle || '', image, images, gallery_revision: Number.isSafeInteger(row.gallery_revision) && row.gallery_revision >= 0 ? row.gallery_revision : 0, ...(sizes.length && !(sizes.length === 1 && sizes[0] === 'UNI') ? { sizes } : { sizes: undefined }), price: valid ? row.price : old.price || 0, variants, stock: variants.reduce((sum, v) => sum + v.stock, 0), verified: valid, personalization_enabled: row.personalization_enabled === true, personalization_required: row.personalization_enabled === true && row.personalization_required === true, personalization_fee: Number.isSafeInteger(row.personalization_fee) && row.personalization_fee >= 0 ? row.personalization_fee : 0 };
   });
 }
 export function normalizeFavorites(raw, products) {

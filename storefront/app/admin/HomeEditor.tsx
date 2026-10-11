@@ -4,9 +4,11 @@ import {ArrowDown,ArrowUp,Check,CheckCircle2,ChevronLeft,Copy,Eye,EyeOff,History
 import {useAuth} from "../../components/AuthProvider";
 import {useStore} from "../../components/StoreProvider";
 import {DEFAULT_HOME,EDIT_FIELDS,SECTION_DESCRIPTIONS,copyConfig,makeSection,type Field,type HomeConfig,type HomeResponse,type HomeSection,type SectionKind,type SectionSettings} from "../../lib/home-layout";
+import {campaignReady,productImages,type ProductMedia} from "../../lib/product-media.mjs";
+import {uploadMedia} from "../../lib/media-upload";
 import "./home-editor.css";
 
-const TYPES:SectionKind[]=["hero","categories","products","personalization","retro","accessories","banner","text","services"];
+const TYPES:SectionKind[]=["hero","categories","products","personalization","retro","accessories","banner","text","services","campaign"];
 type Revision={id:number;revision:number;action:string;created:string};
 type Media={url:string;name:string;bytes:number};
 const FORMAT=new Intl.DateTimeFormat("pl-PL",{dateStyle:"medium",timeStyle:"short"});
@@ -64,6 +66,7 @@ export default function HomeEditor(){
   if(type==="up"&&pos===0)return;
   if(type==="down"&&pos===draft.sections.length-1)return;
   if(type==="toggle"&&part.type==="hero"&&part.enabled&&!draft.sections.some(s=>s.type==="hero"&&s.enabled&&s.id!==id)){setError("Nie można wyłączyć jedynego banera głównego.");return}
+  if(type==="toggle"&&part.type==="campaign"&&!part.enabled&&!campaignReady(part.settings,store.products)){setError("Dodaj zdjęcie, jego opis i powiązane produkty przed włączeniem kampanii.");return}
   edit(d=>{
    const i=d.sections.findIndex(s=>s.id===id);
    if(type==="toggle")d.sections[i].enabled=!d.sections[i].enabled;
@@ -133,23 +136,28 @@ export default function HomeEditor(){
   catch(ex){setError(ex instanceof Error?ex.message:"Nie odczytano biblioteki mediów")}
  };
  const upload=async(file:File)=>{
-  if(!file||!/^image\/(?:jpeg|png|webp)$/.test(file.type)){setError("Wybierz obraz JPG, PNG lub WebP.");return}
-  if(file.size>1200000){setError("Plik jest za duży. Maksymalnie 1,2 MB — zmniejsz zdjęcie i spróbuj ponownie.");return}
   setUploading(true);setError("");
   try{
-   const base64=await new Promise<string>((resolve,reject)=>{
-    const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));
-    reader.onerror=()=>reject(Error("Błąd odczytu pliku"));reader.readAsDataURL(file);
-   });
-   const result=await auth.request<{url:string}>("/api/admin/home/media",{method:"POST",body:JSON.stringify({image:base64,name:file.name})});
-   setMedia(x=>[{url:result.url,name:file.name,bytes:file.size},...x]);
-   if(selected)updateSection(selected.id,"image",result.url);
+   const url=await uploadMedia(file,auth.request);
+   setMedia(x=>[{url,name:file.name,bytes:file.size},...x]);
+   if(selected)edit(d=>{const part=d.sections.find(x=>x.id===selected.id);if(!part)return;part.settings.image=url;if(part.type==="campaign"){part.settings.image_alt="";part.settings.image_illustrative=true;}});
    setLibraryOpen(false);setMessage("Zdjęcie dodano do biblioteki i szkicu. Zapisz i opublikuj, aby pokazać je klientom.");
   }catch(ex){setError(ex instanceof Error?ex.message:"Nie udało się przesłać zdjęcia")}
   finally{setUploading(false)}
  };
+ const campaignChoices=selected?.type==="campaign"?store.products.filter(p=>String(selected.settings.product_ids).split(",").map(x=>Number(x.trim())).includes(p.id)).flatMap(p=>productImages(p).filter(img=>img.role==="model"||img.role==="lifestyle").map(img=>({product:p,image:img}))):[];
+ const chooseCampaignImage=(img:ProductMedia)=>{
+  if(!selected)return;
+  edit(d=>{const part=d.sections.find(x=>x.id===selected.id);if(part)Object.assign(part.settings,{image:img.url,image_alt:img.alt,image_role:img.role,image_illustrative:img.illustrative});});
+ };
  const field=(f:Field)=>{
   if(!selected)return null;
+  if(selected.type==="campaign"&&f.key==="product_ids"){
+   const ids=String(selected.settings.product_ids||"").split(",").map(Number).filter(Boolean);
+   return <fieldset key={f.key} className="home-campaign-products"><legend>Produkty kampanii</legend>{store.products.map(p=><label key={p.id}><input type="checkbox" checked={ids.includes(p.id)} onChange={e=>{const next=e.target.checked?[...ids,p.id]:ids.filter(id=>id!==p.id);edit(d=>{const part=d.sections.find(x=>x.id===selected.id);if(!part)return;part.settings.product_ids=next.join(",");const image=String(part.settings.image);if(ids.includes(p.id)&&!e.target.checked&&productImages(p).some(img=>img.url===image)){part.settings.image="";part.settings.image_alt="";part.settings.image_illustrative=true;part.enabled=false;}});}}/>{p.name}</label>)}</fieldset>;
+  }
+  if(selected.type==="campaign"&&f.key==="image")return <div key={f.key} className="home-edit-field"><span>Zdjęcie kampanii</span><div className="home-edit-image">{selected.settings.image?<img src={String(selected.settings.image)} alt={String(selected.settings.image_alt)}/>:<span>Brak zdjęcia</span>}</div>{selected.settings.image_illustrative===true&&selected.settings.image&&<small>Materiał poglądowy</small>}<label>Zdjęcie z galerii powiązanego produktu<select value={String(selected.settings.image||"")} onChange={e=>{const choice=campaignChoices.find(x=>x.image.url===e.target.value);if(choice)chooseCampaignImage(choice.image);}}><option value="">Wybierz zdjęcie</option>{selected.settings.image&&!campaignChoices.some(x=>x.image.url===selected.settings.image)&&<option value={String(selected.settings.image)}>Własny przesłany obraz</option>}{campaignChoices.map(({product,image})=><option key={product.id+image.id} value={image.url}>{product.name} · {image.alt||image.role}{image.illustrative?" · Materiał poglądowy":""}</option>)}</select></label>{!campaignChoices.length&&<small>Brak zdjęć „Na modelu” lub „Lifestyle” w galeriach wybranych produktów. Dodaj pasujące materiały w galerii produktu lub prześlij zdjęcie poniżej.</small>}<label className="home-edit-media-btn">{uploading?"Przetwarzanie / wysyłanie…":"Prześlij pasujące zdjęcie"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={e=>{if(e.target.files?.[0])void upload(e.target.files[0]);e.target.value="";}}/></label><small>JPG, PNG, WebP do 25 MB · proporcjonalna optymalizacja do 1,2 MB. Uzupełnij opis i potwierdź zgodność produktu, koloru i wzoru.</small></div>;
+  if(selected.type==="campaign"&&f.key==="image_illustrative")return <label key={f.key} className="home-campaign-truth"><input type="checkbox" checked={selected.settings.image_illustrative!==false} onChange={e=>{if(e.target.checked||window.confirm("Potwierdzam, że zdjęcie przedstawia dokładnie produkty kampanii, ich kolor i wzór. Czy usunąć oznaczenie „Materiał poglądowy”?"))updateSection(selected.id,"image_illustrative",e.target.checked);}}/>Materiał poglądowy</label>;
   const val=selected.settings[f.key];
   const change=(v:string|number|boolean)=>updateSection(selected.id,f.key,v);
   return <label className="home-edit-field" key={f.key}><span>{f.label}</span>
@@ -201,7 +209,7 @@ export default function HomeEditor(){
   </div>
   {addOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Dodaj sekcję" onClick={()=>setAddOpen(false)}><div className="home-builder-dialog" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><span>BIBLIOTEKA SEKCJI</span><h3>Dodaj element strony</h3></div><button onClick={()=>setAddOpen(false)}><X size={21}/></button></div><div className="home-builder-types">{TYPES.map(type=><button key={type} onClick={()=>add(type)}><span className="home-builder-type-icon"><Plus size={20}/></span><span><strong>{SECTION_DESCRIPTIONS[type].name}</strong><small>{SECTION_DESCRIPTIONS[type].about}</small></span></button>)}</div></div></div>}
   {libraryOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Biblioteka zdjęć" onClick={()=>setLibraryOpen(false)}><div className="home-builder-dialog" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><span>MEDIA LIBRARY</span><h3>Zdjęcia i grafiki</h3></div><button onClick={()=>setLibraryOpen(false)}><X size={21}/></button></div>
-   <label className="home-builder-upload"><ImagePlus size={26}/><strong>{uploading?"Wysyłanie zdjęcia...":"Prześlij nowe zdjęcie"}</strong><small>JPG, PNG lub WebP do 1,2 MB · automatyczna optymalizacja</small><input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={e=>{if(e.target.files?.[0])void upload(e.target.files[0])}}/></label>
+   <label className="home-builder-upload"><ImagePlus size={26}/><strong>{uploading?"Wysyłanie zdjęcia...":"Prześlij nowe zdjęcie"}</strong><small>JPG, PNG lub WebP do 25 MB · optymalizacja do 1,2 MB</small><input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={e=>{if(e.target.files?.[0])void upload(e.target.files[0])}}/></label>
    <div className="home-builder-media-grid">{[...media,...catalogueImages.map(img=>({...img,bytes:0}))].map(item=><button key={item.url} onClick={()=>{if(selected)updateSection(selected.id,"image",item.url);setLibraryOpen(false)}}><img src={item.url} alt={item.name}/><span>{item.name}</span></button>)}</div>
   </div></div>}
   {versionsOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Historia strony" onClick={()=>setVersionsOpen(false)}><div className="home-builder-dialog home-builder-history" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><span>HISTORIA / ROLLBACK</span><h3>Poprzednie wersje</h3></div><button onClick={()=>setVersionsOpen(false)}><X size={21}/></button></div><p>Przywracanie nie publikuje zmian — zapisuje wskazaną wersję do szkicu.</p><div>{revisions.map(rev=><div className="home-builder-version" key={rev.id}><span><strong>Wersja {rev.revision}</strong><small>{FORMAT.format(new Date(rev.created))} · {rev.action==="published"?"Opublikowana":rev.action==="draft"?"Szkic":"Pierwotna"}</small></span><button disabled={busy} onClick={()=>void restore(rev.id)}><RefreshCw size={15}/> Przywróć</button></div>)}</div></div></div>}

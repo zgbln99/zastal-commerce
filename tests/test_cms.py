@@ -124,4 +124,95 @@ class CMSIntegration(unittest.TestCase):
         finally:
             if previous is not None:os.environ["ZASTAL_TEST_MODE"]=previous
 
-if __name__=="__main__":unittest.main()
+
+
+def campaign_config(enabled=False, **changes):
+    config = copy.deepcopy(cms.DEFAULT)
+    config['sections'].append({'id': 'new-campaign', 'type': 'campaign', 'enabled': enabled,
+        'settings': {'eyebrow': 'Kolekcja', 'title': 'Barwy klubu', 'description': '',
+                     'image': '', 'image_alt': '', 'image_role': 'lifestyle',
+                     'image_illustrative': True, 'product_ids': '',
+                     'cta_text': 'Zobacz', 'cta_url': '/sklep', 'alignment': 'left', **changes}})
+    return config
+
+
+class CampaignValidation(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        import sqlite3
+        self.conn = sqlite3.connect(Path(self.tmp.name) / 'campaign.sqlite3')
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute('CREATE TABLE products(id INTEGER PRIMARY KEY)')
+        self.conn.execute('INSERT INTO products VALUES(7)')
+        cms.init_schema(self.conn)
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close(); self.tmp.cleanup()
+
+    def ready(self, **changes):
+        return campaign_config(True, **{'image': '/assets/photos/product-1.webp',
+                                       'image_alt': 'Koszulka na zdjęciu', 'product_ids': '7', **changes})
+
+    def accepts(self, function, *args):
+        try: return function(*args)
+        except ValueError as ex: self.fail('Valid campaign rejected: '+str(ex))
+
+    def test_old_version_one_configs_remain_identical(self):
+        before = [tuple(r) for r in self.conn.execute('SELECT * FROM site_home')]
+        self.assertEqual(cms.validate(copy.deepcopy(cms.DEFAULT)), cms.DEFAULT)
+        cms.init_schema(self.conn)
+        self.assertEqual([tuple(r) for r in self.conn.execute('SELECT * FROM site_home')], before)
+        self.assertFalse(any(section['type'] == 'campaign' for section in cms.get(self.conn)['config']['sections']))
+
+    def test_disabled_empty_campaign_is_a_draft_without_auto_publication(self):
+        config = campaign_config()
+        self.assertEqual(self.accepts(cms.validate, config), config)
+        self.assertEqual(self.accepts(cms.save_draft, self.conn, config, 1), 2)
+        self.assertEqual(cms.get(self.conn)['config'], cms.DEFAULT)
+        self.assertEqual(cms.get(self.conn, admin=True)['config'], config)
+        self.assertEqual(cms.history(self.conn)[0]['action'], 'draft')
+
+    def test_enabled_campaign_preserves_actual_and_illustrative_metadata(self):
+        for illustrative in [False, True]:
+            with self.subTest(illustrative=illustrative):
+                config = self.ready(image_illustrative=illustrative, image_role='model')
+                state = cms.get(self.conn, admin=True)
+                revision = self.accepts(cms.save_draft, self.conn, config, state['revision'])
+                cms.publish(self.conn, revision)
+                self.assertEqual(cms.get(self.conn)['config'], config)
+                self.assertIs(cms.get(self.conn)['config']['sections'][-1]['settings']['image_illustrative'], illustrative)
+
+    def test_campaign_rejects_bad_urls_roles_types_and_missing_required_metadata(self):
+        bad = [('image', ''), ('image', 'https://example.test/photo.webp'),
+               ('image', '/assets/../commerce_api.py'), ('image', '/assets/%2e%2e/file'),
+               ('image', '/assets/photos/missing.webp'), ('image', '/assets/photos/product-1.webp?x=1'),
+               ('image', '/api/store/media/'+'a'*32+'.webp'),
+               ('image_role', 'packshot'), ('image_role', []), ('image_role', 5),
+               ('image_illustrative', 1), ('image_illustrative', 'false'),
+               ('image_alt', ''), ('image_alt', '\nOpis'), ('image_alt', '<img src=x>'), ('image_alt', 'x'*251),
+               ('product_ids', ''), ('product_ids', '9'*100), ('product_ids', '0'), ('product_ids', '-1'),
+               ('product_ids', []), ('cta_url', 'javascript:alert(1)')]
+        for field, value in bad:
+            with self.subTest(field=field, value=value):
+                config = self.ready(); config['sections'][-1]['settings'][field] = value
+                with self.assertRaises(ValueError): cms.validate(config)
+        missing = self.ready(); del missing['sections'][-1]['settings']['image_illustrative']
+        with self.assertRaises(ValueError): cms.validate(missing)
+        unknown = self.ready(); unknown['sections'][-1]['settings']['unknown'] = True
+        with self.assertRaises(ValueError): cms.validate(unknown)
+        self.assertEqual(cms.get(self.conn, admin=True)['revision'], 1)
+
+    def test_missing_product_references_fail_save_and_publish_without_mutating_cms(self):
+        config = self.ready(product_ids='7,999')
+        before = cms.get(self.conn, admin=True)
+        with self.assertRaises(ValueError): cms.save_draft(self.conn, config, 1)
+        self.assertEqual(cms.get(self.conn, admin=True), before)
+        revision = self.accepts(cms.save_draft, self.conn, self.ready(), 1)
+        self.conn.execute('DELETE FROM products WHERE id=7')
+        with self.assertRaises(ValueError): cms.publish(self.conn, revision)
+        self.assertEqual(cms.get(self.conn)['config'], cms.DEFAULT)
+        self.assertEqual(cms.history(self.conn)[0]['action'], 'draft')
+
+
+if __name__ == "__main__": unittest.main()

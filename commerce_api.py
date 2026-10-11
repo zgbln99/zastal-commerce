@@ -21,6 +21,7 @@ import commerce_auth as auth
 import commerce_personalization as personalization
 import commerce_launch as launch
 import commerce_cms as cms
+import commerce_media as media
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
@@ -99,6 +100,7 @@ def init():
         personalization.init_schema(c)
         launch.init_schema(c)
         cms.init_schema(c)
+        media.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -129,6 +131,7 @@ def compatible_products(c):
     products = [dict(x) for x in c.execute("SELECT * FROM products ORDER BY id")]
     for product in products:
         product.update(personalization.product_options(c, product['id']))
+        product.update(media.public_gallery(c, product))
         product['sizes'] = [v['size'] for v in c.execute('SELECT size FROM product_variants WHERE product_id=? ORDER BY id', (product['id'],))]
     return products
 
@@ -208,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path=urlparse(self.path).path
-        if path=="/health":return self.respond(200,{"ok":True,"version":"0.8","sales_phase":"prelaunch","accounts":True,"cms":True})
+        if path=="/health":return self.respond(200,{"ok":True,"version":"0.9","sales_phase":"prelaunch","accounts":True,"cms":True})
         if path.startswith("/api/store/media/"):
             data=cms.load_media(path.rsplit("/",1)[-1]);return self.respond(200,data,"image/webp") if data is not None else self.respond(404,{"error":"Nie znaleziono zdjęcia"})
         if not self.access(path):return
@@ -230,6 +233,10 @@ class Handler(BaseHTTPRequestHandler):
                     receipt=c.execute('SELECT * FROM order_receipts WHERE order_id=? AND customer_id=?',(oid,self.request_user['id'])).fetchone()
                     return self.respond(200,order_detail(c,receipt)) if receipt else self.respond(404,{'error':'Nie znaleziono zamówienia'})
                 if path=='/api/admin/products':return self.respond(200,catalog(c))
+                gallery_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/gallery',path)
+                if gallery_route:
+                    try:return self.respond(200,media.get(c,int(gallery_route.group(1))))
+                    except LookupError as ex:return self.respond(404,{'error':str(ex)})
                 if path in ('/api/players', '/api/admin/players'):return self.respond(200,personalization.roster(c, path.startswith('/api/admin/')))
                 if path=='/api/admin/customers':return self.respond(200,customers(c))
                 if path.startswith('/api/admin/customers/'):
@@ -533,6 +540,17 @@ class Handler(BaseHTTPRequestHandler):
                     result=launch.snapshot(c)
                     c.commit()
                     return self.respond(200,result)
+            gallery_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/gallery',path)
+            if gallery_route:
+                pid=int(gallery_route.group(1))
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        result=media.save(c,pid,data)
+                        audit(c,'product-gallery',pid,f"Zapisano galerię: wersja {result['revision']}, zdjęcia: {len(result['images'])}")
+                    return self.respond(200,result)
+                except LookupError as ex:return self.respond(404,{'error':str(ex)})
+                except media.Conflict as ex:return self.respond(409,{'error':str(ex)})
             if path.startswith('/api/admin/products/'):
                 pid=int(path.rsplit('/',1)[1])
                 with connect() as c:

@@ -1,20 +1,29 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
+import { productImages, secondaryImage, type ImageProduct, type ProductMedia } from "../lib/product-media.mjs";
 import { Heart, Plus, ArrowUpRight } from "lucide-react";
 import { fmt } from "../lib/catalog";
 import { productDisplayPrice, type Product } from "../lib/commerce.mjs";
 import { useStore } from "./StoreProvider";
-export function ProductImage({ product, className = "", eager = false }: { product: { image: string; name: string }; className?: string; eager?: boolean }) {
-  return <img src={product.image} alt={product.name} className={className} loading={eager ? "eager" : "lazy"} decoding="async" onError={e => { const el = e.currentTarget; if (!el.dataset.failed) { el.dataset.failed = "1"; el.src = "/assets/product-unavailable.svg"; } }} />;
+export function ProductImage({ product, media, className = "", eager = false, showLabel = true }: { product: ImageProduct; media?: ProductMedia; className?: string; eager?: boolean; showLabel?: boolean }) {
+  const current = media || productImages(product)[0];
+  const source = current?.url || "/assets/product-unavailable.svg";
+  const [failed, setFailed] = useState("");
+  const broken = failed === source;
+  return <><img src={broken ? "/assets/product-unavailable.svg" : source} alt={broken ? "Zdjęcie produktu niedostępne" : current?.alt || product.name || "Produkt"} className={className} loading={eager ? "eager" : "lazy"} decoding="async" onError={() => setFailed(source)}/>{showLabel && current?.illustrative && !broken && <small className="product-media-label">Materiał poglądowy</small>}</>;
 }
 export default function ProductCard({ product, eager = false }: { product: Product; eager?: boolean }) {
   const store = useStore();
+  const [alternate, setAlternate] = useState(false);
+  const images = productImages(product);
+  const current = alternate ? secondaryImage(images) || images[0] : images[0];
   const liked = store.favorites.includes(product.id);
   const available = product.variants.some(v => v.stock > 0);
   const needsSelection = !!product.sizes || !!product.personalization_enabled;
-  return <article className="product-card">
+  return <article className="product-card" onMouseEnter={() => setAlternate(window.matchMedia("(hover: hover) and (pointer: fine)").matches)} onMouseLeave={() => setAlternate(false)} onFocusCapture={() => setAlternate(true)} onBlurCapture={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setAlternate(false); }}>
     <div className="product-image-wrap">
-      <Link href={"/produkt/" + product.id} className="product-image-link" tabIndex={-1} aria-hidden="true"><ProductImage product={product} eager={eager}/></Link>
+      <Link href={"/produkt/" + product.id} className="product-image-link" aria-label={product.name}><ProductImage product={product} media={current} eager={eager}/></Link>
       {product.id === 2 && <span className="product-badge">Retro</span>}
       {product.verified && !available && <span className="product-badge">Wyprzedane</span>}
       <button className={"favorite-button " + (liked ? "is-favorite" : "")} onClick={() => store.favorite(product.id)} aria-label={(liked ? "Usuń z ulubionych: " : "Dodaj do ulubionych: ") + product.name} aria-pressed={liked} disabled={!store.hydrated}><Heart size={18} fill={liked ? "currentColor" : "none"}/></button>

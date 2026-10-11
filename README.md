@@ -2,13 +2,15 @@
 
 Polish fan-shop storefront and staff operations workspace for Zastal Zielona Góra.
 
-**v0.8 — prelaunch store with a versioned homepage CMS and visual editor.** Public browsing and staff operations are available. The system **does not accept new orders, registration or payments** until real integrations, verified stock, confirmed seller identity and legally reviewed sales information are in place. Previously created test orders are retained as historical records. No card details or shipping addresses are collected. Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
+**v0.9 — prelaunch store with product galleries and CMS campaigns.** Public browsing and staff operations are available. The system **does not accept new orders, registration or payments** until real integrations, verified stock, confirmed seller identity and legally reviewed sales information are in place. Previously created test orders are retained as historical records. No card details or shipping addresses are collected. Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
 
 ## Home page editing (CMS)
 
-Open **/admin → Edytor strony**. The editor has an outline of blocks, a central live desktop/mobile preview and settings for each selected block. Use **Zapisz szkic** to keep unfinished work private and **Opublikuj** to make it live. **Historia** restores previous versions to a private draft; it does not publish without confirmation. Nine sections can be added and configured. Product imagery can also be uploaded directly in the product editor.
+Open **/admin → Edytor strony**. The editor has an outline of blocks, a central live desktop/mobile preview and settings for each selected block. Use **Zapisz szkic** to keep unfinished work private and **Opublikuj** to make it live. **Historia** restores previous versions to a private draft; it does not publish without confirmation. All nine existing section types remain supported, with a new campaign section linking model/lifestyle imagery and products. Campaigns start disabled and require matching imagery before publication. Product imagery can also be uploaded directly in the product editor.
 
 Implementation and safeguards are documented in [docs/CMS.md](docs/CMS.md). The frontend reads only the public published configuration via the server-side API; private drafts require an authenticated administrator session with CSRF protection. Publishing content **never** enables checkout or bypasses sales readiness checks.
+
+Product galleries support ordered thumbnails, keyboard/touch navigation, zoom and a second image on catalogue hover/focus. The product editor controls roles, descriptions, order and the visible **Materiał poglądowy** status, with revision checks protecting concurrent edits. Reviewed initial galleries retain all existing covers: apparel visuals remain illustrative, and accessory covers are genuine product photos. Only the sports bag has two additional verified photographs. No matching model/lifestyle photos are verified, so no campaign is automatically published. Source hashes and the preview-first import workflow are documented in [docs/PRODUCT_MEDIA.md](docs/PRODUCT_MEDIA.md).
 
 ## Sales launch / readiness
 

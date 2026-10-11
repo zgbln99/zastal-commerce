@@ -15,7 +15,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 HOME_MEDIA = Path(__file__).resolve().parent / "home_media"
 SECTION_TYPES = ("hero", "categories", "products", "personalization", "retro",
-                 "accessories", "banner", "text", "services")
+                 "accessories", "banner", "text", "services", "campaign")
 REGEX_ID = re.compile(r"^[a-z][a-z0-9-]{1,55}$")
 SAFE_LINK = re.compile(r"^/(?!/)[a-zA-Z0-9_/\.\-?&=%#]*$")
 COLOR = re.compile(r"^#[a-fA-F0-9]{6}$")
@@ -23,6 +23,10 @@ SLUGS = {"Koszulki", "Bluzy", "Akcesoria", "Dzieci", "Wszystko"}
 
 # Exact whitelisted edit fields and type validation. HTML is intentionally unsupported.
 FIELDS = {
+ "campaign": {"eyebrow": "text", "title": "text", "description": "long",
+              "image": "image", "image_alt": "text", "image_role": "image_role",
+              "image_illustrative": "bool", "product_ids": "product_ids",
+              "cta_text": "text", "cta_url": "url", "alignment": "align"},
  "hero": {"eyebrow": "text", "title": "text", "description": "long",
           "image": "image", "cta_text": "text", "cta_url": "url",
           "secondary_text": "text", "secondary_url": "url",
@@ -125,7 +129,7 @@ def valid_url(value):
 def valid_image(value):
     return valid_url(value) and (not value or value.startswith(("/assets/", "/api/store/media/")))
 
-def validate(conf):
+def validate(conf, conn=None):
     if not isinstance(conf,dict) or set(conf)!={"version","sections"} or conf["version"]!=1:
         raise ValueError("Nieprawidłowa wersja konfiguracji strony")
     sections=conf["sections"]
@@ -167,6 +171,9 @@ def validate(conf):
             elif format_=="align":
                 if value not in ("left","center","right"):raise ValueError("Nieprawidłowe wyrównanie")
                 clean[field]=value
+            elif format_=="image_role":
+                if value not in ("model", "lifestyle"):raise ValueError("Wybierz zdjęcie modelowe lub lifestyle")
+                clean[field]=value
             elif format_=="bool":
                 if type(value) is not bool:raise ValueError("Nieprawidłowy przełącznik")
                 clean[field]=value
@@ -187,6 +194,22 @@ def validate(conf):
                 if not isinstance(value,str) or len(value)>140 or (value.strip() and not re.fullmatch(r"\d+(?:\s*,\s*\d+)*",value)):
                     raise ValueError("Wprowadź ID produktów oddzielone przecinkiem")
                 clean[field]=value
+        if kind=="campaign":
+            # Lazy import keeps the upload module independent of gallery storage.
+            import commerce_media as media
+            if clean["image"] and not media.valid_image_url(clean["image"]):
+                raise ValueError("Wybierz istniejące zdjęcie z biblioteki mediów")
+            if not media.plain_text(data["image_alt"],250):
+                raise ValueError("Nieprawidłowy opis zdjęcia kampanii")
+            product_ids=[int(part.strip()) for part in clean["product_ids"].split(",")] if clean["product_ids"].strip() else []
+            if any(not 1<=product_id<=9223372036854775807 for product_id in product_ids):
+                raise ValueError("Wybierz poprawne ID produktów")
+            if section["enabled"] and (not clean["image"] or not clean["image_alt"] or not product_ids):
+                raise ValueError("Aktywna kampania wymaga zdjęcia, opisu i powiązanych produktów")
+            if conn is not None:
+                for product_id in set(product_ids):
+                    if not conn.execute("SELECT 1 FROM products WHERE id=?",(product_id,)).fetchone():
+                        raise ValueError("Produkt kampanii nie istnieje: "+str(product_id))
         out.append({"id":sid,"type":kind,"enabled":section["enabled"],"settings":clean})
     if not any(x["enabled"] and x["type"]=="hero" for x in out):
         raise ValueError("Strona musi posiadać aktywny baner główny")
@@ -195,7 +218,7 @@ def validate(conf):
     return {"version":1,"sections":out}
 
 def save_draft(conn,config,expected_revision):
-    c=validate(config)
+    c=validate(config,conn)
     row=conn.execute("SELECT revision FROM site_home WHERE id=1").fetchone()
     if type(expected_revision) is not int or expected_revision!=row["revision"]:
         raise RuntimeError("Edytor jest nieaktualny. Odśwież dane przed zapisem.")
@@ -209,7 +232,7 @@ def publish(conn,expected_revision):
     row=conn.execute("SELECT revision,draft FROM site_home WHERE id=1").fetchone()
     if type(expected_revision) is not int or expected_revision!=row["revision"]:
         raise RuntimeError("Wersja edytora jest nieaktualna")
-    validate(json.loads(row["draft"]))
+    validate(json.loads(row["draft"]),conn)
     conn.execute("UPDATE site_home SET published=draft,published_revision=revision,updated=? WHERE id=1",(now(),))
     conn.execute("INSERT INTO site_home_revisions(revision,content,action,created) VALUES(?,?,'published',?)",(row["revision"],row["draft"],now()))
 

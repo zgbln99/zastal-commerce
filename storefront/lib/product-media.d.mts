@@ -1,0 +1,13 @@
+export type ProductMedia = {id:string;url:string;role:'packshot'|'model'|'detail'|'lifestyle';alt:string;illustrative:boolean;source_url:string};
+export type GalleryResponse = {images:ProductMedia[];revision:number};
+export type ImageProduct = {id?:number;name?:string;image?:string;images?:ProductMedia[]};
+export function safeImageUrl(value:unknown,legacy?:boolean):boolean;
+export function normalizeImages(raw:unknown):ProductMedia[];
+export function productImages(product:ImageProduct):ProductMedia[];
+export function secondaryImage(images:unknown):ProductMedia|null;
+export function galleryIndex(index:number,step:number,count:number):number;
+export function swipeIndex(index:number,count:number,dx:number,dy:number):number;
+export function campaignReady(settings:Record<string,unknown>,products:{id:number}[]):boolean;
+export function uploadBatch<T>(files:T[],upload:(file:T)=>Promise<string>,progress?:(value:{done:number;total:number})=>void):Promise<{uploaded:{file:T;url:string}[];failed:{file:T;error:string}[]}>;
+export function persistGallery(productId:number,images:ProductMedia[],revision:number,request:import('../components/AuthProvider').ApiRequest):Promise<GalleryResponse>;
+export function createProductWithGallery<T extends {id:number}>(payload:Record<string,unknown>,images:ProductMedia[]|null,request:import('../components/AuthProvider').ApiRequest):Promise<{product:T;gallery:GalleryResponse|null;galleryError:unknown}>;
