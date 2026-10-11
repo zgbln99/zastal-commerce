@@ -8,9 +8,9 @@ import { useStore } from "./StoreProvider";
 import { ProductImage } from "./ProductCard";
 
 const collections = [
-  { key: "fans", label: "Na co dzień", eyebrow: "ZIELONA GÓRA / SKLEP KIBICA", title: ["Zastal.", "Na co dzień."], copy: "Te same barwy. Na trybunach i poza halą.", href: "/sklep", action: "Sprawdź kolekcję", theme: "dark" },
-  { key: "shirts", label: "Koszulki", eyebrow: "KOSZULKI / ZASTAL ZIELONA GÓRA", title: ["W barwach", "Zastalu."], copy: "Klubowe koszulki dla dorosłych i dzieci.", href: "/sklep?category=Koszulki", action: "Zobacz koszulki", theme: "light" },
-  { key: "hoodies", label: "Bluzy & retro", eyebrow: "BLUZY / KLUBOWA KLASYKA", title: ["Zielona Góra.", "Zawsze blisko."], copy: "Bluzy z kapturem i kolekcja z logo retro.", href: "/sklep?category=Bluzy", action: "Wybierz bluzę", theme: "light" },
+  { key: "fans", label: "Na co dzień", eyebrow: "ZASTAL ZIELONA GÓRA  /  SKLEP KLUBOWY", title: ["Nie tylko", "na mecz."], copy: "Koszulki, bluzy i akcesoria dla kibiców z Zielonej Góry.", href: "/sklep", action: "Sprawdź kolekcję", theme: "dark" },
+  { key: "shirts", label: "Koszulki", eyebrow: "KOLEKCJA  /  KOSZULKI", title: ["Koszulki", "Zastalu."], copy: "Klubowe wzory, różne rozmiary. Wybierz coś dla siebie.", href: "/sklep?category=Koszulki", action: "Zobacz koszulki", theme: "light" },
+  { key: "hoodies", label: "Bluzy & retro", eyebrow: "KOLEKCJA  /  BLUZY", title: ["Czas na", "bluzę."], copy: "Modele z aktualnym i klasycznym znakiem klubu.", href: "/sklep?category=Bluzy", action: "Wybierz bluzę", theme: "light" },
 ] as const;
 
 export default function CollectionCarousel() {
