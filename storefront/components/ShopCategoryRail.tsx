@@ -23,7 +23,7 @@ export default function ShopCategoryRail({
       const p = products.find(x => x.id === group.sku) || products.find(x => x.category === group.key);
       const selected = category === group.key;
       return <button key={group.key} className={"shop-category-tile " + (selected ? "selected" : "")} onClick={() => onChoose(selected ? "" : group.key)} aria-pressed={selected}>
-        <span className="shop-category-image">{p && <ProductImage product={p}/>}</span>
+        <span className="shop-category-image">{p && <ProductImage product={p} eager/>}</span>
         <span className="shop-category-label"><small>{group.number} / {products.filter(x => x.category === group.key).length} PRODUKTÓW</small><strong>{group.title}</strong></span>
         <span className="shop-category-arrow"><ArrowUpRight size={16}/></span>
       </button>;
