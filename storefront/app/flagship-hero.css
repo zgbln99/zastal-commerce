@@ -43,3 +43,5 @@
 }
 @media(max-width:410px){.flagship-hero{height:585px;min-height:585px}.flagship-hero-content{padding:18px 23px 32px}.flagship-hero h1{font-size:51px}.flagship-hero-footer{margin:0 23px}.flagship-hero-topline{margin:0 18px}.flagship-hero-footer>span{max-width:130px;text-align:right}.flagship-button-quiet{font-size:10px}}
 @media(prefers-reduced-motion:reduce){.flagship-button-primary{transition:none}}
+
+@media(max-width:360px){.flagship-hero h1{font-size:40px;letter-spacing:-.067em;line-height:1.05}.flagship-hero-content{padding-left:21px;padding-right:21px}}
