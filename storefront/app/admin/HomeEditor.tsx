@@ -31,6 +31,7 @@ export default function HomeEditor(){
  const enabled=draft.sections.filter(x=>x.enabled).length;
  const notify=()=>{preview.current?.contentWindow?.postMessage({kind:"zastal:home:preview",config:draft},window.location.origin);};
  useEffect(()=>{notify();},[draft,device,loaded]);
+ useEffect(()=>{const ready=(event:MessageEvent)=>{if(event.origin===window.location.origin&&event.source===preview.current?.contentWindow&&event.data?.kind==="zastal:home:ready")notify();};window.addEventListener("message",ready);return()=>window.removeEventListener("message",ready);},[draft]);
  useEffect(()=>{
   if(!isDirty)return;
   const warn=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};
