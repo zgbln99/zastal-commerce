@@ -261,7 +261,7 @@ def list_media():
     if not HOME_MEDIA.is_dir():return []
     entries=sorted(HOME_MEDIA.glob("*.webp"),key=lambda path:path.stat().st_mtime,reverse=True)
     return [{"url":"/api/store/media/"+p.name,"name":p.name,"bytes":p.stat().st_size}
-            for p in entries[:100] if re.fullmatch(r"[0-9a-f]{32}\\.webp",p.name)]
+            for p in entries[:100] if re.fullmatch(r"[0-9a-f]{32}\.webp",p.name)]
 
 def load_media(filename):
     if not re.fullmatch(r"[0-9a-f]{32}\.webp",filename):
