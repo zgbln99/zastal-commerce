@@ -13,7 +13,7 @@ export function PersonalizationEditorial({ product }: { product: Product | undef
   if (!product || !product.personalization_enabled) return null;
   return <section className="editorial-print" aria-labelledby="editorial-print-title">
     <div className="editorial-print-copy">
-      <div className="editorial-serial"><span>03 — PERSONALIZACJA</span><span>SKLEP ZASTALU / NADRUK</span></div>
+      <div className="editorial-serial"><span>02 — PERSONALIZACJA</span><span>SKLEP ZASTALU / NADRUK</span></div>
       <div className="editorial-print-body">
         <span className="editorial-mini-label">WYBRANE PRODUKTY / NADRUK NA ZAMÓWIENIE</span>
         <h2 id="editorial-print-title">Twoje nazwisko.<br/>Twój numer.</h2>
