@@ -16,3 +16,6 @@ dist/
 storefront/.next/
 storefront/node_modules/
 storefront/next-env.d.ts
+
+# CMS media assets are persisted on AMS, never committed to source control.
+home_media/
