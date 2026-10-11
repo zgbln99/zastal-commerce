@@ -8,6 +8,8 @@ Polish fan-shop storefront and staff operations workspace for Zastal Zielona Gó
 
 The administrator can use the **Uruchomienie sklepu** section to enter the legal seller name, verified NIP, contact and return address, HTTPS links to the sales regulations, privacy notice, withdrawal/returns and shipping policies. The section records club-side confirmations for branding, catalog, counted stock and the purchased DTF supply chain, and tracks technical launch blockers separately. Changes are audited. API: public `GET /api/store/status`; authenticated admin `GET/PATCH /api/admin/launch`.
 
+The **Import magazynu** screen supports downloading an Excel-compatible `sku;stan` CSV template and uploading verified stock counts. The backend validates all SKUs and quantities before making any changes, rejects duplicate SKUs, applies updates in one SQLite transaction, recalculates product totals and records every variance in the stock ledger. The import **never** automatically confirms inventory readiness or activates checkout.
+
 **Fail-closed:** `/api/orders` and `/api/auth/register` return HTTP 503 with code `store_prelaunch`. New sales cannot be enabled by an administrator checkbox. Payment provider, real shipping, transactional email and fiscal/commercial documentation integrations must be completed and tested before the API is changed to allow real purchases. Existing order confirmation links remain readable.
 
 The restricted environment variable `ZASTAL_TEST_MODE=isolated-only` enables original write integration tests **only when the test database resides under the operating system temporary directory**. Never enable it on AMS production.
