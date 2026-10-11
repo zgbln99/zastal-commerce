@@ -2,5 +2,66 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowRight, ArrowUpRight, ChevronRight } from "lucide-react";
 import "./help.css";
-export const metadata:Metadata={title:"Pomoc w zakupach"};
-export default function Help(){return <div className="container help-page"><div className="breadcrumbs"><Link href="/">Strona główna</Link><ChevronRight size={11}/><span>Pomoc w zakupach</span></div><div className="page-heading"><span className="eyebrow">INFORMACJE O SKLEPIE</span><h1>Pomoc w zakupach</h1><p>Rozmiary, dostawa i zamówienia. Wszystko, co trzeba wiedzieć o tej wersji sklepu.</p></div><div className="help-layout"><nav className="help-nav" aria-label="Tematy pomocy"><a href="#zamowienia">Zamówienia i płatności</a><a href="#dostawa">Dostawa i odbiór</a><a href="#rozmiary">Wybór rozmiaru</a><a href="#wersja-demo">Wersja demonstracyjna</a><a href="#prywatnosc">Prywatność</a><a href="#kontakt">Kontakt z klubem</a></nav><div className="help-content"><section id="zamowienia"><span className="eyebrow">01 / ZAKUPY</span><h2>Jak złożyć zamówienie?</h2><ol className="shopping-steps"><li><span>1</span><div><strong>Wybierz produkt</strong><p>Sprawdź kategorię, zdjęcie i dostępność. Dla odzieży wybierz rozmiar.</p></div></li><li><span>2</span><div><strong>Dodaj do koszyka</strong><p>Możesz zmienić liczbę sztuk i usunąć produkty. Koszyk jest wspólny dla wszystkich stron sklepu.</p></div></li><li><span>3</span><div><strong>Sprawdź podsumowanie</strong><p>Wybierz symulowaną metodę dostawy i zaznacz, że rozumiesz tryb testowy.</p></div></li><li><span>4</span><div><strong>Zapisz potwierdzenie</strong><p>Po złożeniu zamówienia dostaniesz numer i prywatny link do historii statusów. Nie pobieramy opłaty.</p></div></li></ol><details><summary>Czy mogę zapłacić kartą lub BLIK-iem?</summary><p>W tej wersji płatności są testowe. Nie podawaj danych karty ani kodów BLIK. Podłączenie operatora płatności będzie osobnym etapem uruchomienia sklepu.</p></details><details><summary>Czy zamówienie można anulować?</summary><p>Obsługa sklepu może anulować niezrealizowane zamówienie w panelu. System przywraca zarezerwowane sztuki do magazynu. Rozpoczęta aplikacja nadruku lub rezerwacja transferu DTF wymaga najpierw rozliczenia przez obsługę.</p></details></section><section id="dostawa"><span className="eyebrow">02 / DOSTAWA</span><h2>Dostawa i odbiór</h2><p>Checkout pokazuje przykładowy model dostawy. Poniższe kwoty są ustawieniami demonstracyjnymi, a nie ofertą usług kurierskich.</p><div className="help-table-wrap"><table><thead><tr><th>Metoda testowa</th><th>Koszt</th></tr></thead><tbody><tr><td>Odbiór osobisty</td><td>0,00 zł</td></tr><tr><td>Automat paczkowy</td><td>12,99 zł</td></tr><tr><td>Kurier</td><td>14,99 zł</td></tr><tr><td>Dostawa od 250,00 zł</td><td>0,00 zł</td></tr></tbody></table></div><p>Nie wybieramy prawdziwego punktu odbioru, nie zbieramy adresu i nie tworzymy etykiety przewozowej. Zamówienia oznaczone jako wysłane są wyłącznie symulacją.</p></section><section id="rozmiary"><span className="eyebrow">03 / ODZIEŻ</span><h2>Jak wybrać rozmiar?</h2><p>Dla bluz i koszulek w katalogu znajdziesz warianty S–XXL, a dla koszulek dziecięcych 116–164. Niedostępne rozmiary są przekreślone.</p><p>Wymiary odzieży i skład materiału wymagają potwierdzenia przez producenta. Dokładna tabela wymiarów zostanie dodana po zatwierdzeniu specyfikacji odzieży.</p><p>Pielęgnację dobierz według metki produktu. Przed zakupem w aktualnym sklepie klubowym sprawdź jego opis i informacje od sprzedawcy.</p></section><section id="wersja-demo"><span className="eyebrow">04 / O PROJEKCIE</span><h2>Co działa w wersji demonstracyjnej?</h2><p>Możesz przeglądać produkty, filtrować katalog, zapisywać ulubione, dobierać rozmiary i przejść całe zamówienie testowe. Obsługa ma dostęp do zamówień, magazynu wariantów, zakupów gotowych transferów DTF, nanoszenia nadruków, kontroli i etykiet EAN/QR.</p><div className="help-note"><strong>To projekt nowego sklepu.</strong><p>Zdjęcia i katalog służą prezentacji. Nie przyjmujemy rzeczywistych zakupów. Dostawy, ceny i stany w tej instalacji służą testowaniu działania systemu.</p></div><a href="https://zastal.store/" target="_blank" rel="noreferrer" className="inline-link">Przejdź do aktualnego sklepu klubowego <ArrowUpRight size={15}/></a></section><section id="prywatnosc"><span className="eyebrow">05 / PRYWATNOŚĆ</span><h2>Konto i dane zakupów</h2><p>Koszyk i ulubione zapisują się w tej przeglądarce. Konto jest dobrowolne: zapisujemy adres e-mail, nazwę konta oraz bezpieczny skrót hasła. Sesja logowania używa chronionego pliku cookie. Nie przyjmujemy danych kart płatniczych.</p><p>Zamówienie testowe zapisuje produkty, warianty, ilości, kwoty i sposób dostawy. Po zalogowaniu przypisujemy je do Twojego konta; tylko Ty i administrator możecie odczytać historię konta. Prywatny link do potwierdzenia umożliwia jego podgląd — nie publikuj go, jeśli nie chcesz udostępniać zamówienia.</p><p>Hasło zmienisz w ustawieniach konta. Odzyskiwanie dostępu wymaga osobistego klucza, który otrzymasz przy rejestracji; sklep nie wysyła e-maili do resetowania haseł. Obsługa sklepu wymaga konta administratora. Wersja demonstracyjna nie zastępuje regulaminu, polityki prywatności i konfiguracji potrzebnych do uruchomienia rzeczywistej sprzedaży.</p></section><section id="kontakt"><span className="eyebrow">06 / KLUB</span><h2>Kontakt z Zastalem</h2><p>Aktualne informacje o klubie i dane kontaktowe znajdziesz na stronie Zastalu.</p><a className="button button-dark" href="https://basketzg.pl/" target="_blank" rel="noreferrer">Strona Zastalu Zielona Góra <ArrowUpRight size={17}/></a></section></div></div><div className="help-bottom"><Link className="inline-link" href="/sklep">Wróć do produktów <ArrowRight size={17}/></Link></div></div>}
+
+export const metadata: Metadata = {
+  title: "Informacje o sklepie",
+  description: "Informacje o przygotowaniu sprzedaży Zastal Store, doborze rozmiaru, nadrukach, dostawach oraz ochronie danych.",
+};
+
+export default function Help() {
+  return <div className="container help-page">
+    <div className="breadcrumbs"><Link href="/">Strona główna</Link><ChevronRight size={11}/><span>Informacje o sklepie</span></div>
+    <div className="page-heading"><span className="eyebrow">ZASTAL ZIELONA GÓRA / STORE</span><h1>Informacje o sklepie</h1><p>Wszystko, co warto wiedzieć przed startem zakupów online.</p></div>
+    <div className="help-layout">
+      <nav className="help-nav" aria-label="Tematy pomocy">
+        <a href="#zamowienia">Zakupy i zamówienia</a>
+        <a href="#dostawa">Dostawa i odbiór</a>
+        <a href="#rozmiary">Rozmiary i nadruki</a>
+        <a href="#wersja-demo">Etap uruchomienia</a>
+        <a href="#prywatnosc">Konto i prywatność</a>
+        <a href="#kontakt">Kontakt</a>
+      </nav>
+      <div className="help-content">
+        <section id="zamowienia">
+          <span className="eyebrow">01 / ZAKUPY</span><h2>Zakupy w Zastal Store</h2>
+          <p>Nowy sklep przygotowujemy do uruchomienia sprzedaży internetowej. Na razie możesz zapoznać się z ofertą, przeglądać warianty, zapisywać produkty na liście ulubionych i układać koszyk.</p>
+          <div className="help-note"><strong>Nowe zamówienia są obecnie wstrzymane.</strong><p>Nie pobieramy płatności, nie przyjmujemy nowych zamówień i nie tworzymy rzeczywistych przesyłek. Włączenie sprzedaży nastąpi dopiero po zakończeniu integracji i formalności.</p></div>
+          <details><summary>Czy mogę już zapłacić BLIK-iem lub kartą?</summary><p>Jeszcze nie. Operator płatności nie jest podłączony do tej instalacji. Nie wpisuj w sklepie numerów kart ani kodów BLIK.</p></details>
+          <details><summary>Co z wcześniejszymi zamówieniami w systemie?</summary><p>Wcześniej zapisane zamówienia techniczne pozostają w historii w celu przetestowania obsługi sklepu. Nie są potwierdzeniem opłaconego zakupu.</p></details>
+          <details><summary>Czy koszyk będzie zachowany?</summary><p>Tak. Koszyk jest przechowywany lokalnie w tej przeglądarce. Jego stan może zniknąć po wyczyszczeniu danych przeglądarki lub przejściu na inne urządzenie.</p></details>
+        </section>
+        <section id="dostawa">
+          <span className="eyebrow">02 / DOSTAWA</span><h2>Dostawa i odbiór</h2>
+          <p>Warianty wysyłki, ich koszty i terminy realizacji zostaną opublikowane po podpisaniu odpowiednich umów i przetestowaniu integracji z przewoźnikami.</p>
+          <p>Nie pokazujemy niezweryfikowanych stawek dostawy ani fikcyjnych progów darmowej wysyłki. Sklep nie przyjmuje obecnie adresów do rzeczywistych zamówień.</p>
+        </section>
+        <section id="rozmiary">
+          <span className="eyebrow">03 / PRODUKTY</span><h2>Rozmiary i personalizacja</h2>
+          <p>Odzież ma osobne warianty rozmiarów, a ich dostępność pochodzi z ewidencji magazynowej sklepu. Dane o rozmiarach, składzie materiału i pielęgnacji będą uzupełniane na podstawie informacji producentów.</p>
+          <p>Na wybranych produktach możesz skonfigurować nadruk z własnym nazwiskiem i numerem albo wybrać zawodnika z dostępnej listy. Opcje personalizacji widać na karcie konkretnego produktu.</p>
+          <p>Nadruki DTF są kupowane od zewnętrznego dostawcy w postaci gotowych transferów, które następnie aplikuje się na odzież. Przed sprzedażą wymagają potwierdzenia wzory, koszty i terminy realizacji.</p>
+          <Link className="inline-link" href="/sklep">Przejrzyj produkty <ArrowRight size={15}/></Link>
+        </section>
+        <section id="wersja-demo">
+          <span className="eyebrow">04 / URUCHOMIENIE</span><h2>Co przygotowujemy?</h2>
+          <p>Sklep ma już katalog, wyszukiwarkę, koszyk, personalizację wybranych produktów oraz zaplecze do obsługi magazynu, etykiet i nanoszenia nadruków. W panelu obsługi jest też lista zadań potrzebnych przed uruchomieniem sprzedaży.</p>
+          <p>Brakuje jeszcze zatwierdzonych danych sprzedawcy i dokumentów, pełnej weryfikacji stanów magazynowych oraz realnych integracji płatności, dostaw, dokumentów sprzedaży i e-maili transakcyjnych.</p>
+          <div className="help-note"><strong>Do czasu uruchomienia możesz skorzystać z dotychczasowego sklepu klubu.</strong><p>To odrębna instalacja przygotowywana do wdrożenia. Nie należy traktować jej jako działającej platformy do dokonywania zakupów.</p></div>
+          <a href="https://zastal.store/" target="_blank" rel="noreferrer" className="inline-link">Dotychczasowy sklep klubowy <ArrowUpRight size={15}/></a>
+        </section>
+        <section id="prywatnosc">
+          <span className="eyebrow">05 / DANE</span><h2>Konto i prywatność</h2>
+          <p>Koszyk, ulubione oraz lista ostatnio oglądanych produktów są zapisywane lokalnie na urządzeniu. Nie tworzymy na ich podstawie profilu marketingowego ani nie przesyłamy historii oglądania produktów na serwer.</p>
+          <p>Rejestracja nowych kont jest tymczasowo wyłączona. Wcześniej utworzone konta pozostają dostępne do logowania; dane logowania i historia konta są obsługiwane przez zabezpieczone API.</p>
+          <p>Przed włączeniem sprzedaży zostaną udostępnione odpowiednie dokumenty dotyczące przetwarzania danych klientów, zasad sprzedaży oraz prawa odstąpienia od umowy.</p>
+        </section>
+        <section id="kontakt">
+          <span className="eyebrow">06 / ZASTAL</span><h2>Kontakt</h2>
+          <p>Aktualne informacje o klubie oraz oficjalne kanały kontaktu znajdziesz na jego stronie internetowej.</p>
+          <a className="button button-dark" href="https://basketzg.pl/" target="_blank" rel="noreferrer">Przejdź na stronę Zastalu <ArrowUpRight size={17}/></a>
+        </section>
+      </div>
+    </div>
+    <div className="help-bottom"><Link className="inline-link" href="/sklep">Wróć do produktów <ArrowRight size={17}/></Link></div>
+  </div>;
+}
