@@ -69,6 +69,10 @@ def image_value(value):
         return value
     if any(ch.isspace() for ch in value) or '\\' in value:
         raise ValueError('Nieprawidłowy adres zdjęcia')
+    if value.startswith('/api/store/media/'):
+        if not re.fullmatch(r'/api/store/media/[0-9a-f]{32}\\.webp',value):
+            raise ValueError('Nieprawidłowy obraz z biblioteki mediów')
+        return value
     if value.startswith('/assets/'):
         if not re.fullmatch(r'/assets/[A-Za-z0-9_./-]+', value) or any(part in ('', '.', '..') for part in value[8:].split('/')):
             raise ValueError('Nieprawidłowy adres zdjęcia')
