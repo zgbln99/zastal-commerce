@@ -2,3 +2,34 @@
 @media(max-width:1100px){.product-detail-layout{gap:37px;grid-template-columns:1.1fr 1fr}.product-gallery-main{min-height:520px;padding:25px 20px 55px}.product-gallery-main>img{height:440px}.product-detail-info>h1{font-size:30px}.product-detail-info .size-buttons button{min-width:47px}.product-detail-info .purchase-actions .button{font-size:13px}.product-detail-info .purchase-actions .quantity-control{width:95px}}
 @media(max-width:800px){.product-detail-layout{grid-template-columns:1fr;gap:18px}.product-gallery-main{min-height:470px}.product-gallery-main>img{height:400px}.product-detail-info{padding:9px 0}.product-detail-info>h1{font-size:33px;margin:16px 0 12px}.product-detail-info .size-buttons button{min-width:52px}.product-gallery>p{margin-bottom:0}.product-detail-info .purchase-actions .button{font-size:14px}.product-detail-info .purchase-actions .quantity-control{width:115px}.product-related{margin-top:43px}}
 @media(max-width:640px){.product-page .breadcrumbs{font-size:10px}.product-gallery-main{min-height:370px;padding:21px 13px 40px}.product-gallery-main>img{height:315px}.gallery-caption{font-size:10px;left:15px;bottom:19px}.gallery-zoom{width:30px;height:30px;right:15px;bottom:15px}.gallery-zoom svg{width:15px}.product-gallery>p{font-size:10px;margin-top:10px}.product-detail-info>h1{font-size:29px;margin:15px 0 10px}.product-detail-subtitle{font-size:13px;margin-bottom:21px}.product-price-row{padding-bottom:23px;margin-bottom:23px}.product-price-row strong{font-size:23px}.product-price-row small{font-size:10px}.product-detail-info .size-label{font-size:13px}.product-detail-info .size-label a{font-size:11px}.product-detail-info .size-buttons button{min-width:46px;height:42px;font-size:13px}.product-detail-info .purchase-actions .button{font-size:13px;min-height:46px}.product-detail-info .purchase-actions .quantity-control{width:100px;height:46px}.product-services{margin-top:24px;padding:3px 14px}.product-services>div{font-size:12px}.product-services small{font-size:10px}.product-accordions summary{font-size:13px}.product-accordions p{font-size:12px}.product-related .section-heading h2{font-size:22px}.product-zoom-modal{padding:22px;max-height:calc(100dvh - 26px)}.product-zoom-modal>img{height:calc(100dvh - 95px)}}
+
+/* Product editorial treatment: generous photography, quiet commerce controls. */
+.product-page .breadcrumbs{font-size:11px;color:#79877d;padding:26px 0 22px}
+.product-page .product-detail-layout{grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);gap:6%!important;margin-top:6px}
+.product-page .product-gallery-main{background:#eeefeb!important;border-radius:0!important;min-height:650px!important;padding:43px 29px 60px!important}
+.product-page .product-gallery-main>img{height:510px!important;max-height:75vh!important;object-fit:contain}
+.product-page .gallery-zoom{border-radius:0!important;width:43px!important;height:43px!important;right:24px!important;bottom:24px!important}
+.product-page .gallery-caption{bottom:26px!important;left:29px!important;font-size:10px!important;letter-spacing:.01em!important}
+.product-page .product-gallery>p{font-size:11px!important;color:#88978c!important;margin-top:15px!important}
+.product-page .product-detail-info{padding-top:24px!important}
+.product-page .product-detail-top .eyebrow{font-size:10px!important;letter-spacing:.14em!important;font-weight:700!important}
+.product-page .product-detail-top>span{font-size:10px!important;color:#83948a!important}
+.product-page .product-detail-info>h1{font-size:clamp(33px,3.15vw,49px)!important;font-weight:730!important;letter-spacing:-.052em!important;line-height:1.12!important;margin:23px 0 12px!important}
+.product-page .product-detail-subtitle{font-size:13px!important;color:#718477!important;margin-bottom:27px!important}
+.product-page .product-price-row{margin-bottom:30px!important;padding-bottom:28px!important;border-color:#e3e7e0!important}
+.product-page .product-price-row strong{font-size:27px!important;font-weight:710!important;letter-spacing:-.03em!important}
+.product-page .product-price-row small{font-size:10px!important;color:#7f9185!important}
+.product-page .detail-favorite{border-radius:0!important;height:41px!important;width:41px!important}
+.product-page .size-buttons button{border-radius:0!important;height:46px!important;min-width:56px!important;font-size:13px!important}
+.product-page .purchase-actions .button{background:#124b33!important;border-radius:0!important;font-weight:680!important;letter-spacing:0!important}
+.product-page .purchase-actions .quantity-control{border-radius:0!important}
+.product-page .product-services{margin-top:31px!important;border-left:0!important;border-right:0!important;border-radius:0!important;padding:3px 0!important}
+.product-page .product-services>div{padding:18px 0!important;font-size:12px!important}
+.product-page .product-services small{font-size:11px!important;line-height:1.6!important}
+.product-page .product-accordions details{padding:19px 0!important}
+.product-page .product-accordions summary{font-size:12px!important;font-weight:670!important}
+.product-page .product-related{margin-top:95px!important}
+.product-page .product-related .section-heading h2{font-size:31px!important;font-weight:700!important;letter-spacing:-.04em!important}
+@media(max-width:1020px){.product-page .product-detail-layout{gap:4%!important}.product-page .product-gallery-main{min-height:510px!important}.product-page .product-gallery-main>img{height:415px!important}}
+@media(max-width:760px){.product-page .product-detail-layout{grid-template-columns:1fr!important;gap:20px!important}.product-page .product-gallery-main{min-height:420px!important;padding:25px 14px 45px!important}.product-page .product-gallery-main>img{height:350px!important}.product-page .product-detail-info{padding-top:8px!important}.product-page .product-detail-info>h1{font-size:36px!important;margin-top:16px!important}.product-page .product-related{margin-top:56px!important}.product-page .gallery-caption{left:18px!important;bottom:17px!important}}
+@media(max-width:420px){.product-page .product-gallery-main{min-height:350px!important}.product-page .product-gallery-main>img{height:300px!important}}
