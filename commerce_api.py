@@ -306,6 +306,41 @@ class Handler(BaseHTTPRequestHandler):
             with connect() as c:
                 if auth.dispatch(self,path,c):return
             data=self.body()
+            if path=='/api/admin/inventory/import':
+                rows=data.get('rows')
+                reason=data.get('reason')
+                if not isinstance(rows,list) or not 1<=len(rows)<=100:
+                    raise Invalid('Plik musi zawierać od 1 do 100 wariantów')
+                if not isinstance(reason,str) or not 3<=len(reason.strip())<=160:
+                    raise Invalid('Podaj uzasadnienie aktualizacji magazynu')
+                seen=set()
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    changes=[]
+                    affected=set()
+                    for row in rows:
+                        if not isinstance(row,dict) or set(row)!={'sku','stock'}:
+                            raise Invalid('Nieprawidłowa struktura wiersza CSV')
+                        sku=row['sku'];stock=row['stock']
+                        if not isinstance(sku,str) or not 1<=len(sku)<=90 or sku in seen:
+                            raise Invalid('Pusty lub powtórzony numer SKU')
+                        if type(stock) is not int or not 0<=stock<=100000:
+                            raise Invalid('Stan musi być liczbą całkowitą od 0 do 100 000')
+                        seen.add(sku)
+                        variant=c.execute('SELECT * FROM product_variants WHERE sku=?',(sku,)).fetchone()
+                        if variant is None:raise Invalid('Nieznany wariant: '+sku[:90])
+                        delta=stock-variant['stock']
+                        if delta:
+                            c.execute('UPDATE product_variants SET stock=? WHERE id=?',(stock,variant['id']))
+                            c.execute('INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)',
+                                      (variant['id'],delta,reason.strip(),stamp(),'inventory-import'))
+                            changes.append({'sku':sku,'old':variant['stock'],'new':stock,'delta':delta})
+                            affected.add(variant['product_id'])
+                    for product_id in affected:
+                        c.execute('UPDATE products SET stock=(SELECT COALESCE(SUM(stock),0) FROM product_variants WHERE product_id=?) WHERE id=?',
+                                  (product_id,product_id))
+                    audit(c,'stock-import','bulk',f"Zaktualizowano {len(changes)} wariantów, import: {reason.strip()[:120]}")
+                return self.respond(200,{'ok':True,'rows':len(rows),'changed':len(changes),'changes':changes})
             if path=='/api/account/orders/claim':
                 user=auth.require_user(self,'customer')
                 oid=data.get('id');token=data.get('tracking_token')
