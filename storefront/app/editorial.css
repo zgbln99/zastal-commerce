@@ -147,4 +147,5 @@ body{background:#fff;color:var(--ink);-webkit-font-smoothing:antialiased}
  .home-service-links{margin-top:51px!important;padding:0!important}
 }
 @media(max-width:390px){.collection-slide{height:535px!important}.home-collection-image{height:195px!important}.slide-copy h1{font-size:43px!important}}
+@media(max-width:360px){.store-header-actions{gap:4px!important}}
 @media(prefers-reduced-motion:reduce){.home-collection-image img,.product-image-link img{transition:none!important}}
