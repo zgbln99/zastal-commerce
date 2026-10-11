@@ -7,14 +7,14 @@ import { useStore } from "./StoreProvider";
 export function ProductImage({ product, className = "", eager = false }: { product: { image: string; name: string }; className?: string; eager?: boolean }) {
   return <img src={product.image} alt={product.name} className={className} loading={eager ? "eager" : "lazy"} decoding="async" onError={e => { const el = e.currentTarget; if (!el.dataset.failed) { el.dataset.failed = "1"; el.src = "/assets/product-unavailable.svg"; } }} />;
 }
-export default function ProductCard({ product }: { product: Product }) {
+export default function ProductCard({ product, eager = false }: { product: Product; eager?: boolean }) {
   const store = useStore();
   const liked = store.favorites.includes(product.id);
   const available = product.variants.some(v => v.stock > 0);
   const needsSelection = !!product.sizes || !!product.personalization_enabled;
   return <article className="product-card">
     <div className="product-image-wrap">
-      <Link href={"/produkt/" + product.id} className="product-image-link" tabIndex={-1} aria-hidden="true"><ProductImage product={product}/></Link>
+      <Link href={"/produkt/" + product.id} className="product-image-link" tabIndex={-1} aria-hidden="true"><ProductImage product={product} eager={eager}/></Link>
       {product.id === 2 && <span className="product-badge">Retro</span>}
       {product.verified && !available && <span className="product-badge">Wyprzedane</span>}
       <button className={"favorite-button " + (liked ? "is-favorite" : "")} onClick={() => store.favorite(product.id)} aria-label={(liked ? "Usuń z ulubionych: " : "Dodaj do ulubionych: ") + product.name} aria-pressed={liked} disabled={!store.hydrated}><Heart size={18} fill={liked ? "currentColor" : "none"}/></button>
