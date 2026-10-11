@@ -24,6 +24,7 @@ export default function HomeEditor(){
  const [uploading,setUploading]=useState(false);
  const [versionsOpen,setVersionsOpen]=useState(false),[revisions,setRevisions]=useState<Revision[]>([]);
  const [addOpen,setAddOpen]=useState(false);
+ const [dragging,setDragging]=useState<string|null>(null);
  const [undo,setUndo]=useState<HomeConfig[]>([]),[redo,setRedo]=useState<HomeConfig[]>([]);
  const preview=useRef<HTMLIFrameElement|null>(null);
  const selected=draft.sections.find(x=>x.id===selection)||draft.sections[0];
@@ -175,8 +176,8 @@ export default function HomeEditor(){
   {isDirty&&<p className="home-builder-unsaved"><span/> Niezapisane zmiany — widoczne tylko w podglądzie edytora</p>}
   <div className="home-builder-workspace">
    <aside className="home-builder-outline"><div className="home-builder-side-head"><div><Layers3 size={18}/> Sekcje <b>{draft.sections.length}</b></div><small>{enabled} aktywnych</small></div>
-    <div className="home-builder-list">{draft.sections.map((sec,index)=><div key={sec.id} className={"home-builder-item "+(sec.id===selection?"active":"")+(sec.enabled?"":" disabled")} onClick={()=>setSelection(sec.id)}>
-     <div className="home-builder-item-main"><b>{String(index+1).padStart(2,"0")}</b><span><strong>{SECTION_DESCRIPTIONS[sec.type].name}</strong><small>{String(sec.settings.title||sec.settings.eyebrow||"Sekcja").slice(0,42)}</small></span></div>
+    <div className="home-builder-list">{draft.sections.map((sec,index)=><div key={sec.id} className={"home-builder-item "+(sec.id===selection?"active":"")+(sec.enabled?"":" disabled")+(dragging===sec.id?" dragging":"")} draggable onDragStart={e=>{setDragging(sec.id);e.dataTransfer.effectAllowed="move"}} onDragEnd={()=>setDragging(null)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(!dragging||dragging===sec.id)return;edit(d=>{const from=d.sections.findIndex(x=>x.id===dragging),to=d.sections.findIndex(x=>x.id===sec.id);if(from<0||to<0)return;const [part]=d.sections.splice(from,1);d.sections.splice(to,0,part)});setDragging(null)}}>
+     <button type="button" className="home-builder-item-main" onClick={()=>setSelection(sec.id)}><b>{String(index+1).padStart(2,"0")}</b><span><strong>{SECTION_DESCRIPTIONS[sec.type].name}</strong><small>{String(sec.settings.title||sec.settings.eyebrow||"Sekcja").slice(0,42)}</small></span></button>
      <div className="home-builder-item-actions" onClick={e=>e.stopPropagation()}>
       <button aria-label="Przesuń w górę" title="Przesuń w górę" disabled={index===0} onClick={()=>action(sec.id,"up")}><ArrowUp size={14}/></button>
       <button aria-label="Przesuń w dół" title="Przesuń w dół" disabled={index===draft.sections.length-1} onClick={()=>action(sec.id,"down")}><ArrowDown size={14}/></button>
