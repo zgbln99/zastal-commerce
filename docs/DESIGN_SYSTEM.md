@@ -35,7 +35,7 @@ without resorting to ornamental badges.
 
 ## Composition
 
-- Start with authentic supporter photo: big image, stable crop, clear copy field.
+- Start with one authentic supporter photo: edge-to-edge campaign cover, stable crop, readable copy field and two direct catalog actions. Do not reintroduce a rotating hero carousel, separate sidebar merchandise promo or automatic slide controls without explicit club creative direction.
 - Product photography has space to breathe; use `object-fit:contain`.
 - Prefer asymmetric **editorial** features to repetitive boxes.
 - Section order: hero → categories → real customization capability →
