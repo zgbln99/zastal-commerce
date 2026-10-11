@@ -22,7 +22,7 @@ function Block({section}:{section:HomeSection}){
  const s=section.settings,kind=section.type;
  const title=text(s,"title");
  const sectionTitle=titleLines(title);
- const active=filter??text(s,"category")||"Wszystko";
+ const active=filter??(text(s,"category")||"Wszystko");
  const links=(x:string)=>"/sklep?category="+encodeURIComponent(x);
  const chosen=products.find(p=>p.id===num(s,"product_id"))||catalog.find(p=>p.id===num(s,"product_id"));
  if(kind==="hero")return <StoreHero settings={s}/>;
