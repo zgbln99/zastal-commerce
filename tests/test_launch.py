@@ -98,4 +98,29 @@ class LaunchTests(unittest.TestCase):
         self.assertFalse(launch.https_url("https://user:pass@example.org"))
         self.assertTrue(launch.https_url("https://example.org/privacy"))
 
+    def test_05_stocktake_is_atomic_and_audited(self):
+        status,_=self.client.login("admin","local-isolated-admin-token")
+        self.assertEqual(status,200)
+        with api.connect() as c:
+            c.execute("INSERT INTO products(id,name,sku,category,price,stock) VALUES(777,'Test stocktake','QA-SKU','Koszulki',7000,12)")
+            c.execute("INSERT INTO product_variants(product_id,size,sku,ean,stock) VALUES(?,?,?,?,?)",
+                      (777,'M','QA-SKU-M',api.ean13(77701),5))
+            c.execute("INSERT INTO product_variants(product_id,size,sku,ean,stock) VALUES(?,?,?,?,?)",
+                      (777,'L','QA-SKU-L',api.ean13(77702),7))
+        code,fail=self.client.request("POST","/api/admin/inventory/import",
+             {"rows":[{"sku":"QA-SKU-M","stock":9},{"sku":"MISSING-SKU","stock":0}],"reason":"Spis z natury QA"})
+        self.assertEqual(code,400)
+        with api.connect() as c:
+            self.assertEqual(c.execute("SELECT stock FROM product_variants WHERE sku='QA-SKU-M'").fetchone()[0],5)
+        code,out=self.client.request("POST","/api/admin/inventory/import",
+             {"rows":[{"sku":"QA-SKU-M","stock":9},{"sku":"QA-SKU-L","stock":0}],"reason":"Spis z natury QA"})
+        self.assertEqual(code,200)
+        self.assertEqual(out["changed"],2)
+        with api.connect() as c:
+            self.assertEqual(c.execute("SELECT stock FROM products WHERE id=777").fetchone()[0],9)
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM stock_events WHERE source='inventory-import'").fetchone()[0],2)
+        code,out=self.client.request("POST","/api/admin/inventory/import",
+             {"rows":[{"sku":"QA-SKU-M","stock":1},{"sku":"QA-SKU-M","stock":2}],"reason":"Drugi import"})
+        self.assertEqual(code,400)
+
 if __name__=="__main__":unittest.main()
