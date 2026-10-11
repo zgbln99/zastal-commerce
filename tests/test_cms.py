@@ -1,5 +1,6 @@
 """Zastal Store CMS integration checks: draft isolation, concurrency and media."""
 import base64
+import os
 import copy
 import io
 import json
@@ -115,8 +116,12 @@ class CMSIntegration(unittest.TestCase):
         self.assertEqual(status,400)
 
     def test_06_order_gate_unaffected(self):
-        status,response=self.outsider.request("POST","/api/orders",{"items":[{"id":1,"size":"L","quantity":1}]})
-        self.assertEqual(status,503)
-        self.assertEqual(response["code"],"store_prelaunch")
+        previous=os.environ.pop("ZASTAL_TEST_MODE",None)
+        try:
+            status,response=self.outsider.request("POST","/api/orders",{"items":[{"id":1,"size":"L","quantity":1}]})
+            self.assertEqual(status,503)
+            self.assertEqual(response["code"],"store_prelaunch")
+        finally:
+            if previous is not None:os.environ["ZASTAL_TEST_MODE"]=previous
 
 if __name__=="__main__":unittest.main()
