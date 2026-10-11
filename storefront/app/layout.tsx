@@ -3,6 +3,7 @@ import "./globals.css";
 import "./storefront-refresh.css";
 import "./editorial.css";
 import "./club-editorial.css";
+import "./merchandising-features.css";
 import CommerceRoot from "../components/CommerceRoot";
 export const metadata: Metadata = {
   title: {default: "Zastal Store — sklep kibica", template: "%s | Zastal Store"},
