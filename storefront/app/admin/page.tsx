@@ -11,6 +11,7 @@ import Products from "./Products";
 import Customers from "./Customers";
 import Players from "./Players";
 import LaunchCenter from "./LaunchCenter";
+import InventoryImport from "./InventoryImport";
 
 const views:{id:OperationsTab; label:string; title:string; description:string; icon:ReactNode}[] = [
   {id:"dashboard", label:"Przegląd", title:"Przegląd sklepu", description:"Zamówienia i zadania wymagające uwagi.", icon:<LayoutDashboard size={19}/>},
@@ -22,6 +23,7 @@ const views:{id:OperationsTab; label:string; title:string; description:string; i
   {id:"transfers", label:"Zakupy DTF", title:"Zakupy transferów DTF", description:"Gotowe transfery od dostawców i przyjęcia dostaw.", icon:<Package size={19}/>},
   {id:"production", label:"Nanoszenie DTF", title:"Nanoszenie i kontrola", description:"Przydzielanie transferów do zamówień oraz etapy pracy.", icon:<ClipboardCheck size={19}/>},
   {id:"labels", label:"Etykiety", title:"Etykiety EAN i QR", description:"Weryfikacja kodów i wydruk dla konkretnych wariantów.", icon:<Tag size={19}/>},
+  {id:"inventory_import",label:"Import magazynu",title:"Import stanów magazynowych",description:"Hurtowa aktualizacja stanów SKU z arkusza CSV.",icon:<Warehouse size={19}/>},
   {id:"launch",label:"Uruchomienie sklepu",title:"Uruchomienie sprzedaży",description:"Konfiguracja podmiotu, lista warunków i gotowość operacyjna.",icon:<Settings size={19}/>},
   {id:"account",label:"Ustawienia konta",title:"Ustawienia konta",description:"Hasło, klucz odzyskiwania i sesje administratora.",icon:<Settings size={19}/>},
   {id:"audit", label:"Historia", title:"Historia operacji", description:"Zapisane działania i ruchy magazynowe.", icon:<Activity size={19}/>},
@@ -91,6 +93,7 @@ export default function Admin() {
       {activeTab==="customers"&&<Customers onOpenOrder={openOrder}/>}
       {activeTab==="account"&&<AccountSecurity/>}
       {activeTab==="launch"&&<LaunchCenter/>}
+      {activeTab==="inventory_import"&&<InventoryImport inventory={data.inventory} onRefresh={refresh}/>}
       <Operations request={auth.request} activeTab={activeTab} data={data} loading={loading} onRefresh={() => refresh()} onAuthError={()=>void auth.refresh().catch(()=>{})} requestedOrderId={requestedOrderId} onOrderOpened={() => setRequestedOrderId(null)}/>
     </div></main>
   </div>;
