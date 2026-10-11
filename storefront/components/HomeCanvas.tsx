@@ -5,7 +5,7 @@ import {ArrowRight,ArrowUpRight,PackageCheck,Ruler,UserRound} from "lucide-react
 import ProductCard,{ProductImage} from "./ProductCard";
 import StoreHero from "./StoreHero";
 import {useStore} from "./StoreProvider";
-import {catalog} from "../lib/catalog";
+
 import {type HomeConfig,type HomeSection,categories,text,num,bool,titleLines} from "../lib/home-layout";
 
 const categoryDescriptions:Record<string,string>={
@@ -24,16 +24,16 @@ function Block({section}:{section:HomeSection}){
  const sectionTitle=titleLines(title);
  const active=filter??(text(s,"category")||"Wszystko");
  const links=(x:string)=>"/sklep?category="+encodeURIComponent(x);
- const chosen=products.find(p=>p.id===num(s,"product_id"))||catalog.find(p=>p.id===num(s,"product_id"));
+ const chosen=products.find(p=>p.id===num(s,"product_id"));
  if(kind==="hero")return <StoreHero settings={s}/>;
  if(kind==="categories"){
   const cats=text(s,"categories").split(",").map(x=>x.trim()).filter(Boolean);
   return <section className="container home-collections" aria-labelledby={section.id}>
    <div className="home-section-heading"><div><span className="home-kicker">{text(s,"eyebrow")}</span><h2 id={section.id}>{title}</h2></div>
    <Link className="home-text-link" href="/sklep">{text(s,"cta_text")} <ArrowUpRight size={17}/></Link></div>
-   <div className="home-collection-grid" style={{gridTemplateColumns:`repeat(${num(s,"columns",4)},minmax(0,1fr))`}}>
+   <div className={"home-collection-grid cms-cols-"+num(s,"columns",4)}>
    {cats.map(category=>{
-    const cover=products.find(p=>p.id===categoryCovers[category])||products.find(p=>p.category===category)||catalog.find(p=>p.id===categoryCovers[category]);
+    const cover=products.find(p=>p.id===categoryCovers[category])||products.find(p=>p.category===category);
     return <Link className={"home-collection collection-"+(categoryClasses[category]||"shirts")} key={category} href={links(category)}>
      <div className="home-collection-image">{cover&&<ProductImage product={cover}/>}</div>
      <div className="home-collection-label"><div><h3>{categoryLabels[category]||category}</h3><span>{categoryDescriptions[category]||"Zobacz kolekcję"}</span></div><ArrowUpRight size={21}/></div>
@@ -52,7 +52,7 @@ function Block({section}:{section:HomeSection}){
    <div className="home-section-heading"><div><span className="home-kicker">{text(s,"eyebrow")}</span><h2 id={section.id}>{title}</h2></div>
    <Link className="home-text-link" href="/sklep">{text(s,"cta_text")} <ArrowRight size={17}/></Link></div>
    {bool(s,"show_filters")&&<div className="collection-tabs" aria-label="Filtruj produkty">{categories.map(x=><button key={x} className={x===active?"active":""} aria-pressed={x===active} onClick={()=>setFilter(x)}>{categoryLabels[x]||x}<span>{x==="Wszystko"?products.length:products.filter(p=>p.category===x).length}</span></button>)}</div>}
-   <div className="product-grid merchandise-grid" style={{gridTemplateColumns:`repeat(${num(s,"columns",4)},minmax(0,1fr))`}}>
+   <div className={"product-grid merchandise-grid cms-cols-"+num(s,"columns",4)}>
     {sorted.slice(0,num(s,"count",8)).map((p,i)=><ProductCard key={p.id} product={p} eager={i<4}/>)}
    </div>
    {!sorted.length&&<p className="account-empty">Brak produktów w wybranej kategorii.</p>}
