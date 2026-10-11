@@ -27,6 +27,6 @@ export default function ShopCategoryRail({
         <span className="shop-category-label"><small>{group.number} / {products.filter(x => x.category === group.key).length} PRODUKTÓW</small><strong>{group.title}</strong></span>
         <span className="shop-category-arrow"><ArrowUpRight size={16}/></span>
       </button>;
-    })}</div>
+    })}</div><p className="shop-category-scroll-hint">Przesuń, aby zobaczyć kolejne kategorie →</p>
   </section>;
 }
