@@ -27,17 +27,17 @@ The restricted environment variable `ZASTAL_TEST_MODE=isolated-only` enables ori
 
 ## Collections and storefront
 
-The homepage has three collection slides using existing club photography and product images. Visitors can navigate using the arrows, numbered selectors, keyboard or horizontal swipes. Automatic rotation pauses for hover, keyboard focus, a hidden tab, open shopping dialogs, an explicit pause or reduced-motion preferences. Manual navigation keeps rotation paused until the visitor resumes it. Four category tiles, a live product grid and a retro collection feature link to the searchable catalogue.
+The homepage has three collection slides using existing club photography and product images. Visitors can navigate using the arrows, numbered selectors, keyboard or horizontal swipes. Automatic rotation pauses for hover, keyboard focus, a hidden tab, open shopping dialogs, an explicit pause or reduced-motion preferences. Manual navigation keeps rotation paused until the visitor resumes it. The brand-led home includes genuine supporter photography, four category tiles, an editorial section for an actually configurable printed product, a live product grid, a retro capsule and a curated accessories lookbook. Design rules and photography standards live in [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Shopping
 
-A shared header, product search, favorites and editable cart work across all shopping pages. Existing saved selections retain their storage keys and are validated before use. Product photographs and Inter fonts are served locally. Missing photographs have a visible fallback.
+A shared header, product search, favorites and editable cart work across all shopping pages. Recently viewed product IDs are remembered locally in the browser only; there is no synced browsing-history account profile. Existing saved selections retain their storage keys and are validated before use. Product photographs and Inter fonts are served locally. Missing photographs have a visible fallback.
 
-Prices and variant availability come from `/api/catalog`. New purchases are blocked when availability cannot be verified. The API checks stock again inside the order transaction and calculates all amounts in integer groszy. Test delivery costs are pickup 0, parcel locker 1299 and courier 1499; delivery becomes free at a product subtotal of 25000.
+Prices and variant availability come from `/api/catalog`. The public checkout is deliberately disabled during prelaunch. Legacy historical integration tests simulate pickup, parcel locker and courier prices but **none of these are published shipping offers**. The public basket no longer displays a fictional free-shipping threshold. The API continues to validate stock and calculate amounts in integer groszy within isolated workflow tests.
 
 Checkout uses a retained idempotency key and exact request snapshot. A lost response can be recovered after a reload, including when the attempted purchase exhausted the remaining stock. Reusing a key with different contents is rejected. Completing a purchase removes only the submitted quantities from the cart. Each confirmation URL contains a random token and exposes only that order and its status history.
 
-## Accounts and personalized shirts
+## Accounts and customizable merchandise
 
 Customer registration and login use opaque Secure/HttpOnly cookies, server-side role checks and CSRF validation. Customers can edit their display name, change their password, revoke other sessions and see only their own orders. Guest orders can be attached using their private confirmation token. Checkout records its account identity in the retained request to avoid attaching a recovered attempt to a different account.
 
@@ -45,7 +45,7 @@ There is no email provider. Registration and recovery show a high-entropy person
 
 The product form creates live catalogue entries, variants and internal EANs. It supports an image, short description, optional/required personalization and an integer-groszy print fee. Buyers choose an active player or enter a surname (1–20 letters/punctuation) and a one/two-digit number, including 0 or 00. The initial 12-player roster was checked at https://basketzg.pl/players on 2026-10-10 and is editable in the panel. There is no automatic claim that the roster remains current after that date.
 
-Cart lines distinguish print choices while sharing size stock. Server-calculated names, numbers and fees are saved with each order and shown in confirmations, customer history, staff orders and the DTF queue. Retries retain the original order and charges after catalogue or roster changes. Existing products start with personalization disabled; enable it for a real match-shirt product after adding its details.
+Cart lines distinguish print choices while sharing size stock. Server-calculated names, numbers and fees are saved with each order and shown in confirmations, customer history, staff orders and the DTF queue. Retries retain the original order and charges after catalogue or roster changes. One existing hoodie is currently configurable for surname/number printing; other products are not automatically treated as customizable. When adding true game jerseys, first upload verified product photography, size specifications, approved roster options and actual decoration costs.
 
 ## Staff operations
 
