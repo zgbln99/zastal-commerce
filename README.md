@@ -2,7 +2,13 @@
 
 Polish fan-shop storefront and staff operations workspace for Zastal Zielona Góra.
 
-**v0.7 — prelaunch build of the Zastal Store.** Public browsing and staff operations are available. The system **does not accept new orders, registration or payments** until real integrations, verified stock, confirmed seller identity and legally reviewed sales information are in place. Previously created test orders are retained as historical records. No card details or shipping addresses are collected. Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
+**v0.8 — prelaunch store with a versioned homepage CMS and visual editor.** Public browsing and staff operations are available. The system **does not accept new orders, registration or payments** until real integrations, verified stock, confirmed seller identity and legally reviewed sales information are in place. Previously created test orders are retained as historical records. No card details or shipping addresses are collected. Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
+
+## Home page editing (CMS)
+
+Open **/admin → Edytor strony**. The editor has an outline of blocks, a central live desktop/mobile preview and settings for each selected block. Use **Zapisz szkic** to keep unfinished work private and **Opublikuj** to make it live. **Historia** restores previous versions to a private draft; it does not publish without confirmation. Nine sections can be added and configured. Product imagery can also be uploaded directly in the product editor.
+
+Implementation and safeguards are documented in [docs/CMS.md](docs/CMS.md). The frontend reads only the public published configuration via the server-side API; private drafts require an authenticated administrator session with CSRF protection. Publishing content **never** enables checkout or bypasses sales readiness checks.
 
 ## Sales launch / readiness
 
@@ -27,7 +33,7 @@ The restricted environment variable `ZASTAL_TEST_MODE=isolated-only` enables ori
 
 ## Collections and storefront
 
-The homepage has three collection slides using existing club photography and product images. Visitors can navigate using the arrows, numbered selectors, keyboard or horizontal swipes. Automatic rotation pauses for hover, keyboard focus, a hidden tab, open shopping dialogs, an explicit pause or reduced-motion preferences. Manual navigation keeps rotation paused until the visitor resumes it. The brand-led home includes genuine supporter photography, four category tiles, an editorial section for an actually configurable printed product, a live product grid, a retro capsule and a curated accessories lookbook. Design rules and photography standards live in [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
+The homepage is managed with a genuine section-based CMS: drag to reorder, show/hide/duplicate, edit images, headings, CTAs and merchandised products. A single editorial club-photo hero replaced the old rotating carousel. The CMS supports separate private drafts and published revisions, private responsive preview, media uploads, rollback and audited changes.
 
 ## Shopping
 
