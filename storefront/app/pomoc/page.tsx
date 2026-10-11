@@ -51,7 +51,7 @@ export default function Help() {
         </section>
         <section id="prywatnosc">
           <span className="eyebrow">05 / DANE</span><h2>Konto i prywatność</h2>
-          <p>Koszyk, ulubione oraz lista ostatnio oglądanych produktów są zapisywane lokalnie na urządzeniu. Nie tworzymy na ich podstawie profilu marketingowego ani nie przesyłamy historii oglądania produktów na serwer.</p>
+          <p>Koszyk, ulubione oraz lista ostatnio oglądanych produktów są zapisywane lokalnie na urządzeniu. Lista ostatnio oglądanych nie jest synchronizowana z kontem klienta; usunięcie danych tej przeglądarki czyści także tę listę.</p>
           <p>Rejestracja nowych kont jest tymczasowo wyłączona. Wcześniej utworzone konta pozostają dostępne do logowania; dane logowania i historia konta są obsługiwane przez zabezpieczone API.</p>
           <p>Przed włączeniem sprzedaży zostaną udostępnione odpowiednie dokumenty dotyczące przetwarzania danych klientów, zasad sprzedaży oraz prawa odstąpienia od umowy.</p>
         </section>
