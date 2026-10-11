@@ -219,6 +219,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path=='/api/store/home':return self.respond(200,cms.get(c))
                 if path=='/api/admin/home':return self.respond(200,cms.get(c,admin=True))
                 if path=='/api/admin/home/revisions':return self.respond(200,cms.history(c))
+                if path=='/api/admin/home/media':return self.respond(200,cms.list_media())
                 if path=='/api/admin/launch':return self.respond(200,launch.snapshot(c))
                 if path=='/api/account/orders':
                     auth.require_user(self,'customer')
