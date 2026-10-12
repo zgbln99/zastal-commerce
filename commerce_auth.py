@@ -102,7 +102,11 @@ def digest(value):
 
 
 def public_user(row):
-    return {field: row[field] for field in ('id', 'identifier', 'name', 'role', 'created')} if row is not None else None
+    if row is None:
+        return None
+    result = {field: row[field] for field in ('id', 'identifier', 'name', 'role', 'created')}
+    result['email_verified'] = bool(row['email_verified'])
+    return result
 
 
 def init_schema(c, bootstrap_secret):
@@ -119,6 +123,8 @@ def init_schema(c, bootstrap_secret):
         CREATE INDEX IF NOT EXISTS sessions_user ON auth_sessions(user_id);
         CREATE INDEX IF NOT EXISTS sessions_expiry ON auth_sessions(expires);
     """)
+    import commerce_email as email
+    email.init_schema(c)
     if bootstrap_secret and not c.execute("SELECT 1 FROM users WHERE role='admin'").fetchone():
         c.execute("INSERT INTO users(identifier,name,role,password_hash,created,updated) VALUES('admin','Administrator','admin',?,datetime('now'),datetime('now'))",
                   (hash_password(bootstrap_secret),))
@@ -228,6 +234,8 @@ def dispatch(handler, path, c):
         cursor = c.execute("INSERT INTO users(identifier,name,role,password_hash,recovery_hash,created,updated) VALUES(?,?,'customer',?,?,datetime('now'),datetime('now'))",
                            (identifier, name, encoded, digest(key)))
         user = c.execute('SELECT * FROM users WHERE id=?', (cursor.lastrowid,)).fetchone()
+        import commerce_email as email
+        email.queue_verification(c, user)
         rotate(handler, c, user)
         extra['recovery_key'], status = key, 201
     elif path == '/api/auth/login':
@@ -262,6 +270,9 @@ def dispatch(handler, path, c):
                            (encoded, digest(new_key), user['id'], user['recovery_hash']))
         if cursor.rowcount != 1:
             raise AuthError(400, 'Klucz został już użyty. Użyj aktualnego klucza odzyskiwania.')
+        import commerce_email as email
+        email.invalidate_tokens(c, user['id'])
+        user = c.execute('SELECT * FROM users WHERE id=?', (user['id'],)).fetchone()
         rotate(handler, c, user, revoke_all=True)
         extra['recovery_key'] = new_key
     else:
@@ -284,6 +295,8 @@ def dispatch(handler, path, c):
                 encoded = hash_password(password_value(data))
                 user = begin_account_write(handler, c)
                 c.execute("UPDATE users SET password_hash=?,updated=datetime('now') WHERE id=?", (encoded, user['id']))
+                import commerce_email as email
+                email.invalidate_tokens(c, user['id'])
                 user = c.execute('SELECT * FROM users WHERE id=?', (user['id'],)).fetchone()
                 rotate(handler, c, user, revoke_all=True)
             else:

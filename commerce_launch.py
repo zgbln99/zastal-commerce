@@ -100,7 +100,7 @@ def snapshot(c, public=False):
     result = {
         "phase": "prelaunch",
         "checkout_enabled": False,
-        "registration_enabled": False,
+        "registration_enabled": True,
         "notice": "Sklep Zastalu jest przygotowywany do uruchomienia sprzedaży online.",
     }
     if not public:

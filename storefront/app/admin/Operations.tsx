@@ -9,7 +9,7 @@ import "./operations.css";
 import type {OrderPrint} from "../../lib/commerce.mjs";
 import {ApiError,type ApiRequest} from "../../components/AuthProvider";
 
-export type OperationsTab = "dashboard" | "orders" | "inventory" | "transfers" | "production" | "labels" | "audit" | "products" | "customers" | "account" | "players" | "launch" | "inventory_import" | "homepage";
+export type OperationsTab = "dashboard" | "orders" | "inventory" | "transfers" | "production" | "labels" | "audit" | "products" | "customers" | "account" | "players" | "launch" | "inventory_import" | "homepage" | "pos" | "fulfillment" | "email";
 export type Variant = {id:number; product_id:number; size:string; sku:string; ean:string; stock:number; name:string; category:string; price:number};
 export type Batch = {id:number; design:string; supplier:string; reference:string; ordered:number; received:number; available:number; cost_unit:number; created:string};
 export type Order = {id:number; created:string; items:string; total:number; status:string; fulfillment?:string; shipping_fee?:number; subtotal?:number;customer?:{id:number;identifier:string;name:string}};
@@ -20,15 +20,15 @@ export type ActivityEvent = {id:number; kind:string; object_id:string; note:stri
 export type Movement = {id:number; sku:string; delta:number; reason:string; created:string; source:string};
 export type OperationsData = {orders:Order[]; inventory:Variant[]; batches:Batch[]; tasks:Task[]; activity:ActivityEvent[]; movements:Movement[]};
 export const emptyOperationsData:OperationsData = {orders:[], inventory:[], batches:[], tasks:[], activity:[], movements:[]};
-export const orderStatuses = ["nowe", "potwierdzone", "do_kompletacji", "nanoszenie_dtf", "kontrola_jakosci", "spakowane", "wyslane_demo", "anulowane"];
+export const orderStatuses = ["nowe", "potwierdzone", "do_kompletacji", "nanoszenie_dtf", "kontrola_jakosci", "spakowane", "wydane", "wyslane_demo", "anulowane"];
 const productionStatuses = ["oczekuje", "przygotowanie", "nanoszenie", "kontrola", "gotowe", "odrzucone"];
-export const statusText:Record<string,string> = {nowe:"Nowe", potwierdzone:"Potwierdzone", do_kompletacji:"Kompletacja", nanoszenie_dtf:"Nanoszenie DTF", kontrola_jakosci:"Kontrola jakości", spakowane:"Spakowane", wyslane_demo:"Wysłane (demo)", anulowane:"Anulowane", oczekuje:"Oczekuje", przygotowanie:"Przygotowanie", nanoszenie:"Nanoszenie transferu", kontrola:"Kontrola jakości", gotowe:"Gotowe", odrzucone:"Odrzucone"};
+export const statusText:Record<string,string> = {nowe:"Nowe", potwierdzone:"Potwierdzone", do_kompletacji:"Kompletacja", nanoszenie_dtf:"Nanoszenie DTF", kontrola_jakosci:"Kontrola jakości", spakowane:"Spakowane", wydane:"Wydane", wyslane_demo:"Wysłane (demo)", anulowane:"Anulowane", oczekuje:"Oczekuje", przygotowanie:"Przygotowanie", nanoszenie:"Nanoszenie transferu", kontrola:"Kontrola jakości", gotowe:"Gotowe", odrzucone:"Odrzucone"};
 const activityText:Record<string,string> = {player:"Zawodnik",product:"Produkt",customer:"Konto klienta",order:"Zamówienie", stock:"Korekta stanu", transfer:"Transfery DTF", production:"Nanoszenie DTF"};
 const sourceText:Record<string,string> = {admin:"Korekta ręczna", checkout:"Zamówienie testowe", orders:"Obsługa zamówienia"};
 export const formatMoney = (value:number) => new Intl.NumberFormat("pl-PL", {style:"currency", currency:"PLN"}).format(value / 100);
 export const formatDate = (value:string) => {const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString("pl-PL", {day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit"});};
 export const orderNumber = (id:number) => "ZS-" + String(id).padStart(5, "0");
-export const isClosedOrder = (status:string) => ["anulowane", "wyslane_demo"].includes(status);
+export const isClosedOrder = (status:string) => ["anulowane", "wyslane_demo", "wydane"].includes(status);
 export const isClosedTask = (status:string) => ["gotowe", "odrzucone"].includes(status);
 
 export class AdminApiError extends Error {

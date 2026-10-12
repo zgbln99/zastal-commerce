@@ -45,19 +45,23 @@ class LaunchTests(unittest.TestCase):
             with urllib.request.urlopen(request,timeout=8) as r:return r.status,json.load(r)
         except urllib.error.HTTPError as r:return r.status,json.load(r)
 
-    def test_01_live_orders_and_signup_blocked(self):
+    def test_01_live_orders_blocked_but_signup_available(self):
         status,st=self.public("GET","/api/store/status")
         self.assertEqual(status,200)
         self.assertEqual(st["phase"],"prelaunch")
         self.assertFalse(st["checkout_enabled"])
-        self.assertFalse(st["registration_enabled"])
-        for path,body in [
-            ("/api/orders",{"items":[{"id":1,"size":"L","quantity":1}]}),
-            ("/api/auth/register",{"name":"Test","email":"test@example.com","password":"Strong-Temporary-Password-123"})
-        ]:
-            status,data=self.public("POST",path,body)
-            self.assertEqual(status,503)
-            self.assertEqual(data["code"],"store_prelaunch")
+        self.assertTrue(st["registration_enabled"])
+        status,data=self.public("POST","/api/orders",{"items":[{"id":1,"size":"L","quantity":1}]})
+        self.assertEqual(status,503)
+        self.assertEqual(data["code"],"store_prelaunch")
+        customer=Client(self.port)
+        status,registered=customer.register("prelaunch-account@example.test")
+        self.assertEqual(status,201,registered)
+        self.assertEqual(registered['user']['role'],'customer')
+        status,_=customer.request('GET','/api/admin/products')
+        self.assertEqual(status,403)
+        status,_=customer.request('POST','/api/orders',{'items':[{'id':1,'size':'L','quantity':1}]})
+        self.assertEqual(status,503)
         with api.connect() as c:
             self.assertEqual(c.execute("SELECT COUNT(*) FROM orders").fetchone()[0],0)
 

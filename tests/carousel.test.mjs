@@ -32,3 +32,8 @@ test('scrolling, small taps and diagonal gestures do not change collections', ()
   assert.equal(swipeDirection(100, 100, 125, 101), 0);
   assert.equal(swipeDirection(200, 100, 130, 185), 0);
 });
+test('owner autoplay preference disables timing without disabling manual navigation', () => {
+  assert.equal(autoplayAllowed({ ...ready, autoplay: false }), false);
+  assert.equal(autoplayAllowed({ ...ready, autoplay: true }), true);
+  assert.equal(nextSlide(1, 1, 3), 2);
+});

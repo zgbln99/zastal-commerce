@@ -1,0 +1,20 @@
+[Unit]
+Description=Zastal Store transactional email outbox
+After=network-online.target zastal-store-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinelx
+WorkingDirectory=/var/lib/sentinelx/uploads/zastal-commerce-app
+EnvironmentFile=/var/lib/sentinelx/uploads/zastal-commerce-app/.runtime.env
+ExecStart=/usr/bin/python3 tools/email_worker.py --loop --limit 10 --interval 15
+Restart=always
+RestartSec=10
+TimeoutStopSec=20
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -45,7 +45,7 @@ export default function Help() {
         <section id="wersja-demo">
           <span className="eyebrow">04 / URUCHOMIENIE</span><h2>Co przygotowujemy?</h2>
           <p>Sklep ma już katalog, wyszukiwarkę, koszyk, personalizację wybranych produktów oraz zaplecze do obsługi magazynu, etykiet i nanoszenia nadruków. W panelu obsługi jest też lista zadań potrzebnych przed uruchomieniem sprzedaży.</p>
-          <p>Brakuje jeszcze zatwierdzonych danych sprzedawcy i dokumentów, pełnej weryfikacji stanów magazynowych oraz realnych integracji płatności, dostaw, dokumentów sprzedaży i e-maili transakcyjnych.</p>
+          <p>Sprzedaż online czeka na konfigurację płatności i dostaw oraz uzupełnienie danych sprzedawcy. Konto możesz już założyć i korzystać z jego ustawień. Wiadomości e-mail będą wysyłane po podłączeniu skrzynki sklepu.</p>
           <div className="help-note"><strong>Do czasu uruchomienia możesz skorzystać z dotychczasowego sklepu klubu.</strong><p>To odrębna instalacja przygotowywana do wdrożenia. Nie należy traktować jej jako działającej platformy do dokonywania zakupów.</p></div>
           <a href="https://zastal.store/" target="_blank" rel="noreferrer" className="inline-link">Dotychczasowy sklep klubowy <ArrowUpRight size={15}/></a>
         </section>

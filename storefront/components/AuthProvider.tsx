@@ -3,7 +3,7 @@ import {createContext,useCallback,useContext,useEffect,useRef,useState} from "re
 import {Check,Copy,KeyRound} from "lucide-react";
 import Modal from "./Modal";
 import "../app/konto/account.css";
-export type User={id:number;identifier:string;name:string;role:"customer"|"admin";created:string};
+export type User={id:number;identifier:string;name:string;role:"customer"|"admin";created:string;email_verified?:boolean};
 export type Session={user:User|null;csrf_token:string;recovery_key?:string};
 export class ApiError extends Error{constructor(message:string,public status:number,public code=""){super(message);this.name="ApiError";}}
 export type ApiRequest=<T>(path:string,options?:RequestInit)=>Promise<T>;

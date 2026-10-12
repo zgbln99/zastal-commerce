@@ -2,7 +2,7 @@
 
 Polish fan-shop storefront and staff operations workspace for Zastal Zielona Góra.
 
-**v0.9 — prelaunch store with product galleries and CMS campaigns.** Public browsing and staff operations are available. The system **does not accept new orders, registration or payments** until real integrations, verified stock, confirmed seller identity and legally reviewed sales information are in place. Previously created test orders are retained as historical records. No card details or shipping addresses are collected. Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
+**v0.10 — staff POS, saved fulfillment, customer registration, email outbox and CMS carousel.** Public browsing and staff operations are available. The system **does not accept public checkout orders or online payments** until real integrations, verified stock, confirmed seller identity and legally reviewed sales information are in place. Previously created test orders are retained as historical records. No card details or shipping addresses are collected. Product and club photographs come from the existing catalogue and should be approved by the club before commercial use.
 
 ## Home page editing (CMS)
 
@@ -18,7 +18,7 @@ The administrator can use the **Uruchomienie sklepu** section to enter the legal
 
 The **Import magazynu** screen supports downloading an Excel-compatible `sku;stan` CSV template and uploading verified stock counts. The backend validates all SKUs and quantities before making any changes, rejects duplicate SKUs, applies updates in one SQLite transaction, recalculates product totals and records every variance in the stock ledger. The import **never** automatically confirms inventory readiness or activates checkout.
 
-**Fail-closed:** `/api/orders` and `/api/auth/register` return HTTP 503 with code `store_prelaunch`. New sales cannot be enabled by an administrator checkbox. Payment provider, real shipping, transactional email and fiscal/commercial documentation integrations must be completed and tested before the API is changed to allow real purchases. Existing order confirmation links remain readable.
+**Fail-closed:** `/api/orders` returns HTTP 503 with code `store_prelaunch`. New public sales cannot be enabled by an administrator checkbox. Customer registration is independent and enabled; staff POS creates explicitly labelled demo sales only. Payment provider, real shipping, transactional email and fiscal/commercial documentation integrations must be completed and tested before the API is changed to allow real purchases. Existing order confirmation links remain readable.
 
 The restricted environment variable `ZASTAL_TEST_MODE=isolated-only` enables original write integration tests **only when the test database resides under the operating system temporary directory**. Never enable it on AMS production.
 
@@ -35,7 +35,7 @@ The restricted environment variable `ZASTAL_TEST_MODE=isolated-only` enables ori
 
 ## Collections and storefront
 
-The homepage is managed with a genuine section-based CMS: drag to reorder, show/hide/duplicate, edit images, headings, CTAs and merchandised products. A single editorial club-photo hero replaced the old rotating carousel. The CMS supports separate private drafts and published revisions, private responsive preview, media uploads, rollback and audited changes.
+The homepage is managed with a genuine section-based CMS: drag to reorder, show/hide/duplicate, edit images, headings, CTAs and merchandised products. The editorial carousel preserves the existing first campaign and adds editable catalogue slides, pause/keyboard/swipe controls and reduced-motion support. The CMS supports separate private drafts and published revisions, private responsive preview, media uploads, rollback and audited changes.
 
 ## Shopping
 
@@ -119,3 +119,18 @@ The runtime credential file and SQLite database remain outside source control. B
 This is a **prelaunch environment**, not an active e-commerce merchant checkout. The storefront cannot process real payments, dispatch parcels, issue fiscal documents or collect customer addresses. Commercial launch still needs approved product and size information, actual stock and suppliers, payment/delivery integrations, customer-service and returns procedures, email delivery/verification, additional staff roles and applicable commercial policies. Physical label alignment needs checking on the target printer. An Android staff application is a separate future project.
 
 `app.py` is the legacy prototype retained for historical reference. The deployed API is `commerce_api.py`; the deployed interface is `storefront/` (Next.js 16, React 19, TypeScript).
+
+
+## Staff POS and saved fulfillment
+
+Open `/admin` directly (no public admin navigation) and choose **Kasa POS**. Search products or scan SKU/EAN/QR, choose size/personalization and add quantities. Cash or external-terminal confirmation records a **test sale**, reserves shared stock transactionally and queues fulfillment. No real payment or fiscal receipt is created. Pending sale identity survives uncertain network results and page reloads; retries cannot double-reserve stock.
+
+**Realizacja** records picking, print and quality per immutable line and per unit, with revision conflict checks. Select the exact line before scanning the variant. Purchased DTF production tasks must finish before line print confirmation. Pack only after all required checks; handover closes the order. Work tickets and sale summaries are printable nonfiscal documents. Cancellation returns reservations unless print/production already requires manual handling.
+
+## Customer email
+
+`/konto` supports sign-in and registration before online sales start. Customers see verification status. Email verification and password resets use expiring single-use links whose token stays in the URL fragment and is removed on page load; all token rows are hashed. Personal recovery keys remain available. Reset revokes old sessions and recovery keys.
+
+Admin **E-mail** shows SMTP readiness and a masked outbox with retry controls. Set SMTP variables in the existing protected `.runtime.env`, outside Git: `ZASTAL_SMTP_HOST`, `ZASTAL_SMTP_PORT` (587 or 465), `ZASTAL_SMTP_FROM`, `ZASTAL_SMTP_TLS` (`starttls` or `ssl`), optional `ZASTAL_SMTP_USERNAME` and `ZASTAL_SMTP_PASSWORD`, plus HTTPS `ZASTAL_SITE_ORIGIN`. Restart API and `zastal-store-email` after configuration. Never commit or expose credentials.
+
+`python tools/email_worker.py --loop --limit 10 --interval 15` sends the durable outbox. Unconfigured SMTP leaves messages pending without claiming delivery. Authentication and order messages are separate from marketing. Under a crash after SMTP acceptance, delivery can be repeated; SMTP is at-least-once, with claim leases and bounded retry backoff.

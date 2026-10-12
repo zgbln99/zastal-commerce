@@ -3,12 +3,12 @@ export type SectionSettings=Record<string,string|number|boolean>;
 export type HomeSection={id:string;type:SectionKind;enabled:boolean;settings:SectionSettings};
 export type HomeConfig={version:1;sections:HomeSection[]};
 export type HomeResponse={config:HomeConfig;revision:number;published_revision:number;draft_changed:boolean;updated:string};
-export type Field={key:string;label:string;type:"short"|"long"|"image"|"url"|"number"|"select"|"toggle"|"color"|"product";min?:number;max?:number;options?:{value:string|number;label:string}[];hint?:string};
+export type Field={key:string;label:string;type:"short"|"long"|"image"|"url"|"number"|"select"|"toggle"|"color"|"product";min?:number;max?:number;options?:{value:string|number;label:string}[];hint?:string;defaultValue?:string|number|boolean};
 const opts=(values:string[])=>values.map(v=>({value:v,label:v}));
 export const categories=["Wszystko","Koszulki","Bluzy","Akcesoria","Dzieci"];
 export const SECTION_DESCRIPTIONS:Record<SectionKind,{name:string;about:string}>={
  campaign:{name:"Kampania z produktami",about:"Zdjęcie pasujących produktów na modelu lub lifestyle i powiązany katalog"},
- hero:{name:"Baner główny",about:"Zdjęcie kampanii, nagłówek, przyciski i przyciemnienie"},
+ hero:{name:"Baner główny / slajdy",about:"Pierwszy baner i dwie opcjonalne kolekcje. Domyślne zdjęcia pochodzą z aktualnego katalogu."},
  categories:{name:"Kolekcje",about:"Wybór kategorii i liczba kolumn"},
  products:{name:"Produkty",about:"Produkty z katalogu, filtry i liczba elementów"},
  personalization:{name:"Personalizacja",about:"Wyróżnienie konkretnej koszulki lub bluzy z nadrukiem"},
@@ -28,12 +28,31 @@ const align:Field={key:"alignment",label:"Wyrównanie tekstu",type:"select",opti
 const catOptions=opts(categories);
 const cols:Field={key:"columns",label:"Liczba kolumn",type:"select",options:[2,3,4].map(n=>({value:n,label:String(n)}))};
 const count:Field={key:"count",label:"Liczba produktów",type:"number",min:1,max:12};
+const heroRoles=[{value:"packshot",label:"Produkt / packshot"},{value:"model",label:"Na modelu"},{value:"detail",label:"Detal"},{value:"lifestyle",label:"Lifestyle / kibice"}];
+const slideFields=(n:number):Field[]=>[
+ {key:`slide_${n}_enabled`,label:`Pokaż slajd ${n}`,type:"toggle",defaultValue:true,hint:"Puste pola korzystają z kolekcji i zdjęcia z aktualnego katalogu."},
+ {key:`slide_${n}_eyebrow`,label:"Nadtytuł",type:"short"},
+ {key:`slide_${n}_title`,label:"Nagłówek",type:"short"},
+ {key:`slide_${n}_description`,label:"Opis",type:"long"},
+ {key:`slide_${n}_image`,label:"Zdjęcie (puste = katalog)",type:"image"},
+ {key:`slide_${n}_image_alt`,label:"Opis zdjęcia",type:"short",hint:"Wymagany dla własnego zdjęcia aktywnego slajdu."},
+ {key:`slide_${n}_image_role`,label:"Rola zdjęcia",type:"select",options:heroRoles,defaultValue:"packshot"},
+ {key:`slide_${n}_image_illustrative`,label:"Materiał poglądowy",type:"toggle",defaultValue:true,hint:"Wyłącz tylko dla zdjęcia przedstawiającego dokładny produkt, kolor i wzór."},
+ {key:`slide_${n}_cta_text`,label:"Tekst przycisku",type:"short"},
+ {key:`slide_${n}_cta_url`,label:"Link przycisku",type:"url"},
+];
 export const EDIT_FIELDS:Record<SectionKind,Field[]>={
  campaign:[eyebrow,heading,desc,{key:"product_ids",label:"Produkty kampanii",type:"short"},image,{key:"image_alt",label:"Opis zdjęcia",type:"short"},{key:"image_role",label:"Rola zdjęcia",type:"select",options:[{value:"model",label:"Na modelu"},{value:"lifestyle",label:"Lifestyle"}]},{key:"image_illustrative",label:"Materiał poglądowy",type:"toggle"},cta,{key:"cta_url",label:"Link przycisku",type:"url"},align],
- hero:[eyebrow,heading,desc,image,cta,{key:"cta_url",label:"Link przycisku",type:"url"},
+ hero:[eyebrow,heading,desc,image,{key:"image_alt",label:"Opis pierwszego zdjęcia",type:"short"},
+   {key:"image_role",label:"Rola pierwszego zdjęcia",type:"select",options:heroRoles,defaultValue:"lifestyle"},
+   {key:"image_illustrative",label:"Materiał poglądowy",type:"toggle",defaultValue:false},cta,{key:"cta_url",label:"Link przycisku",type:"url"},
    {key:"secondary_text",label:"Drugi przycisk",type:"short"},{key:"secondary_url",label:"Drugi link",type:"url"},
    {key:"height",label:"Wysokość banera (px)",type:"number",min:400,max:850},
-   {key:"overlay",label:"Przyciemnienie zdjęcia (%)",type:"number",min:0,max:95},align],
+   {key:"overlay",label:"Przyciemnienie zdjęcia (%)",type:"number",min:0,max:95},align,
+   {key:"slides_enabled",label:"Dodatkowe slajdy kolekcji",type:"toggle",defaultValue:true,hint:"Wyłącz, aby zachować tylko pierwszy baner."},
+   {key:"autoplay",label:"Automatyczna zmiana slajdów",type:"toggle",defaultValue:true,hint:"Zatrzymuje się podczas czytania, obsługi okien sklepu i przy ograniczonym ruchu."},
+   {key:"interval_ms",label:"Czas slajdu (ms)",type:"number",min:3000,max:15000,defaultValue:6000,hint:"6000 ms = 6 sekund. Zakres od 3 do 15 sekund."},
+   ...slideFields(2),...slideFields(3)],
  categories:[eyebrow,heading,{key:"cta_text",label:"Tekst linku",type:"short"},
    {key:"categories",label:"Kategorie (po przecinku)",type:"short",hint:"Koszulki,Bluzy,Dzieci,Akcesoria"},cols],
  products:[eyebrow,heading,{key:"category",label:"Początkowa kategoria",type:"select",options:catOptions},count,cols,

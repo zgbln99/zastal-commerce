@@ -59,7 +59,7 @@ class MediaIntegration(unittest.TestCase):
 
     def test_health_reports_release_without_changing_prelaunch_flags(self):
         self.assertEqual(self.guest.request('GET', '/health'), (200, {
-            'ok': True, 'version': '0.9', 'sales_phase': 'prelaunch', 'accounts': True, 'cms': True}))
+            'ok': True, 'version': '0.10', 'sales_phase': 'prelaunch', 'accounts': True, 'cms': True, 'pos': True, 'email': True}))
 
     def test_additive_schema_does_not_mutate_existing_records(self):
         with api.connect() as c:

@@ -22,13 +22,15 @@ import commerce_personalization as personalization
 import commerce_launch as launch
 import commerce_cms as cms
 import commerce_media as media
+import commerce_ops as ops
+import commerce_email as mail
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
 TOKEN = os.environ.get("ZASTAL_ADMIN_TOKEN", "")
 VALID_STATUS = (
     "nowe", "potwierdzone", "do_kompletacji", "nanoszenie_dtf",
-    "kontrola_jakosci", "spakowane", "wyslane_demo", "anulowane",
+    "kontrola_jakosci", "spakowane", "wyslane_demo", "anulowane", "wydane",
 )
 PRINT_STATUS = ("oczekuje", "przygotowanie", "nanoszenie", "kontrola", "gotowe", "odrzucone")
 LIMITS = defaultdict(deque)
@@ -101,6 +103,7 @@ def init():
         launch.init_schema(c)
         cms.init_schema(c)
         media.init_schema(c)
+        ops.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -211,13 +214,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path=urlparse(self.path).path
-        if path=="/health":return self.respond(200,{"ok":True,"version":"0.9","sales_phase":"prelaunch","accounts":True,"cms":True})
+        if path=="/health":return self.respond(200,{"ok":True,"version":"0.10","sales_phase":"prelaunch","accounts":True,"cms":True,"pos":True,"email":True})
         if path.startswith("/api/store/media/"):
             data=cms.load_media(path.rsplit("/",1)[-1]);return self.respond(200,data,"image/webp") if data is not None else self.respond(404,{"error":"Nie znaleziono zdjęcia"})
         if not self.access(path):return
         try:
             with connect() as c:
                 if auth.dispatch(self,path,c):return
+                if mail.dispatch(self,path,c):return
+                if path=='/api/admin/fulfillment':return self.respond(200,ops.queue(c))
+                operation_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)',path)
+                if operation_route:return self.respond(200,ops.detail(c,int(operation_route.group(1))))
                 if path=='/api/store/status':return self.respond(200,launch.snapshot(c,public=True))
                 if path=='/api/store/home':return self.respond(200,cms.get(c))
                 if path=='/api/admin/home':return self.respond(200,cms.get(c,admin=True))
@@ -299,7 +306,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path=="/api/admin/activity":
                     return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 80")])
             return self.respond(404,{"error":"Nie znaleziono"})
-        except auth.AuthError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (ValueError,TypeError):return self.respond(400,{"error":"Nieprawidłowy identyfikator"})
         except sqlite3.Error:return self.respond(500,{"error":"Błąd bazy danych"})
 
@@ -316,11 +323,26 @@ class Handler(BaseHTTPRequestHandler):
         path=urlparse(self.path).path
         if not self.access(path):return
         try:
-            if path in ('/api/orders','/api/auth/register') and not launch.isolated_test_workflow(DATABASE):
-                return self.respond(503,{'error':'Sprzedaż i rejestracja nowych kont zostaną uruchomione po skonfigurowaniu usług sklepu.','code':'store_prelaunch'})
+            if path == '/api/orders' and not launch.isolated_test_workflow(DATABASE):
+                return self.respond(503,{'error':'Sprzedaż online zostanie uruchomiona po skonfigurowaniu usług sklepu. Konto klienta możesz już założyć.','code':'store_prelaunch'})
             with connect() as c:
                 if auth.dispatch(self,path,c):return
+                if mail.dispatch(self,path,c):return
             data=self.body()
+            if path=='/api/admin/pos/sales':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    user=auth.require_user(self,'admin')
+                    result=ops.create_sale(c,data,user['id'])
+                    if not result['replayed']:mail.enqueue_order(c,result['id'])
+                return self.respond(200 if result['replayed'] else 201,result)
+            completion_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)/complete',path)
+            if completion_route:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    result=ops.complete(c,int(completion_route.group(1)),data,auth.require_user(self,'admin')['id'])
+                    mail.enqueue_order(c,result['id'],'order_status_changed')
+                return self.respond(200,result)
             if path=='/api/admin/home/media':
                 try:return self.respond(201,{'url':cms.write_media(data)})
                 except ValueError as ex:return self.error(ex)
@@ -457,6 +479,7 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute("INSERT INTO order_receipts(order_id,tracking_token,fulfillment,shipping_fee,subtotal,idempotency_key,fingerprint,customer_id) VALUES(?,?,?,?,?,?,?,?)",(cur.lastrowid,tracking,fulfillment,shipping,subtotal,key,fingerprint,owner))
                     c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(cur.lastrowid,now,"nowe"))
                     audit(c,"order",cur.lastrowid,"Utworzono zamówienie demonstracyjne")
+                    mail.enqueue_order(c,cur.lastrowid)
                 return self.respond(201,{"id":cur.lastrowid,"total":total,"tracking_token":tracking})
             if path=='/api/admin/products':
                 product=personalization.validate_product(data)
@@ -500,7 +523,7 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute("BEGIN IMMEDIATE")
                     o=c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone()
                     b=c.execute("SELECT * FROM dtf_batches WHERE id=?",(bid,)).fetchone()
-                    if not o or o["status"] in ("anulowane","wyslane_demo"):raise Invalid("Brak aktywnego zamówienia")
+                    if not o or o["status"] in ("anulowane","wyslane_demo","wydane","spakowane"):raise Invalid("Brak aktywnego zamówienia")
                     lines=json.loads(o["items"])
                     if idx<0 or idx>=len(lines) or not b:raise Invalid("Nieprawidłowa pozycja lub nadruk")
                     count=int(lines[idx].get("qty",1))
@@ -511,7 +534,7 @@ class Handler(BaseHTTPRequestHandler):
                     audit(c,"production",cur.lastrowid,f"Rezerwacja {count} transferów, zlecenie {oid}, poz. {idx+1}")
                     return self.respond(201,{"id":cur.lastrowid})
             return self.respond(404,{"error":"Nie znaleziono"})
-        except auth.AuthError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError,sqlite3.IntegrityError) as ex:
             return self.error(ex)
         except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
@@ -523,6 +546,13 @@ class Handler(BaseHTTPRequestHandler):
             with connect() as c:
                 if auth.dispatch(self,path,c):return
             data=self.body()
+            operation_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)',path)
+            if operation_route:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    result=ops.update_line(c,int(operation_route.group(1)),data,auth.require_user(self,'admin')['id'])
+                    mail.enqueue_order(c,result['id'],'order_status_changed')
+                return self.respond(200,result)
             if path=='/api/admin/home':
                 try:
                     with connect() as c:
@@ -594,8 +624,11 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute("BEGIN IMMEDIATE")
                     old=c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone()
                     if not old:raise Invalid("Nie istnieje takie zamówienie")
-                    if old["status"] in ("wyslane_demo","anulowane") and old["status"]!=status:raise Invalid("Zamówienie zostało już zamknięte")
+                    if old["status"] in ("wyslane_demo","anulowane","wydane") and old["status"]!=status:raise Invalid("Zamówienie zostało już zamknięte")
+                    if old['status']!=status and status in ('spakowane','wyslane_demo','wydane'):
+                        raise Invalid('Pakowanie i wydanie potwierdź w sekcji Realizacja po kontroli wszystkich sztuk')
                     if status=="anulowane" and old["status"]!="anulowane":
+                        if c.execute('SELECT 1 FROM fulfillment_lines WHERE order_id=? AND printed_qty>0',(oid,)).fetchone():raise Invalid('Nadruk wykonany — anulowanie wymaga obsługi ręcznej')
                         if c.execute("SELECT 1 FROM production_tasks WHERE order_id=? AND status NOT IN ('oczekuje')",(oid,)).fetchone():raise Invalid("Produkcja rozpoczęta — anulowanie wymaga obsługi ręcznej")
                         if c.execute("SELECT 1 FROM production_tasks WHERE order_id=?",(oid,)).fetchone():raise Invalid("Usuń lub rozlicz rezerwacje DTF przed anulowaniem")
                         for line in json.loads(old["items"]):
@@ -610,6 +643,7 @@ class Handler(BaseHTTPRequestHandler):
                         c.execute("UPDATE orders SET status=? WHERE id=?",(status,oid))
                         c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(oid,stamp(),status))
                         audit(c,"order",oid,"Status: "+status)
+                        mail.enqueue_order(c,oid,'order_status_changed')
                 return self.respond(200,{"ok":True,"status":status})
             if path.startswith("/api/admin/inventory/"):
                 vid=int(path.rsplit("/",1)[1]);delta=int(data.get("delta",0));reason=str(data.get("reason","")).strip()
@@ -637,15 +671,18 @@ class Handler(BaseHTTPRequestHandler):
                 tid=int(path.rsplit("/",1)[1]);status=data.get("status")
                 if status not in PRINT_STATUS:raise Invalid("Nieprawidłowy etap produkcji")
                 with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
                     old=c.execute("SELECT * FROM production_tasks WHERE id=?",(tid,)).fetchone()
                     if not old:raise Invalid("Nie znaleziono zlecenia")
+                    parent=c.execute('SELECT status FROM orders WHERE id=?',(old['order_id'],)).fetchone()
+                    if not parent or parent['status'] in ('anulowane','wyslane_demo','wydane','spakowane'):raise Invalid('Zamówienie nie jest aktywne')
                     if old["status"] in ("gotowe","odrzucone") and status!=old["status"]:raise Invalid("Zlecenie zakończone")
                     if old["status"]!=status:
                         c.execute("UPDATE production_tasks SET status=?,updated=? WHERE id=?",(status,stamp(),tid))
                         audit(c,"production",tid,"Etap: "+status)
                 return self.respond(200,{"ok":True})
             return self.respond(404,{"error":"Nie znaleziono"})
-        except auth.AuthError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError) as ex:return self.error(ex)
         except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
 

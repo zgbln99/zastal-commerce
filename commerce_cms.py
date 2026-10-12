@@ -49,6 +49,19 @@ FIELDS = {
               "second_title": "text", "second_text": "text", "third_title": "text", "third_text": "text"},
 }
 
+# Optional additions deliberately stay out of DEFAULT and stored old revisions.
+# Saving a legacy draft must not silently add fields or rewrite its first cover.
+HERO_OPTIONAL_FIELDS = {
+    "slides_enabled": "bool", "autoplay": "bool", "interval_ms": "interval",
+    "image_alt": "text", "image_role": "hero_image_role", "image_illustrative": "bool",
+}
+for _slide in (2, 3):
+    HERO_OPTIONAL_FIELDS.update({f"slide_{_slide}_{key}": format_ for key, format_ in {
+        "enabled": "bool", "eyebrow": "text", "title": "text", "description": "long",
+        "image": "image", "image_alt": "text", "image_role": "hero_image_role",
+        "image_illustrative": "bool", "cta_text": "text", "cta_url": "url",
+    }.items()})
+
 DEFAULT = {"version": 1, "sections": [
  {"id": "hero-main", "type": "hero", "enabled": True, "settings": {
     "eyebrow": "KLUBOWA KOLEKCJA", "title": "W barwach Zastalu.",
@@ -129,6 +142,14 @@ def valid_url(value):
 def valid_image(value):
     return valid_url(value) and (not value or value.startswith(("/assets/", "/api/store/media/")))
 
+def valid_hero_image(value):
+    # Validate the reference without demanding that archived assets exist locally.
+    # Checkout/testing hosts may serve media separately from the CMS process.
+    if not value:return True
+    if re.fullmatch(r"/api/store/media/[0-9a-f]{32}\.webp",value):return True
+    return bool(re.fullmatch(r"/assets/[A-Za-z0-9_./-]+",value)) and all(
+        part and part not in (".","..") for part in value[len("/assets/"):].split("/"))
+
 def validate(conf, conn=None):
     if not isinstance(conf,dict) or set(conf)!={"version","sections"} or conf["version"]!=1:
         raise ValueError("Nieprawidłowa wersja konfiguracji strony")
@@ -148,10 +169,13 @@ def validate(conf, conn=None):
         if kind not in SECTION_TYPES or type(section["enabled"]) is not bool:
             raise ValueError("Nieznany typ sekcji")
         data=section["settings"]
-        if not isinstance(data,dict) or set(data)!=set(FIELDS[kind]):
+        required=FIELDS[kind]
+        optional=HERO_OPTIONAL_FIELDS if kind=="hero" else {}
+        if not isinstance(data,dict) or not set(required)<=set(data) or not set(data)<=set(required)|set(optional):
             raise ValueError("Brakuje pól sekcji: "+kind)
         clean={}
-        for field,format_ in FIELDS[kind].items():
+        for field,format_ in {**required,**optional}.items():
+            if field not in data:continue
             value=data[field]
             if format_ in ("text","long"):
                 limit=250 if format_=="text" else 1300
@@ -163,6 +187,8 @@ def validate(conf, conn=None):
                 clean[field]=value
             elif format_=="image":
                 if not valid_image(value):raise ValueError("Obraz musi być wybrany z biblioteki mediów")
+                if kind=="hero" and not valid_hero_image(value):
+                    raise ValueError("Obraz musi być wybrany z biblioteki mediów")
                 clean[field]=value
             elif format_=="color":
                 if not isinstance(value,str) or not COLOR.fullmatch(value):
@@ -174,12 +200,16 @@ def validate(conf, conn=None):
             elif format_=="image_role":
                 if value not in ("model", "lifestyle"):raise ValueError("Wybierz zdjęcie modelowe lub lifestyle")
                 clean[field]=value
+            elif format_=="hero_image_role":
+                if value not in ("packshot", "model", "detail", "lifestyle"):
+                    raise ValueError("Nieprawidłowa rola zdjęcia slajdu")
+                clean[field]=value
             elif format_=="bool":
                 if type(value) is not bool:raise ValueError("Nieprawidłowy przełącznik")
                 clean[field]=value
-            elif format_ in ("height","overlay","columns","count","product"):
+            elif format_ in ("height","overlay","columns","count","product","interval"):
                 low,high={"height":(400,850),"overlay":(0,95),"columns":(2,4),
-                          "count":(1,12),"product":(1,999999)}[format_]
+                          "count":(1,12),"product":(1,999999),"interval":(3000,15000)}[format_]
                 if type(value) is not int or not low<=value<=high:
                     raise ValueError("Nieprawidłowa wartość pola: "+field)
                 clean[field]=value
@@ -194,6 +224,11 @@ def validate(conf, conn=None):
                 if not isinstance(value,str) or len(value)>140 or (value.strip() and not re.fullmatch(r"\d+(?:\s*,\s*\d+)*",value)):
                     raise ValueError("Wprowadź ID produktów oddzielone przecinkiem")
                 clean[field]=value
+        if kind=="hero":
+            for slide in (2,3):
+                prefix=f"slide_{slide}_"
+                if section["enabled"] and clean.get("slides_enabled",True) and clean.get(prefix+"enabled",True) and clean.get(prefix+"image") and not clean.get(prefix+"image_alt"):
+                    raise ValueError("Uzupełnij opis zdjęcia slajdu "+str(slide))
         if kind=="campaign":
             # Lazy import keeps the upload module independent of gallery storage.
             import commerce_media as media
