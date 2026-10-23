@@ -199,7 +199,7 @@ class Handler(BaseHTTPRequestHandler):
         self.response_headers=[]
         try:
             with connect() as c:auth.session(self,c)
-            if path.startswith('/api/admin/'):auth.require_user(self,'admin')
+            if path.startswith('/api/admin/'):auth.require_staff(self,auth.capability_for(self.command,path))
             elif path.startswith('/api/account/'):auth.require_user(self)
             if self.command in ('POST','PATCH'):
                 auth.check_origin(self)
@@ -221,6 +221,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             with connect() as c:
                 if auth.dispatch(self,path,c):return
+                if auth.staff_dispatch(self,path,c):return
                 if mail.dispatch(self,path,c):return
                 if path=='/api/admin/fulfillment':return self.respond(200,ops.queue(c))
                 operation_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)',path)
@@ -327,20 +328,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(503,{'error':'Sprzedaż online zostanie uruchomiona po skonfigurowaniu usług sklepu. Konto klienta możesz już założyć.','code':'store_prelaunch'})
             with connect() as c:
                 if auth.dispatch(self,path,c):return
+                if auth.staff_dispatch(self,path,c):return
                 if mail.dispatch(self,path,c):return
             data=self.body()
             if path=='/api/admin/pos/sales':
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
-                    user=auth.require_user(self,'admin')
-                    result=ops.create_sale(c,data,user['id'])
+                    result=ops.create_sale(c,data,self.request_user['id'])
                     if not result['replayed']:mail.enqueue_order(c,result['id'])
                 return self.respond(200 if result['replayed'] else 201,result)
             completion_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)/complete',path)
             if completion_route:
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
-                    result=ops.complete(c,int(completion_route.group(1)),data,auth.require_user(self,'admin')['id'])
+                    result=ops.complete(c,int(completion_route.group(1)),data,self.request_user['id'])
                     mail.enqueue_order(c,result['id'],'order_status_changed')
                 return self.respond(200,result)
             if path=='/api/admin/home/media':
@@ -545,12 +546,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             with connect() as c:
                 if auth.dispatch(self,path,c):return
+                if auth.staff_dispatch(self,path,c):return
             data=self.body()
             operation_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)',path)
             if operation_route:
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
-                    result=ops.update_line(c,int(operation_route.group(1)),data,auth.require_user(self,'admin')['id'])
+                    result=ops.update_line(c,int(operation_route.group(1)),data,self.request_user['id'])
                     mail.enqueue_order(c,result['id'],'order_status_changed')
                 return self.respond(200,result)
             if path=='/api/admin/home':

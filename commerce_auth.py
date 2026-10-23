@@ -10,7 +10,37 @@ from http.cookies import CookieError, SimpleCookie
 
 COOKIE = '__Host-zastal_session'
 SITE_ORIGIN = os.environ.get('ZASTAL_SITE_ORIGIN', 'https://zastalstore.51-15-21-164.sslip.io').rstrip('/')
-TTL = {None: 3600, 'customer': 7 * 86400, 'admin': 8 * 3600}
+STAFF_ROLES = ('admin', 'manager', 'warehouse', 'cashier', 'production', 'orders')
+ROLES = ('customer',) + STAFF_ROLES
+ROLE_LABELS = {'admin': 'Właściciel / administrator', 'manager': 'Menedżer sklepu', 'warehouse': 'Magazyn',
+               'cashier': 'Kasjer', 'production': 'Produkcja / nadruki', 'orders': 'Obsługa zamówień'}
+CAPABILITIES = ('cms', 'products', 'players', 'customers', 'orders', 'fulfillment', 'inventory', 'transfers',
+                'production', 'labels', 'pos', 'shifts', 'discounts', 'email', 'launch', 'staff', 'settings',
+                'returns', 'audit', 'pages')
+ROLE_CAPABILITIES = {
+    'admin': set(CAPABILITIES),
+    'manager': set(CAPABILITIES) - {'staff', 'launch'},
+    'warehouse': {'inventory', 'transfers', 'labels', 'fulfillment', 'audit'},
+    'cashier': {'pos', 'shifts', 'customers', 'labels'},
+    'production': {'production', 'transfers', 'fulfillment', 'labels'},
+    'orders': {'orders', 'fulfillment', 'customers', 'email', 'returns', 'labels'},
+}
+# Route prefix -> capability needed for writes; reads of shared operational data need any staff role.
+ROUTE_CAPABILITIES = (
+    ('/api/admin/home', 'cms', 'cms'), ('/api/admin/pages', 'pages', 'pages'),
+    ('/api/admin/launch', 'launch', 'launch'), ('/api/admin/staff', 'staff', 'staff'),
+    ('/api/admin/settings', 'settings', 'settings'),
+    ('/api/admin/pos', 'pos', 'pos'), ('/api/admin/shifts', 'shifts', 'shifts'),
+    ('/api/admin/fulfillment', 'fulfillment', 'fulfillment'), ('/api/admin/email', 'email', 'email'),
+    ('/api/admin/customers', 'customers', 'customers'), ('/api/admin/returns', 'returns', 'returns'),
+    ('/api/admin/activity', 'audit', 'audit'),
+    ('/api/admin/products', 'products', None), ('/api/admin/players', 'players', None),
+    ('/api/admin/orders', 'orders', None), ('/api/admin/inventory', 'inventory', None),
+    ('/api/admin/stock-events', None, None), ('/api/admin/transfers', 'transfers', None),
+    ('/api/admin/production', 'production', None),
+)
+TTL = {None: 3600, 'customer': 7 * 86400}
+TTL.update({role: 8 * 3600 for role in STAFF_ROLES})
 _limits = defaultdict(deque)
 _rate_lock = threading.Lock()
 _hash_slots = threading.BoundedSemaphore(2)
@@ -106,7 +136,40 @@ def public_user(row):
         return None
     result = {field: row[field] for field in ('id', 'identifier', 'name', 'role', 'created')}
     result['email_verified'] = bool(row['email_verified'])
+    if row['role'] in STAFF_ROLES:
+        result['capabilities'] = sorted(ROLE_CAPABILITIES[row['role']])
     return result
+
+
+def is_staff(user):
+    return bool(user) and user['role'] in STAFF_ROLES
+
+
+def capabilities(user):
+    return ROLE_CAPABILITIES.get(user['role'], set()) if user else set()
+
+
+def capability_for(method, path):
+    """Capability required by a staff route; None means any active staff account."""
+    for prefix, write, read in ROUTE_CAPABILITIES:
+        if path == prefix or path.startswith(prefix + '/'):
+            return write if method in ('POST', 'PATCH', 'PUT', 'DELETE') else read
+    return None
+
+
+def require_staff(handler, capability=None):
+    user = require_user(handler)
+    if not is_staff(user):
+        raise AuthError(403, 'To konto nie ma dostępu do tej części sklepu.', 'role_required')
+    if capability and capability not in capabilities(user):
+        raise AuthError(403, 'Twoja rola nie pozwala na tę operację.', 'capability_required')
+    return user
+
+
+def staff_identifier_value(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[a-z0-9][a-z0-9._@-]{2,63}', value.strip().casefold()):
+        raise AuthError(400, 'Login pracownika: 3–64 znaki (litery, cyfry, kropka, myślnik, @).')
+    return value.strip().casefold()
 
 
 def init_schema(c, bootstrap_secret):
@@ -125,9 +188,37 @@ def init_schema(c, bootstrap_secret):
     """)
     import commerce_email as email
     email.init_schema(c)
+    migrate_roles(c)
     if bootstrap_secret and not c.execute("SELECT 1 FROM users WHERE role='admin'").fetchone():
         c.execute("INSERT INTO users(identifier,name,role,password_hash,created,updated) VALUES('admin','Administrator','admin',?,datetime('now'),datetime('now'))",
                   (hash_password(bootstrap_secret),))
+
+
+def migrate_roles(c):
+    """Rebuild users once so the role CHECK accepts staff roles; data and ids are preserved."""
+    definition = c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").fetchone()
+    if not definition or "'manager'" in definition[0]:
+        return
+    columns = [row['name'] for row in c.execute('PRAGMA table_info(users)')]
+    names = ','.join(columns)
+    roles = ','.join("'" + role + "'" for role in ROLES)
+    c.executescript(f"""
+        PRAGMA foreign_keys=OFF;
+        BEGIN;
+        CREATE TABLE IF NOT EXISTS commerce_migrations(name TEXT PRIMARY KEY);
+        CREATE TABLE users_v2 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, identifier TEXT UNIQUE NOT NULL COLLATE NOCASE,
+            name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ({roles})),
+            password_hash TEXT NOT NULL, recovery_hash TEXT, active INTEGER NOT NULL DEFAULT 1,
+            created TEXT NOT NULL, updated TEXT NOT NULL,
+            email_verified INTEGER NOT NULL DEFAULT 0);
+        INSERT INTO users_v2({names}) SELECT {names} FROM users;
+        DROP TABLE users;
+        ALTER TABLE users_v2 RENAME TO users;
+        INSERT OR IGNORE INTO commerce_migrations(name) VALUES('staff-roles-2026-10-24');
+        COMMIT;
+        PRAGMA foreign_keys=ON;
+    """)
 
 
 def session(handler, c, create=False):
@@ -204,6 +295,77 @@ def begin_account_write(handler, c):
         raise AuthError(401, 'Sesja konta wygasła. Zaloguj się ponownie.', 'session_required')
     handler.request_user, handler.request_session = user, entry
     return user
+
+
+def staff_public(row):
+    return {'id': row['id'], 'identifier': row['identifier'], 'name': row['name'], 'role': row['role'],
+            'role_label': ROLE_LABELS.get(row['role'], row['role']), 'active': bool(row['active']),
+            'created': row['created'], 'capabilities': sorted(ROLE_CAPABILITIES.get(row['role'], set()))}
+
+
+def staff_dispatch(handler, path, c):
+    """Owner-only staff account management. Caller already enforced the 'staff' capability."""
+    if path != '/api/admin/staff' and not re.fullmatch(r'/api/admin/staff/[1-9][0-9]*', path):
+        return False
+    actor = require_staff(handler, 'staff')
+    if handler.command == 'GET' and path == '/api/admin/staff':
+        rows = c.execute("SELECT * FROM users WHERE role!='customer' ORDER BY id").fetchall()
+        handler.respond(200, {'staff': [staff_public(row) for row in rows],
+                              'roles': [{'id': role, 'label': ROLE_LABELS[role], 'capabilities': sorted(ROLE_CAPABILITIES[role])} for role in STAFF_ROLES]})
+        return True
+    if handler.command == 'POST' and path == '/api/admin/staff':
+        data = handler.body()
+        identifier = staff_identifier_value(data.get('identifier'))
+        name, role = name_value(data.get('name')), data.get('role')
+        if role not in STAFF_ROLES:
+            raise AuthError(400, 'Wybierz rolę pracownika.')
+        encoded = hash_password(password_value(data))
+        c.execute('BEGIN IMMEDIATE')
+        if c.execute('SELECT 1 FROM users WHERE identifier=?', (identifier,)).fetchone():
+            raise AuthError(409, 'Ten login jest już zajęty.')
+        cursor = c.execute("INSERT INTO users(identifier,name,role,password_hash,created,updated) VALUES(?,?,?,?,datetime('now'),datetime('now'))",
+                           (identifier, name, role, encoded))
+        c.execute('INSERT INTO audit_log(kind,object_id,note,created) VALUES(?,?,?,datetime(\'now\'))',
+                  ('staff', str(cursor.lastrowid), f'Administrator {actor["id"]}: utworzono konto {identifier} ({ROLE_LABELS[role]})'))
+        row = c.execute('SELECT * FROM users WHERE id=?', (cursor.lastrowid,)).fetchone()
+        c.commit()
+        handler.respond(201, staff_public(row))
+        return True
+    if handler.command == 'PATCH' and path != '/api/admin/staff':
+        data = handler.body()
+        target = int(path.rsplit('/', 1)[1])
+        if not any(key in data for key in ('name', 'role', 'active', 'password')):
+            raise AuthError(400, 'Podaj dane do zmiany.')
+        encoded = hash_password(password_value(data)) if 'password' in data else None
+        c.execute('BEGIN IMMEDIATE')
+        row = c.execute("SELECT * FROM users WHERE id=? AND role!='customer'", (target,)).fetchone()
+        if not row:
+            raise AuthError(404, 'Nie znaleziono konta pracownika.')
+        name = name_value(data['name']) if 'name' in data else row['name']
+        role = data.get('role', row['role'])
+        if role not in STAFF_ROLES:
+            raise AuthError(400, 'Wybierz rolę pracownika.')
+        active = data.get('active', bool(row['active']))
+        if not isinstance(active, bool):
+            raise AuthError(400, 'Status konta musi być wartością logiczną.')
+        if target == actor['id'] and (not active or role != 'admin'):
+            raise AuthError(409, 'Nie możesz zablokować ani zdegradować własnego konta.')
+        if row['role'] == 'admin' and (role != 'admin' or not active) and not c.execute(
+                "SELECT 1 FROM users WHERE role='admin' AND active=1 AND id!=?", (target,)).fetchone():
+            raise AuthError(409, 'Sklep musi mieć co najmniej jedno aktywne konto administratora.')
+        c.execute("UPDATE users SET name=?,role=?,active=?,updated=datetime('now') WHERE id=?", (name, role, int(active), target))
+        if encoded:
+            c.execute("UPDATE users SET password_hash=?,recovery_hash=NULL WHERE id=?", (encoded, target))
+        if not active or encoded or role != row['role']:
+            c.execute('DELETE FROM auth_sessions WHERE user_id=?', (target,))
+        changes = ', '.join(key for key in ('name', 'role', 'active', 'password') if key in data)
+        c.execute('INSERT INTO audit_log(kind,object_id,note,created) VALUES(?,?,?,datetime(\'now\'))',
+                  ('staff', str(target), f'Administrator {actor["id"]}: zmieniono konto {row["identifier"]}: {changes}'))
+        updated = c.execute('SELECT * FROM users WHERE id=?', (target,)).fetchone()
+        c.commit()
+        handler.respond(200, staff_public(updated))
+        return True
+    raise AuthError(405, 'Niedozwolona metoda.')
 
 
 def dispatch(handler, path, c):

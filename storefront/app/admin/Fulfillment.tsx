@@ -2,7 +2,7 @@
 
 import {useEffect,useRef,useState} from 'react';
 import {CheckCircle2,ClipboardCheck,Package,Printer,RefreshCw,ScanLine,Search} from 'lucide-react';
-import {ApiError,useAuth} from '../../components/AuthProvider';
+import {ApiError,useAuth,can} from '../../components/AuthProvider';
 import {useStore} from '../../components/StoreProvider';
 import {formatDate,formatMoney,isClosedOrder,orderNumber,StatusBadge} from './Operations';
 import {fulfillmentScanCode} from './fulfillment-state.mjs';
@@ -19,7 +19,7 @@ export default function Fulfillment({onSaved}:{onSaved:()=>Promise<boolean>}) {
   const [queue,setQueue]=useState<WorkOrder[]>([]),[detail,setDetail]=useState<WorkOrder|null>(null),[selectedLine,setSelectedLine]=useState<number|null>(null);
   const [loading,setLoading]=useState(true),[detailLoading,setDetailLoading]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[query,setQuery]=useState(''),[scan,setScan]=useState(''),[scanAction,setScanAction]=useState<Action>('pick'),[denied,setDenied]=useState(false);
   const lifetime=useRef(0),queueToken=useRef(0),detailToken=useRef(0),busyRef=useRef(false),current=useRef<WorkOrder|null>(null),selection=useRef<number|null>(null),selectedId=useRef<number|null>(null);
-  const identity=auth.user?.role==='admin'?auth.user.id:null;
+  const identity=can(auth.user,'fulfillment')?auth.user!.id:null;
   const rejectAuth=(e:unknown)=>{if(e instanceof ApiError&&(e.status===401||e.status===403)&&e.code!=='csrf_invalid'){setDenied(true);setQueue([]);setDetail(null);current.current=null;void auth.refresh().catch(()=>{});return true;}return false;};
   const loadQueue=async()=>{
     const session=lifetime.current,token=++queueToken.current;setLoading(true);

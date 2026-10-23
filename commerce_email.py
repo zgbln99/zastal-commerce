@@ -177,7 +177,7 @@ def dispatch(handler, path, c):
     if path not in paths:
         return False
     if path.startswith('/api/admin/'):
-        auth.require_user(handler, 'admin')
+        auth.require_staff(handler, 'email')
     if path.startswith('/api/account/'):
         auth.require_user(handler, 'customer')
     if handler.command != paths[path]:

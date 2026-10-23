@@ -2,7 +2,7 @@
 
 import {useEffect,useRef,useState} from 'react';
 import {CheckCircle2,Mail,RefreshCw} from 'lucide-react';
-import {ApiError,useAuth} from '../../components/AuthProvider';
+import {ApiError,useAuth,can} from '../../components/AuthProvider';
 import {formatDate} from './Operations';
 import './pos.css';
 
@@ -17,7 +17,7 @@ export default function EmailCenter() {
   const auth=useAuth();
   const [data,setData]=useState<MailStatus|null>(null),[loading,setLoading]=useState(true),[busyId,setBusyId]=useState<number|null>(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[denied,setDenied]=useState(false);
   const lifetime=useRef(0),token=useRef(0),busy=useRef(false);
-  const identity=auth.user?.role==='admin'?auth.user.id:null;
+  const identity=can(auth.user,'email')?auth.user!.id:null;
   const rejectAuth=(e:unknown)=>{if(e instanceof ApiError&&(e.status===401||e.status===403)&&e.code!=='csrf_invalid'){setData(null);setDenied(true);void auth.refresh().catch(()=>{});}};
   const load=async()=>{
     const session=lifetime.current,id=++token.current;setLoading(true);

@@ -9,7 +9,7 @@ import "./operations.css";
 import type {OrderPrint} from "../../lib/commerce.mjs";
 import {ApiError,type ApiRequest} from "../../components/AuthProvider";
 
-export type OperationsTab = "dashboard" | "orders" | "inventory" | "transfers" | "production" | "labels" | "audit" | "products" | "customers" | "account" | "players" | "launch" | "inventory_import" | "homepage" | "pos" | "fulfillment" | "email";
+export type OperationsTab = "dashboard" | "orders" | "inventory" | "transfers" | "production" | "labels" | "audit" | "products" | "customers" | "account" | "players" | "launch" | "inventory_import" | "homepage" | "pos" | "fulfillment" | "email" | "staff";
 export type Variant = {id:number; product_id:number; size:string; sku:string; ean:string; stock:number; name:string; category:string; price:number};
 export type Batch = {id:number; design:string; supplier:string; reference:string; ordered:number; received:number; available:number; cost_unit:number; created:string};
 export type Order = {id:number; created:string; items:string; total:number; status:string; fulfillment?:string; shipping_fee?:number; subtotal?:number;customer?:{id:number;identifier:string;name:string}};
@@ -38,11 +38,13 @@ export async function adminRequest<T>(request:ApiRequest,path:string,method="GET
   try{return await request<T>("/api/admin/"+path,{method,...(body!==undefined?{body:JSON.stringify(body)}:{})});}
   catch(e){throw new AdminApiError(e instanceof Error?e.message:"Nie udało się wykonać operacji.",e instanceof ApiError?e.status:0);}
 }
-export async function loadOperationsData(request:ApiRequest):Promise<OperationsData> {
+export async function loadOperationsData(request:ApiRequest, capabilities:string[] = []):Promise<OperationsData> {
+  // Routes a role cannot read are skipped instead of failing the whole dashboard.
+  const optional = async <T,>(path:string, allowed:boolean):Promise<T[]> => allowed ? adminRequest<T[]>(request, path) : [];
   const [orders, inventory, batches, tasks, activity, movements] = await Promise.all([
     adminRequest<Order[]>(request, "orders"), adminRequest<Variant[]>(request, "inventory"),
     adminRequest<Batch[]>(request, "transfers"), adminRequest<Task[]>(request, "production"),
-    adminRequest<ActivityEvent[]>(request, "activity"), adminRequest<Movement[]>(request, "stock-events"),
+    optional<ActivityEvent>("activity", capabilities.includes("audit")), adminRequest<Movement[]>(request, "stock-events"),
   ]);
   if (![orders, inventory, batches, tasks, activity, movements].every(Array.isArray)) throw new AdminApiError("Serwer zwrócił nieprawidłowe dane panelu.", 200);
   return {orders, inventory, batches, tasks, activity, movements};

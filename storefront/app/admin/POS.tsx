@@ -2,7 +2,7 @@
 
 import {useEffect,useRef,useState} from 'react';
 import {CheckCircle2,LockKeyhole,Plus,Printer,RefreshCw,ScanLine,Search,ShoppingBag,Trash2} from 'lucide-react';
-import {useAuth,ApiError} from '../../components/AuthProvider';
+import {useAuth,ApiError,can} from '../../components/AuthProvider';
 import {useStore} from '../../components/StoreProvider';
 import PersonalizationControls,{type PrintSelection} from '../../components/PersonalizationControls';
 import {ProductImage} from '../../components/ProductCard';
@@ -26,7 +26,7 @@ export default function POS({onSaved}:{onSaved:()=>Promise<boolean>}) {
   const [pending,setPending]=useState<SaleAttempt|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[receipt,setReceipt]=useState<Sale|null>(null);
   const [ready,setReady]=useState(false),[storageBlocked,setStorageBlocked]=useState(false),[denied,setDenied]=useState(false);
   const pendingRef=useRef<SaleAttempt|null>(null),busyRef=useRef(false),generation=useRef(0);
-  const identity=auth.user?.role==='admin'?auth.user.id:null;
+  const identity=can(auth.user,'pos')?auth.user!.id:null;
   const storageKey=identity===null?'':`zastal_pos_pending_v1_admin_${identity}`;
   const selected=store.products.find(p=>p.id===selectedId);
   const locked=!!pending||busy||!ready||storageBlocked;
