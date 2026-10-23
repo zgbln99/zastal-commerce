@@ -38,6 +38,9 @@ try {
   const page = await mobile.newPage();
   await page.goto(WEB + '/', { waitUntil: 'networkidle' });
   await shot(page, '01-home-390');
+  await page.goto(WEB + '/produkt/9', { waitUntil: 'networkidle' });
+  step('mobile: preorder product shows note and size guide', (await page.locator('.product-preorder-note').count()) === 1 && (await page.locator('.product-size-guide').count()) === 1);
+  await shot(page, '02a-product-preorder-390');
   await page.goto(WEB + '/produkt/3', { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'M', exact: true }).click();
   await shot(page, '02-product-390');
@@ -88,6 +91,9 @@ try {
   await d.getByRole('button', { name: 'Własny nadruk' }).click();
   await d.fill('input[placeholder="np. KOWALSKI"]', 'Kibic');
   await d.fill('input[placeholder="0–99"]', '7');
+  await d.waitForSelector('.print-preview-photo img');
+  const previewText = await d.locator('.print-preview-photo svg').innerHTML();
+  step('desktop: print preview renders name and number on the product photo', previewText.includes('KIBIC') && previewText.includes('>7<'));
   await shot(d, '08-product-personalized-1440');
   await d.getByRole('button', { name: 'Dodaj do koszyka' }).click();
   await d.waitForSelector('.cart-modal');
@@ -146,6 +152,13 @@ try {
   const expected = [created.id, payuOrder.id].map(id => `ZS-${String(id).padStart(5, '0')}`);
   step('admin: paid orders are in the fulfillment queue', expected.every(number => queuedText.includes(number)), expected.join(', '));
   await shot(d, '15-admin-fulfillment-1440');
+  await d.locator('.admin-navitem', { hasText: 'Produkty' }).first().click();
+  await d.waitForSelector('.admin-product-table tbody tr');
+  await d.locator('.admin-product-table tbody tr', { hasText: 'Bluza Zastal Logo' }).getByRole('button', { name: 'Edytuj' }).click();
+  await d.waitForSelector('.admin-print-layout-stage .print-preview-stage img');
+  step('admin: product editor shows the draggable print layout', (await d.locator('.admin-print-layout-stage rect').count()) === 2);
+  await shot(d, '16a-admin-product-layout-1440');
+  await d.keyboard.press('Escape');
   await d.locator('.admin-navitem', { hasText: 'Pracownicy' }).first().click();
   await d.waitForSelector('.admin-roles-grid');
   await shot(d, '16-admin-staff-1440');

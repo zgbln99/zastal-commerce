@@ -33,9 +33,11 @@ def seed(api, sales, auth):
             c.execute('INSERT INTO products(id,name,sku,category,price,stock) VALUES(?,?,?,?,?,?)', row)
     api.init()
     with api.connect() as c:
-        c.execute("INSERT INTO product_options(product_id,image,subtitle,personalization_enabled,personalization_required,personalization_fee) VALUES(1,'/assets/photos/product-1.webp','Klasyczna bluza z kapturem • zieleń',1,0,2500)")
+        layout = json.dumps({'image': '/assets/photos/product-1.webp', 'areas': {'name': {'x': 30, 'y': 22, 'w': 40, 'h': 5}, 'number': {'x': 34, 'y': 30, 'w': 32, 'h': 18}}, 'color': '#ffffff', 'font': 'block', 'calibrated': False, 'note': ''})
+        c.execute("INSERT INTO product_options(product_id,image,subtitle,personalization_enabled,personalization_required,personalization_fee,decoration_method,print_layout) VALUES(1,'/assets/photos/product-1.webp','Klasyczna bluza z kapturem • zieleń',1,0,2500,'dtf',?)", (layout,))
         for pid in range(2, 13):
             c.execute('INSERT INTO product_options(product_id,image,subtitle) VALUES(?,?,?)', (pid, f'/assets/photos/product-{pid}.webp', 'Kolekcja klubowa'))
+        c.execute("UPDATE product_options SET preorder=1,preorder_note='Wysyłka od 20 listopada',preorder_until='2026-11-20',size_guide='116: dł. 44 cm\n128: dł. 48 cm\n140: dł. 52 cm' WHERE product_id=9")
         for key, value in {'seller_name': 'Zastal Zielona Góra S.A.', 'tax_id': '5260250995', 'business_address': 'ul. Sulechowska 41, 65-119 Zielona Góra',
                            'support_email': 'sklep@example.test', 'support_phone': '68 000 00 00', 'returns_address': 'ul. Sulechowska 41, 65-119 Zielona Góra',
                            'terms_url': 'https://store.example.test/regulamin', 'privacy_url': 'https://store.example.test/prywatnosc',
@@ -82,7 +84,7 @@ def main():
     server = api.ThreadingHTTPServer(('127.0.0.1', api_port), api.Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     web = subprocess.Popen(['npx', 'next', 'start', '-H', '127.0.0.1', '-p', str(web_port)], cwd=ROOT / 'storefront', env={**env, 'ZASTAL_CMS_API': f'http://127.0.0.1:{api_port}'},
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     time.sleep(3)
     print(json.dumps({'folder': folder, 'api': f'http://127.0.0.1:{api_port}', 'web': web_origin, 'admin_password': ADMIN_PASSWORD, 'staff_password': STAFF_PASSWORD,
                       'payu_second_key': env['ZASTAL_PAYU_SECOND_KEY'], 'pid': os.getpid(), 'web_pid': web.pid}), flush=True)
@@ -93,7 +95,10 @@ def main():
         while not stop.is_set() and web.poll() is None:
             time.sleep(0.5)
     finally:
-        web.terminate()
+        try:
+            os.killpg(web.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
         server.shutdown()
 
 

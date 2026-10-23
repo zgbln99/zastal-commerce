@@ -25,6 +25,7 @@ export default function ProductCard({ product, eager = false }: { product: Produ
     <div className="product-image-wrap">
       <Link href={"/produkt/" + product.id} className="product-image-link" aria-label={product.name}><ProductImage product={product} media={current} eager={eager}/></Link>
       {product.id === 2 && <span className="product-badge">Retro</span>}
+      {product.preorder && <span className="product-badge preorder">Przedsprzedaż</span>}
       {product.verified && !available && <span className="product-badge">Wyprzedane</span>}
       <button className={"favorite-button " + (liked ? "is-favorite" : "")} onClick={() => store.favorite(product.id)} aria-label={(liked ? "Usuń z ulubionych: " : "Dodaj do ulubionych: ") + product.name} aria-pressed={liked} disabled={!store.hydrated}><Heart size={18} fill={liked ? "currentColor" : "none"}/></button>
       <button className="card-quick" onClick={() => needsSelection ? store.setQuickId(product.id) : store.add(product.id, "UNI")} disabled={store.status !== "ready" || !product.verified || !available}><Plus size={16}/> {product.personalization_enabled ? "Wybierz nadruk" : product.sizes ? "Wybierz rozmiar" : "Dodaj do koszyka"}</button>

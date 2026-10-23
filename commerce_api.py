@@ -347,6 +347,8 @@ class Handler(BaseHTTPRequestHandler):
                         line=json.loads(task.pop('order_items'))[task['line_index']]
                         task.update(product_name=line.get('name','Produkt'),size=line.get('size') or 'UNI',qty=line.get('qty',1))
                         if line.get('personalization') is not None:task['personalization']=line['personalization']
+                        for key_ in ('decoration_method','print_layout','preorder'):
+                            if line.get(key_) is not None:task[key_]=line[key_]
                         tasks.append(task)
                     return self.respond(200,tasks)
                 if path=="/api/admin/activity":
@@ -545,6 +547,9 @@ class Handler(BaseHTTPRequestHandler):
                         item={"sku":p["sku"],"variant_sku":v["sku"],"ean":v["ean"],"name":p["name"],"size":size,"qty":qty,
                               "base_unit_price":p['price'],"personalization_fee":fee,"unit_price":unit_price}
                         if printed is not None:item['personalization']=printed
+                        extras=personalization.line_extras(c,pid)
+                        if printed is not None:item.update({key_:extras[key_] for key_ in ('decoration_method','print_layout') if key_ in extras})
+                        if 'preorder' in extras:item['preorder']=extras['preorder']
                         result.append(item)
                     now=stamp()
                     subtotal=total

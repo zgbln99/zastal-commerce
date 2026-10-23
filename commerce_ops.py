@@ -135,6 +135,11 @@ def create_sale(c, data, actor_id):
                 'personalization_fee': fee, 'unit_price': unit_price}
         if printed is not None:
             item['personalization'] = printed
+        extras = personalization.line_extras(c, pid)
+        if printed is not None:
+            item.update({key: extras[key] for key in ('decoration_method', 'print_layout') if key in extras})
+        if 'preorder' in extras:
+            item['preorder'] = extras['preorder']
         result.append(item)
         total += unit_price * qty
         c.execute('UPDATE product_variants SET stock=stock-? WHERE id=?', (qty, variant['id']))

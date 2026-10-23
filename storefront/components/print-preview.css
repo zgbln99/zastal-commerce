@@ -1,0 +1,4 @@
+.print-preview-stage{position:relative;width:100%;background:#f2f4f1;border-radius:4px;overflow:hidden;user-select:none}
+.print-preview-stage img{display:block;width:100%;height:auto}
+.print-preview-stage svg{position:absolute;inset:0;width:100%;height:100%}
+.print-preview-stage.editable{touch-action:none;cursor:default}

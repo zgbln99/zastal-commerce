@@ -150,3 +150,10 @@
 
 .admin-product-upload{display:flex;flex-direction:column;gap:8px;border:1px dashed #b7d2be;background:#f4f9f3;color:#1e6441;font-size:11px;font-weight:750;padding:17px;cursor:pointer}.admin-product-upload input{font-size:11px;color:#5e826a}.admin-product-image-preview{display:flex;align-items:center;gap:18px;background:#f4f7f2;padding:12px;font-size:10px;color:#69816c}.admin-product-image-preview img{width:115px;height:98px;object-fit:contain;background:#e9eee8}
 .admin-roles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}.admin-roles-grid article{border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;display:grid;gap:6px;background:#fff}.admin-roles-grid strong{font-size:14px}.admin-roles-grid small{color:var(--muted);line-height:1.6}
+
+.admin-print-layout{border:1px solid var(--line);border-radius:4px;padding:14px 16px;margin:12px 0;display:grid;gap:10px}.admin-print-layout legend{font-weight:600;padding:0 6px}.admin-print-layout p{margin:0;font-size:13px;color:var(--muted)}
+.admin-print-layout-grid{display:grid;grid-template-columns:minmax(220px,1fr) minmax(240px,1fr);gap:18px}.admin-print-layout-stage{display:grid;gap:8px}.admin-print-layout-stage small{color:var(--muted);font-size:12px}
+.admin-print-layout-fields{display:grid;gap:10px}.admin-print-layout-fields label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500}.admin-print-layout-fields input,.admin-print-layout-fields select{border:1px solid #cdd3cf;border-radius:4px;min-height:40px;padding:6px 10px;font:inherit}.admin-print-layout-fields input[type=color]{padding:2px;height:40px}
+.admin-print-area{display:grid;gap:6px;padding:8px 10px;border:1px dashed var(--line);border-radius:4px}.admin-print-area-inputs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.admin-print-area-inputs label span{font-size:11px;color:var(--muted)}
+.admin-print-options textarea{width:100%;border:1px solid #cdd3cf;border-radius:4px;padding:8px 10px;font:inherit;font-size:13px}
+@media (max-width:760px){.admin-print-layout-grid{grid-template-columns:1fr}}

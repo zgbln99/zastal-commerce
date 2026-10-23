@@ -107,6 +107,20 @@ function validProductPrint(line, product) {
   const print = normalizePersonalization(line.personalization);
   return print !== null && (!print || product.personalization_enabled === true) && (!product.personalization_required || !!print);
 }
+export const DECORATION_LABELS = Object.freeze({ dtf: 'Transfer DTF', haft: 'Haft', haft_3d: 'Haft wypukły (3D)', sitodruk: 'Sitodruk', inne: 'Inna metoda' });
+export function normalizePrintLayout(value) {
+  if (!value || typeof value !== 'object' || !safeImageUrl(value.image, true) || !value.areas || typeof value.areas !== 'object') return null;
+  const areas = {};
+  for (const key of ['name', 'number']) {
+    const box = value.areas[key];
+    if (!box || typeof box !== 'object') continue;
+    const numbers = ['x', 'y', 'w', 'h'].map(axis => Number(box[axis]));
+    if (numbers.some(n => !Number.isFinite(n) || n < 0 || n > 100) || numbers[0] + numbers[2] > 100 || numbers[1] + numbers[3] > 100 || numbers[2] < 2 || numbers[3] < 1) return null;
+    areas[key] = { x: numbers[0], y: numbers[1], w: numbers[2], h: numbers[3] };
+  }
+  if (!Object.keys(areas).length) return null;
+  return { image: value.image, areas, color: typeof value.color === 'string' && /^#[0-9a-f]{6}$/i.test(value.color) ? value.color.toLowerCase() : '#ffffff', font: ['block', 'condensed', 'rounded'].includes(value.font) ? value.font : 'block', calibrated: value.calibrated === true, note: typeof value.note === 'string' ? value.note.slice(0, 200) : '' };
+}
 export function mergeCatalog(rows, fallback = []) {
   if (!Array.isArray(rows)) return [];
   return rows.filter(row => row && Number.isSafeInteger(row.id) && row.id > 0).map(row => {
@@ -118,7 +132,7 @@ export function mergeCatalog(rows, fallback = []) {
     const fallbackImage = safeImageUrl(row.image, true) ? row.image : safeImageUrl(old.image, true) ? old.image : '/assets/product-unavailable.svg';
     const images = productImages({ ...row, image: fallbackImage });
     const image = images[0]?.url || fallbackImage;
-    return { ...old, ...row, name: row.name || old.name || 'Produkt', sku: row.sku || old.sku || '', category: row.category || old.category || 'Akcesoria', subtitle: typeof row.subtitle === 'string' ? row.subtitle : old.subtitle || '', image, images, gallery_revision: Number.isSafeInteger(row.gallery_revision) && row.gallery_revision >= 0 ? row.gallery_revision : 0, ...(sizes.length && !(sizes.length === 1 && sizes[0] === 'UNI') ? { sizes } : { sizes: undefined }), price: valid ? row.price : old.price || 0, variants, stock: variants.reduce((sum, v) => sum + v.stock, 0), verified: valid, personalization_enabled: row.personalization_enabled === true, personalization_required: row.personalization_enabled === true && row.personalization_required === true, personalization_fee: Number.isSafeInteger(row.personalization_fee) && row.personalization_fee >= 0 ? row.personalization_fee : 0 };
+    return { ...old, ...row, name: row.name || old.name || 'Produkt', sku: row.sku || old.sku || '', category: row.category || old.category || 'Akcesoria', subtitle: typeof row.subtitle === 'string' ? row.subtitle : old.subtitle || '', image, images, gallery_revision: Number.isSafeInteger(row.gallery_revision) && row.gallery_revision >= 0 ? row.gallery_revision : 0, ...(sizes.length && !(sizes.length === 1 && sizes[0] === 'UNI') ? { sizes } : { sizes: undefined }), price: valid ? row.price : old.price || 0, variants, stock: variants.reduce((sum, v) => sum + v.stock, 0), verified: valid, personalization_enabled: row.personalization_enabled === true, personalization_required: row.personalization_enabled === true && row.personalization_required === true, personalization_fee: Number.isSafeInteger(row.personalization_fee) && row.personalization_fee >= 0 ? row.personalization_fee : 0, decoration_method: Object.hasOwn(DECORATION_LABELS, row.decoration_method) ? row.decoration_method : 'dtf', decoration_method_label: DECORATION_LABELS[Object.hasOwn(DECORATION_LABELS, row.decoration_method) ? row.decoration_method : 'dtf'], preorder: row.preorder === true, preorder_note: typeof row.preorder_note === 'string' ? row.preorder_note.slice(0, 200) : '', preorder_until: typeof row.preorder_until === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.preorder_until) ? row.preorder_until : '', size_guide: typeof row.size_guide === 'string' ? row.size_guide.slice(0, 2000) : '', print_layout: normalizePrintLayout(row.print_layout) };
   });
 }
 export function normalizeFavorites(raw, products) {
