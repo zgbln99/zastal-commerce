@@ -24,19 +24,18 @@ import commerce_cms as cms
 import commerce_media as media
 import commerce_ops as ops
 import commerce_email as mail
+import commerce_sales as sales
+import commerce_payments as payments
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
 TOKEN = os.environ.get("ZASTAL_ADMIN_TOKEN", "")
-VALID_STATUS = (
-    "nowe", "potwierdzone", "do_kompletacji", "nanoszenie_dtf",
-    "kontrola_jakosci", "spakowane", "wyslane_demo", "anulowane", "wydane",
-)
+VALID_STATUS = sales.STATUSES
+# Transitions owned by dedicated workflows (fulfillment, payments, shipments, returns).
+WORKFLOW_STATUS = ("spakowane", "wyslane_demo", "wydane", "wyslane", "oplacone", "zwrot")
 PRINT_STATUS = ("oczekuje", "przygotowanie", "nanoszenie", "kontrola", "gotowe", "odrzucone")
 LIMITS = defaultdict(deque)
 RATE_LOCK = threading.Lock()
-SHIPPING = {"odbior": 0, "paczkomat": 1299, "kurier": 1499}
-FREE_SHIPPING = 25000
 
 def stamp():
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
@@ -104,6 +103,8 @@ def init():
         cms.init_schema(c)
         media.init_schema(c)
         ops.init_schema(c)
+        sales.init_schema(c)
+        payments.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -148,13 +149,37 @@ def catalog(c):
 
 class Invalid(Exception): pass
 
+def readiness(c):
+    return sales.readiness(c,mail.configuration()['configured'],payments.ready())
+
 def order_detail(c,receipt):
     o=asdict(c.execute('SELECT * FROM orders WHERE id=?',(receipt['order_id'],)).fetchone())
     o['items']=json.loads(o['items'])
     o.update({key:receipt[key] for key in ('fulfillment','shipping_fee','subtotal')})
     o['events']=[dict(x) for x in c.execute('SELECT created,status FROM events WHERE order_id=? ORDER BY id',(o['id'],))]
-    o['demo']=True
+    detail=sales.details(c,o['id'])
+    o['details']=sales.public_details(detail)
+    o['demo']=not detail or detail['mode']!='live'
+    o['status_label']=sales.STATUS_LABELS.get(o['status'],o['status'])
+    if detail and detail['payment_method']=='transfer' and detail['payment_status']!='paid':
+        o['transfer']=sales.transfer_instructions(c,o['id'],o['total'])
+    if detail and detail['payment_method']=='payu':
+        o['payment']=payments.public_payment(c,o['id'])
     return o
+
+def checkout_reply(c,oid,total,token):
+    reply={"id":oid,"total":total,"tracking_token":token}
+    order=c.execute('SELECT status FROM orders WHERE id=?',(oid,)).fetchone()
+    detail=sales.details(c,oid)
+    reply['status']=order['status'] if order else 'nowe'
+    reply['mode']=detail['mode'] if detail else 'test'
+    if detail and detail['payment_method']=='payu':
+        reply['payment']={'method':'payu',**payments.public_payment(c,oid)}
+    elif detail:
+        reply['payment']={'method':detail['payment_method'],'status':detail['payment_status']}
+    if detail and detail['payment_method']=='transfer':
+        reply['transfer']=sales.transfer_instructions(c,oid,total)
+    return reply
 
 def account_orders(c,uid):
     return [order_detail(c,r) for r in c.execute('SELECT * FROM order_receipts WHERE customer_id=? ORDER BY order_id DESC',(uid,))]
@@ -186,11 +211,17 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(value)
 
-    def body(self):
+    def raw_body(self,limit=35000):
         length=int(self.headers.get("Content-Length","0"))
-        if length<1 or length>(1_900_000 if self.path=="/api/admin/home/media" else 35000):raise Invalid("Nieprawidłowy rozmiar żądania")
+        if length<1 or length>limit:raise Invalid("Nieprawidłowy rozmiar żądania")
+        return self.rfile.read(length)
+
+    def client_ip(self):
+        return self.headers.get("X-Real-IP") or self.client_address[0]
+
+    def body(self):
         try:
-            data=json.loads(self.rfile.read(length))
+            data=json.loads(self.raw_body(1_900_000 if self.path=="/api/admin/home/media" else 35000))
             if not isinstance(data,dict):raise Invalid("Oczekiwano obiektu")
             return data
         except (ValueError,UnicodeError):raise Invalid("Nieprawidłowy JSON")
@@ -214,7 +245,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path=urlparse(self.path).path
-        if path=="/health":return self.respond(200,{"ok":True,"version":"0.10","sales_phase":"prelaunch","accounts":True,"cms":True,"pos":True,"email":True})
+        if path=="/health":
+            try:
+                with connect() as c:phase=readiness(c)['mode']
+            except sqlite3.Error:return self.respond(503,{"ok":False,"error":"database"})
+            return self.respond(200,{"ok":True,"version":"0.11","sales_phase":phase,"accounts":True,"cms":True,"pos":True,"email":True,"payments":payments.configuration()['configured']})
         if path.startswith("/api/store/media/"):
             data=cms.load_media(path.rsplit("/",1)[-1]);return self.respond(200,data,"image/webp") if data is not None else self.respond(404,{"error":"Nie znaleziono zdjęcia"})
         if not self.access(path):return
@@ -226,12 +261,21 @@ class Handler(BaseHTTPRequestHandler):
                 if path=='/api/admin/fulfillment':return self.respond(200,ops.queue(c))
                 operation_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)',path)
                 if operation_route:return self.respond(200,ops.detail(c,int(operation_route.group(1))))
-                if path=='/api/store/status':return self.respond(200,launch.snapshot(c,public=True))
+                if path=='/api/store/status':
+                    state=readiness(c)
+                    return self.respond(200,{**launch.snapshot(c,public=True,readiness=state),'config':sales.public_config(c,mail.configuration()['configured'],payments.ready(),state['mode'])})
+                if path=='/api/admin/settings':
+                    state=readiness(c)
+                    config=payments.configuration()
+                    return self.respond(200,{'settings':sales.settings(c),'shipping_methods':sales.shipping_methods(c),'readiness':state,
+                        'payu':{'configured':config['configured'],'environment':config['environment'],'pos_id':config['pos_id'],'missing':config['missing']},
+                        'email':mail.configuration()['configured']})
+                if path=='/api/admin/shipping':return self.respond(200,sales.shipping_methods(c))
                 if path=='/api/store/home':return self.respond(200,cms.get(c))
                 if path=='/api/admin/home':return self.respond(200,cms.get(c,admin=True))
                 if path=='/api/admin/home/revisions':return self.respond(200,cms.history(c))
                 if path=='/api/admin/home/media':return self.respond(200,cms.list_media())
-                if path=='/api/admin/launch':return self.respond(200,launch.snapshot(c))
+                if path=='/api/admin/launch':return self.respond(200,launch.snapshot(c,readiness=readiness(c)))
                 if path=='/api/account/orders':
                     auth.require_user(self,'customer')
                     return self.respond(200,account_orders(c,self.request_user['id']))
@@ -264,14 +308,10 @@ class Handler(BaseHTTPRequestHandler):
                     receipt=c.execute("SELECT * FROM order_receipts WHERE order_id=?",(oid,)).fetchone()
                     if not receipt or not secrets.compare_digest(receipt["tracking_token"],token):
                         return self.respond(404,{"error":"Nie znaleziono zamówienia"})
-                    o=asdict(c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone())
-                    o["items"]=json.loads(o["items"])
-                    o.update({key:receipt[key] for key in ("fulfillment","shipping_fee","subtotal")})
-                    o["events"]=[dict(x) for x in c.execute("SELECT created,status FROM events WHERE order_id=? ORDER BY id",(oid,))]
-                    o["demo"]=True
-                    return self.respond(200,o)
+                    return self.respond(200,order_detail(c,receipt))
                 if path=="/api/admin/orders":
-                    return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM orders ORDER BY id DESC LIMIT 300")])
+                    return self.respond(200,[dict(x) for x in c.execute("""SELECT o.*,d.mode,d.payment_status,d.payment_method,d.customer_email,d.customer_name,d.shipping_code,d.shipping_name,d.tracking_number
+                        FROM orders o LEFT JOIN order_details d ON d.order_id=o.id ORDER BY o.id DESC LIMIT 300""")])
                 if path.startswith("/api/admin/orders/"):
                     oid=int(path.rsplit("/",1)[1]);o=asdict(c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone())
                     if not o:return self.respond(404,{"error":"Nie znaleziono zamówienia"})
@@ -282,6 +322,11 @@ class Handler(BaseHTTPRequestHandler):
                     if receipt:o.update(dict(receipt))
                     customer=c.execute('SELECT u.id,u.identifier,u.name FROM users u JOIN order_receipts r ON r.customer_id=u.id WHERE r.order_id=?',(oid,)).fetchone()
                     if customer:o['customer']=dict(customer)
+                    detail=sales.details(c,oid)
+                    o['details']=detail
+                    o['demo']=not detail or detail['mode']!='live'
+                    o['payments']=payments.order_payments(c,oid)
+                    if detail and detail['payment_method']=='transfer':o['transfer']=sales.transfer_instructions(c,oid,o['total'])
                     return self.respond(200,o)
                 if path=="/api/admin/inventory":
                     q="""SELECT v.id,v.product_id,v.size,v.sku,v.ean,v.stock,
@@ -307,7 +352,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path=="/api/admin/activity":
                     return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 80")])
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (ValueError,TypeError):return self.respond(400,{"error":"Nieprawidłowy identyfikator"})
         except sqlite3.Error:return self.respond(500,{"error":"Błąd bazy danych"})
 
@@ -317,15 +362,43 @@ class Handler(BaseHTTPRequestHandler):
         with RATE_LOCK:
             q=LIMITS[ip]
             while q and q[0]<now-600:q.popleft()
-            if len(q)>=6:return False
+            if len(q)>=20:return False
             q.append(now);return True
 
     def do_POST(self):
         path=urlparse(self.path).path
+        if path=='/api/payments/payu/notify':
+            # Server-to-server webhook: authenticated by the provider signature, never by cookies.
+            try:raw=self.raw_body(200000)
+            except Invalid as ex:return self.error(ex)
+            try:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    status,result=payments.handle_notification(c,raw,self.headers.get('OpenPayu-Signature',''))
+                    if status==200 and result in ('completed',):mail.enqueue_order(c,int(c.execute('SELECT order_id FROM payments WHERE ext_order_id=?',(json.loads(raw)['order']['extOrderId'],)).fetchone()[0]),'order_paid')
+            except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
+            return self.respond(status,{'ok':status==200,'result':result})
         if not self.access(path):return
         try:
-            if path == '/api/orders' and not launch.isolated_test_workflow(DATABASE):
-                return self.respond(503,{'error':'Sprzedaż online zostanie uruchomiona po skonfigurowaniu usług sklepu. Konto klienta możesz już założyć.','code':'store_prelaunch'})
+            if path == '/api/orders':
+                with connect() as c:live=readiness(c)['mode']=='live'
+                if not live and not launch.isolated_test_workflow(DATABASE):
+                    return self.respond(503,{'error':'Sprzedaż online zostanie uruchomiona po skonfigurowaniu usług sklepu. Konto klienta możesz już założyć.','code':'store_prelaunch'})
+            retry_route=re.fullmatch(r'/api/orders/([1-9][0-9]*)/payment/retry',path)
+            if retry_route:
+                data=self.body();token=data.get('tracking_token')
+                if not isinstance(token,str) or len(token)>128:raise Invalid('Nieprawidłowe zamówienie')
+                if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele prób. Spróbuj później."})
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    oid=int(retry_route.group(1))
+                    receipt=c.execute('SELECT * FROM order_receipts WHERE order_id=?',(oid,)).fetchone()
+                    if not receipt or not secrets.compare_digest(receipt['tracking_token'],token):return self.respond(404,{'error':'Nie znaleziono zamówienia'})
+                    order=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone();detail=sales.details(c,oid)
+                    if readiness(c)['mode']!='live' or not detail or detail['mode']!='live' or detail['payment_method']!='payu':return self.respond(409,{'error':'To zamówienie nie korzysta z płatności online','code':'payment_not_applicable'})
+                    if order['status']!='oczekuje_platnosci' or detail['payment_status']=='paid':return self.respond(409,{'error':'Zamówienie nie oczekuje już na płatność','code':'payment_not_pending'})
+                    row=payments.create_order(c,order,{**detail,'tracking_token':receipt['tracking_token'],'shipping_fee':receipt['shipping_fee']},self.client_ip(),json.loads(order['items']))
+                return self.respond(200,{'redirect_url':row['redirect_url'],'ext_order_id':row['ext_order_id']})
             with connect() as c:
                 if auth.dispatch(self,path,c):return
                 if auth.staff_dispatch(self,path,c):return
@@ -422,11 +495,9 @@ class Handler(BaseHTTPRequestHandler):
                     elif not user:raise auth.AuthError(401,'Zaloguj się na konto użyte do tego zamówienia.','checkout_account_required')
                     elif requested!=owner:raise auth.AuthError(409,'To zamówienie rozpoczęto na innym koncie.','checkout_account_required')
                 if owner:auth.require_csrf(self)
-                if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele zamówień testowych. Spróbuj później."})
+                if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele zamówień. Spróbuj później."})
                 lines=data.get("items")
                 if not isinstance(lines,list) or not 1<=len(lines)<=20:raise Invalid("Pusty lub nieprawidłowy koszyk")
-                fulfillment=data.get("fulfillment","odbior")
-                if not isinstance(fulfillment,str) or fulfillment not in SHIPPING:raise Invalid("Nieprawidłowa metoda dostawy")
                 key=data.get("idempotency_key")
                 if key is not None and (not isinstance(key,str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}",key)):raise Invalid("Nieprawidłowy identyfikator zamówienia")
                 normalized=[]
@@ -440,48 +511,110 @@ class Handler(BaseHTTPRequestHandler):
                     if 'personalization' in line:
                         item['personalization'] = personalization.normalize_request(line['personalization'])
                     normalized.append(item)
-                # Retain v0.4 fingerprints for old guest attempts; identity is checked separately.
-                fingerprint=hashlib.sha256(json.dumps({"items":normalized,"fulfillment":fulfillment},sort_keys=True).encode()).hexdigest()
+                extended=any(key_ in data for key_ in ('customer','shipping','payment','invoice','consents'))
                 result=[]
                 with connect() as c:
                     c.execute("BEGIN IMMEDIATE")
+                    state=readiness(c);live=state['mode']=='live';mode='live' if live else 'test'
+                    config=sales.settings(c)
+                    checkout=sales.validate_checkout(data,sales.shipping_methods(c,enabled_only=live),sales.payment_options(c,config,payments.ready()),config,live)
+                    method=checkout['method']
+                    identity={"items":normalized,"fulfillment":method['code']}
+                    if extended:identity['checkout']={key_:checkout[key_] for key_ in ('customer','address','locker_code','payment','invoice','consents')}
+                    # Retain v0.4 fingerprints for old guest attempts; identity is checked separately.
+                    fingerprint=hashlib.sha256(json.dumps(identity,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
                     if key:
                         previous=c.execute("SELECT r.*,o.total FROM order_receipts r JOIN orders o ON o.id=r.order_id WHERE idempotency_key=?",(key,)).fetchone()
                         if previous:
                             if previous['customer_id']!=owner:return self.respond(409,{'error':'Zaloguj się na konto użyte do tego zamówienia.','code':'checkout_account_required'})
                             if previous["fingerprint"]!=fingerprint:return self.respond(409,{"error":"Ten identyfikator jest już przypisany do innego koszyka. Odśwież zamówienie."})
-                            return self.respond(200,{"id":previous["order_id"],"total":previous["total"],"tracking_token":previous["tracking_token"]})
+                            return self.respond(200,checkout_reply(c,previous["order_id"],previous["total"],previous["tracking_token"]))
                     total=0
                     for line in normalized:
-                        if not isinstance(line,dict):raise Invalid("Nieprawidłowy produkt")
-                        pid=int(line.get("id",0));qty=int(line.get("quantity",0))
-                        size=str(line.get("size") or "UNI").strip().upper()
-                        if qty<1 or qty>20 or len(size)>10:raise Invalid("Nieprawidłowy rozmiar lub ilość")
+                        pid=line["id"];qty=line["quantity"];size=line["size"]
                         p=c.execute("SELECT * FROM products WHERE id=?",(pid,)).fetchone()
                         v=c.execute("SELECT * FROM product_variants WHERE product_id=? AND size=?",(pid,size)).fetchone()
                         if not p or not v:raise Invalid("Wybierz poprawny wariant produktu")
                         if v["stock"]<qty:raise Invalid("Niewystarczająca dostępność wariantu "+size)
                         c.execute("UPDATE product_variants SET stock=stock-? WHERE id=?",(qty,v["id"]))
                         c.execute("UPDATE products SET stock=stock-? WHERE id=?",(qty,pid))
-                        c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(v["id"],-qty,"zamówienie testowe",stamp(),"checkout"))
+                        c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(v["id"],-qty,"zamówienie" if live else "zamówienie testowe",stamp(),"checkout"))
                         printed,fee=personalization.snapshot(c,pid,line.get('personalization'))
                         unit_price=p['price']+fee
                         total+=unit_price*qty
-                        item={"sku":p["sku"],"variant_sku":v["sku"],"name":p["name"],"size":size,"qty":qty,
+                        item={"sku":p["sku"],"variant_sku":v["sku"],"ean":v["ean"],"name":p["name"],"size":size,"qty":qty,
                               "base_unit_price":p['price'],"personalization_fee":fee,"unit_price":unit_price}
                         if printed is not None:item['personalization']=printed
                         result.append(item)
                     now=stamp()
                     subtotal=total
-                    shipping=0 if subtotal>=FREE_SHIPPING else SHIPPING[fulfillment]
+                    shipping=sales.shipping_cost(method,subtotal)
                     total+=shipping
-                    cur=c.execute("INSERT INTO orders(created,items,total,status) VALUES(?,?,?,?)",(now,json.dumps(result,ensure_ascii=False),total,"nowe"))
+                    status=sales.initial_status(checkout['payment'],mode)
+                    cur=c.execute("INSERT INTO orders(created,items,total,status) VALUES(?,?,?,?)",(now,json.dumps(result,ensure_ascii=False),total,status))
+                    oid=cur.lastrowid
                     tracking=secrets.token_urlsafe(32)
-                    c.execute("INSERT INTO order_receipts(order_id,tracking_token,fulfillment,shipping_fee,subtotal,idempotency_key,fingerprint,customer_id) VALUES(?,?,?,?,?,?,?,?)",(cur.lastrowid,tracking,fulfillment,shipping,subtotal,key,fingerprint,owner))
-                    c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(cur.lastrowid,now,"nowe"))
-                    audit(c,"order",cur.lastrowid,"Utworzono zamówienie demonstracyjne")
-                    mail.enqueue_order(c,cur.lastrowid)
-                return self.respond(201,{"id":cur.lastrowid,"total":total,"tracking_token":tracking})
+                    c.execute("INSERT INTO order_receipts(order_id,tracking_token,fulfillment,shipping_fee,subtotal,idempotency_key,fingerprint,customer_id) VALUES(?,?,?,?,?,?,?,?)",(oid,tracking,method['code'],shipping,subtotal,key,fingerprint,owner))
+                    c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(oid,now,status))
+                    sales.save_details(c,oid,checkout,mode)
+                    audit(c,"order",oid,"Utworzono zamówienie" if live else "Utworzono zamówienie demonstracyjne")
+                    if live and checkout['payment']=='payu':
+                        order_row=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
+                        try:payments.create_order(c,order_row,{**sales.details(c,oid),'tracking_token':tracking,'shipping_fee':shipping},self.client_ip(),result)
+                        except payments.PaymentError as ex:
+                            sales.mark_payment(c,oid,'failed','PayU: '+ex.code)
+                            audit(c,'payment',oid,'Nie udało się rozpocząć płatności online: '+ex.code)
+                    mail.enqueue_order(c,oid)
+                    reply=checkout_reply(c,oid,total,tracking)
+                return self.respond(201,reply)
+            if path=='/api/admin/shipping':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    method=sales.save_shipping(c,data)
+                    audit(c,'settings','shipping',f"Dodano metodę dostawy {method['code']}")
+                return self.respond(201,method)
+            payment_route=re.fullmatch(r'/api/admin/orders/([1-9][0-9]*)/payment',path)
+            if payment_route:
+                oid=int(payment_route.group(1));action=data.get('action');note=str(data.get('note','')).strip()[:200]
+                actor=self.request_user['id']
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    order=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone();detail=sales.details(c,oid)
+                    if not order or not detail:return self.respond(404,{'error':'Nie znaleziono zamówienia'})
+                    if action=='confirm':
+                        if detail['payment_method']=='payu':raise Invalid('Płatności PayU potwierdza operator; użyj ręcznego potwierdzenia tylko dla przelewu lub odbioru')
+                        changed=sales.mark_paid(c,oid,order['total'],'Ręcznie',f'administrator {actor}: {note}')
+                        audit(c,'payment',oid,f'Administrator {actor}: potwierdzono wpłatę ({detail["payment_method"]}) {note}')
+                        if changed:mail.enqueue_order(c,oid,'order_paid')
+                    elif action=='refund':
+                        amount=data.get('amount',order['total'])
+                        if detail['payment_method']=='payu':
+                            refund=payments.request_refund(c,oid,amount,note,actor)
+                        else:
+                            if isinstance(amount,bool) or not isinstance(amount,int) or not 1<=amount<=order['total']:raise Invalid('Nieprawidłowa kwota zwrotu')
+                            sales.mark_payment(c,oid,'refunded' if amount>=order['total'] else 'partially_refunded',f'Zwrot ręczny {amount/100:.2f} PLN: {note}')
+                            audit(c,'payment',oid,f'Administrator {actor}: zarejestrowano zwrot {amount/100:.2f} PLN ({detail["payment_method"]}) {note}')
+                    elif action=='note':
+                        sales.mark_payment(c,oid,detail['payment_status'],note)
+                        audit(c,'payment',oid,f'Administrator {actor}: notatka płatności: {note}')
+                    else:raise Invalid('Wybierz działanie: confirm, refund lub note')
+                    reply={'ok':True,'details':sales.details(c,oid),'payments':payments.order_payments(c,oid),'status':c.execute('SELECT status FROM orders WHERE id=?',(oid,)).fetchone()['status']}
+                return self.respond(200,reply)
+            shipment_route=re.fullmatch(r'/api/admin/orders/([1-9][0-9]*)/shipment',path)
+            if shipment_route:
+                oid=int(shipment_route.group(1))
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    detail=sales.record_shipment(c,oid,data)
+                    audit(c,'order',oid,f"Administrator {self.request_user['id']}: nadano przesyłkę {detail['carrier']} {detail['tracking_number']}")
+                    mail.enqueue_order(c,oid,'order_status_changed')
+                return self.respond(200,{'ok':True,'details':detail,'status':'wyslane'})
+            if path=='/api/admin/orders/expire-unpaid':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    cancelled=sales.expire_unpaid(c)
+                    for oid in cancelled:mail.enqueue_order(c,oid,'order_status_changed')
+                return self.respond(200,{'ok':True,'cancelled':cancelled})
             if path=='/api/admin/products':
                 product=personalization.validate_product(data)
                 with connect() as c:
@@ -535,7 +668,7 @@ class Handler(BaseHTTPRequestHandler):
                     audit(c,"production",cur.lastrowid,f"Rezerwacja {count} transferów, zlecenie {oid}, poz. {idx+1}")
                     return self.respond(201,{"id":cur.lastrowid})
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError,sqlite3.IntegrityError) as ex:
             return self.error(ex)
         except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
@@ -569,9 +702,23 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute('BEGIN IMMEDIATE')
                     changed=launch.update(c,data)
                     audit(c,'launch','settings','Zmieniono konfigurację uruchomienia: '+','.join(changed.keys()))
-                    result=launch.snapshot(c)
+                    result=launch.snapshot(c,readiness=readiness(c))
                     c.commit()
                     return self.respond(200,result)
+            if path=='/api/admin/settings':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    changed=sales.update_settings(c,data)
+                    audit(c,'settings','store',f"Administrator {self.request_user['id']}: zmieniono ustawienia sprzedaży: "+','.join(changed))
+                    result={'settings':sales.settings(c),'readiness':readiness(c)}
+                return self.respond(200,result)
+            shipping_route=re.fullmatch(r'/api/admin/shipping/([1-9][0-9]*)',path)
+            if shipping_route:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    method=sales.save_shipping(c,data,int(shipping_route.group(1)))
+                    audit(c,'settings','shipping',f"Zmieniono metodę dostawy {method['code']}")
+                return self.respond(200,method)
             gallery_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/gallery',path)
             if gallery_route:
                 pid=int(gallery_route.group(1))
@@ -626,10 +773,16 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute("BEGIN IMMEDIATE")
                     old=c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone()
                     if not old:raise Invalid("Nie istnieje takie zamówienie")
-                    if old["status"] in ("wyslane_demo","anulowane","wydane") and old["status"]!=status:raise Invalid("Zamówienie zostało już zamknięte")
-                    if old['status']!=status and status in ('spakowane','wyslane_demo','wydane'):
-                        raise Invalid('Pakowanie i wydanie potwierdź w sekcji Realizacja po kontroli wszystkich sztuk')
+                    if old["status"] in sales.CLOSED and old["status"]!=status:raise Invalid("Zamówienie zostało już zamknięte")
+                    if old['status']!=status and status in WORKFLOW_STATUS:
+                        raise Invalid('Ten status nadają dedykowane kroki: Realizacja (pakowanie, wydanie), Płatności (opłacone), Wysyłka lub Zwroty')
+                    if old['status']=='oczekuje_platnosci' and status not in ('anulowane','potwierdzone'):
+                        raise Invalid('Zamówienie czeka na płatność — potwierdź wpłatę w sekcji płatności')
                     if status=="anulowane" and old["status"]!="anulowane":
+                        detail=sales.details(c,oid)
+                        if detail and detail['payment_status']=='paid':
+                            sales.mark_payment(c,oid,'paid','Anulowano opłacone zamówienie — wymaga zwrotu wpłaty')
+                            audit(c,'payment',oid,'Anulowano opłacone zamówienie: zleć zwrot w sekcji płatności')
                         if c.execute('SELECT 1 FROM fulfillment_lines WHERE order_id=? AND printed_qty>0',(oid,)).fetchone():raise Invalid('Nadruk wykonany — anulowanie wymaga obsługi ręcznej')
                         if c.execute("SELECT 1 FROM production_tasks WHERE order_id=? AND status NOT IN ('oczekuje')",(oid,)).fetchone():raise Invalid("Produkcja rozpoczęta — anulowanie wymaga obsługi ręcznej")
                         if c.execute("SELECT 1 FROM production_tasks WHERE order_id=?",(oid,)).fetchone():raise Invalid("Usuń lub rozlicz rezerwacje DTF przed anulowaniem")
@@ -684,7 +837,7 @@ class Handler(BaseHTTPRequestHandler):
                         audit(c,"production",tid,"Etap: "+status)
                 return self.respond(200,{"ok":True})
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError) as ex:return self.error(ex)
         except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
 

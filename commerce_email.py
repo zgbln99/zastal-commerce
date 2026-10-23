@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import smtplib
+import sqlite3
 import ssl
 import time
 from email.message import EmailMessage
@@ -44,6 +45,30 @@ def init_schema(c):
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
         CREATE INDEX IF NOT EXISTS email_outbox_due ON email_outbox(status,next_attempt);
     """)
+    definition = c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='email_outbox'").fetchone()[0]
+    if 'user_id INTEGER NOT NULL' in definition:
+        # Guest orders need recipients without an account; rebuild once keeping every row.
+        c.executescript("""
+            PRAGMA foreign_keys=OFF;
+            BEGIN;
+            CREATE TABLE email_outbox_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL,
+                user_id INTEGER, order_id INTEGER, recipient TEXT,
+                credential_digest TEXT, dedupe_key TEXT UNIQUE NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending','sending','retry','sent','failed','cancelled')),
+                attempts INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL,
+                updated INTEGER NOT NULL, next_attempt INTEGER NOT NULL,
+                lease_token TEXT, lease_until INTEGER, sent INTEGER, last_error TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
+            INSERT INTO email_outbox_v2(id,kind,user_id,order_id,credential_digest,dedupe_key,status,attempts,created,updated,next_attempt,lease_token,lease_until,sent,last_error)
+                SELECT id,kind,user_id,order_id,credential_digest,dedupe_key,status,attempts,created,updated,next_attempt,lease_token,lease_until,sent,last_error FROM email_outbox;
+            DROP TABLE email_outbox;
+            ALTER TABLE email_outbox_v2 RENAME TO email_outbox;
+            CREATE INDEX IF NOT EXISTS email_outbox_due ON email_outbox(status,next_attempt);
+            COMMIT;
+            PRAGMA foreign_keys=ON;
+        """)
 
 
 def configuration():
@@ -85,13 +110,13 @@ def _credential(user):
     return auth.digest(user['password_hash'])
 
 
-def _queue(c, user, kind, order_id=None, dedupe=None):
+def _queue(c, user, kind, order_id=None, dedupe=None, recipient=None):
     now = int(time.time())
     credential = _credential(user) if kind in AUTH_KINDS else None
     key = dedupe or f'{kind}:{user["id"]}:{credential}'
     cursor = c.execute('''INSERT OR IGNORE INTO email_outbox
-        (kind,user_id,order_id,credential_digest,dedupe_key,created,updated,next_attempt)
-        VALUES(?,?,?,?,?,?,?,?)''', (kind, user['id'], order_id, credential, key, now, now, now))
+        (kind,user_id,order_id,recipient,credential_digest,dedupe_key,created,updated,next_attempt)
+        VALUES(?,?,?,?,?,?,?,?,?)''', (kind, user['id'] if user else None, order_id, recipient, credential, key, now, now, now))
     if not cursor.rowcount and kind in AUTH_KINDS:
         # Explicit resends can revive completed requests, but never steal a live lease.
         c.execute("""UPDATE email_outbox SET status='pending',attempts=0,updated=?,next_attempt=?,
@@ -138,14 +163,26 @@ def _consume_token(c, raw, kind):
     return user
 
 
+ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid')
+
+
 def enqueue_order(c, order_id, kind='order_created'):
-    if kind not in ('order_created', 'order_status_changed'):
+    if kind not in ORDER_KINDS:
         raise ValueError('Unsupported order email kind')
     row = c.execute('SELECT u.*,o.status AS order_status FROM order_receipts r JOIN users u ON u.id=r.customer_id JOIN orders o ON o.id=r.order_id WHERE r.order_id=?', (order_id,)).fetchone()
-    if not row or row['role'] != 'customer' or not row['active']:
-        return None
-    key = f'{kind}:{order_id}' + (f':{row["order_status"]}' if kind == 'order_status_changed' else '')
-    return _queue(c, row, kind, order_id, key)
+    key = f'{kind}:{order_id}'
+    if kind == 'order_status_changed':
+        status = c.execute('SELECT status FROM orders WHERE id=?', (order_id,)).fetchone()
+        key += f':{status["status"] if status else ""}'
+    if row and row['role'] == 'customer' and row['active']:
+        return _queue(c, row, kind, order_id, key)
+    try:
+        guest = c.execute('SELECT customer_email FROM order_details WHERE order_id=?', (order_id,)).fetchone()
+    except sqlite3.OperationalError:
+        guest = None
+    if guest and guest['customer_email']:
+        return _queue(c, None, kind, order_id, key, recipient=guest['customer_email'])
+    return None
 
 
 def _masked(identifier):
@@ -157,8 +194,8 @@ def admin_status(c):
     counts = {state: 0 for state in STATES}
     counts.update({row['status']: row['quantity'] for row in c.execute('SELECT status,COUNT(*) AS quantity FROM email_outbox GROUP BY status')})
     rows = c.execute('''SELECT e.id,e.kind,e.order_id,e.status,e.attempts,e.created,e.updated,
-        e.next_attempt,e.sent,e.last_error,u.identifier FROM email_outbox e
-        JOIN users u ON u.id=e.user_id ORDER BY e.id DESC LIMIT 100''').fetchall()
+        e.next_attempt,e.sent,e.last_error,COALESCE(u.identifier,e.recipient,'') AS identifier FROM email_outbox e
+        LEFT JOIN users u ON u.id=e.user_id ORDER BY e.id DESC LIMIT 100''').fetchall()
     messages = []
     for row in rows:
         message = {key: row[key] for key in ('id', 'kind', 'order_id', 'status', 'attempts', 'created', 'updated', 'next_attempt', 'sent')}
@@ -255,8 +292,9 @@ def _claim(c):
 def _message(c, row, config):
     c.execute('BEGIN IMMEDIATE')
     current = c.execute("SELECT 1 FROM email_outbox WHERE id=? AND status='sending' AND lease_token=?", (row['id'], row['lease_token'])).fetchone()
-    user = c.execute("SELECT * FROM users WHERE id=? AND active=1 AND role='customer'", (row['user_id'],)).fetchone()
-    if not current or not user:
+    user = c.execute("SELECT * FROM users WHERE id=? AND active=1 AND role='customer'", (row['user_id'],)).fetchone() if row['user_id'] else None
+    recipient = user['identifier'] if user else (row['recipient'] if row['kind'] in ORDER_KINDS else None)
+    if not current or not recipient:
         c.commit()
         return None
     if row['kind'] in AUTH_KINDS:
@@ -277,12 +315,11 @@ def _message(c, row, config):
         if not order:
             c.commit()
             return None
-        statuses = {'nowe':'Nowe','potwierdzone':'Potwierdzone','do_kompletacji':'Kompletacja','nanoszenie_dtf':'Nanoszenie nadruku','kontrola_jakosci':'Kontrola jakości','spakowane':'Spakowane','wydane':'Wydane','wyslane_demo':'Wysłane (test)','anulowane':'Anulowane'}
-        subject = f'Zastal Store — zamówienie testowe #{order["id"]}'
-        body = f'Zamówienie testowe #{order["id"]}\nStatus: {statuses.get(order["status"],order["status"])}\nKwota testowa: {order["total"] / 100:.2f} PLN\n\nTo sprzedaż demonstracyjna. Dokument niefiskalny: nie jest paragonem ani fakturą i nie potwierdza rzeczywistej płatności.\n\nSzczegóły znajdziesz po zalogowaniu: {os.environ["ZASTAL_SITE_ORIGIN"].rstrip("/")}/konto\n'
+        import commerce_sales as sales
+        subject, body = sales.order_email(c, order, sales.details(c, order['id']), row['kind'], os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
     c.commit()
     message = EmailMessage()
-    message['From'], message['To'], message['Subject'] = config['from_address'], user['identifier'], subject
+    message['From'], message['To'], message['Subject'] = config['from_address'], recipient, subject
     message['Message-ID'] = make_msgid(idstring=f'zastal-{row["id"]}', domain=config['from_address'].split('@', 1)[1])
     message.set_content(body)
     return message

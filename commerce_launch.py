@@ -94,14 +94,18 @@ def checks(v):
     }
 
 
-def snapshot(c, public=False):
+def snapshot(c, public=False, readiness=None):
+    """readiness comes from commerce_sales.readiness(); without it every integration is reported missing."""
     v = values(c)
     status = checks(v)
+    if readiness:
+        status.update({key: readiness["checks"][key] for key in INTEGRATIONS})
+    live = bool(readiness) and readiness["mode"] == "live"
     result = {
-        "phase": "prelaunch",
-        "checkout_enabled": False,
+        "phase": "live" if live else "prelaunch",
+        "checkout_enabled": live,
         "registration_enabled": True,
-        "notice": "Sklep Zastalu jest przygotowywany do uruchomienia sprzedaży online.",
+        "notice": "" if live else "Sklep Zastalu jest przygotowywany do uruchomienia sprzedaży online.",
     }
     if not public:
         result.update({
@@ -111,7 +115,9 @@ def snapshot(c, public=False):
             "completed": sum(status.values()),
             "total": len(status),
             "blocking": [LABELS[key] for key in LABELS if not status[key]],
-            "sales_live": False,
+            "sales_live": live,
+            "switch_present": bool(readiness) and readiness["switch_present"],
+            "requested_mode": readiness["requested_mode"] if readiness else "prelaunch",
             "can_activate": False,
         })
     return result

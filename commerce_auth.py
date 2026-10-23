@@ -29,7 +29,7 @@ ROLE_CAPABILITIES = {
 ROUTE_CAPABILITIES = (
     ('/api/admin/home', 'cms', 'cms'), ('/api/admin/pages', 'pages', 'pages'),
     ('/api/admin/launch', 'launch', 'launch'), ('/api/admin/staff', 'staff', 'staff'),
-    ('/api/admin/settings', 'settings', 'settings'),
+    ('/api/admin/settings', 'settings', 'settings'), ('/api/admin/shipping', 'settings', 'settings'),
     ('/api/admin/pos', 'pos', 'pos'), ('/api/admin/shifts', 'shifts', 'shifts'),
     ('/api/admin/fulfillment', 'fulfillment', 'fulfillment'), ('/api/admin/email', 'email', 'email'),
     ('/api/admin/customers', 'customers', 'customers'), ('/api/admin/returns', 'returns', 'returns'),

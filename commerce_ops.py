@@ -11,7 +11,8 @@ import secrets
 
 import commerce_personalization as personalization
 
-CLOSED = ('anulowane', 'wyslane_demo', 'wydane')
+CLOSED = ('anulowane', 'wyslane_demo', 'wydane', 'wyslane', 'zwrot')
+WAITING = ('oczekuje_platnosci',)
 
 
 class OpsError(Exception):
@@ -220,8 +221,9 @@ def detail(c, order_id):
 
 
 def queue(c):
-    placeholders = ','.join('?' for _ in CLOSED)
-    ids = c.execute(f'SELECT id FROM orders WHERE status NOT IN ({placeholders}) ORDER BY id LIMIT 300', CLOSED).fetchall()
+    skipped = CLOSED + WAITING
+    placeholders = ','.join('?' for _ in skipped)
+    ids = c.execute(f'SELECT id FROM orders WHERE status NOT IN ({placeholders}) ORDER BY id LIMIT 300', skipped).fetchall()
     return [detail(c, row['id']) for row in ids]
 
 
@@ -233,6 +235,8 @@ def _mutable(c, oid, data, actor_id):
     value = detail(c, oid)
     if value['status'] in CLOSED:
         raise OpsError(409, 'Zamówienie zostało zamknięte', 'order_closed')
+    if value['status'] in WAITING:
+        raise OpsError(409, 'Zamówienie czeka na płatność', 'order_unpaid')
     if revision != value['revision']:
         raise OpsError(409, 'Postęp zmienił się. Odśwież zamówienie', 'stale_revision')
     return value
