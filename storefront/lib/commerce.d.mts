@@ -8,8 +8,12 @@ export type Variant = { id: number; product_id: number; size: string; sku: strin
 export type Product = CatalogItem & { variants: Variant[]; verified: boolean; personalization_enabled?: boolean; personalization_required?: boolean; personalization_fee?: number };
 export type OrderPrint = { mode: 'player' | 'custom'; player_id?: number; name: string; number: string };
 export type Filters = { category?: string; query?: string; minPrice?: number; maxPrice?: number; size?: string; available?: boolean; sort?: string };
-export const FREE_SHIPPING: number;
-export function shippingCost(method: string, subtotal: number): number;
+export type ShippingMethod = { code: string; name: string; kind: 'pickup' | 'locker' | 'courier'; price: number; free_from: number | null; requires_address: boolean; carrier: string; note: string };
+export type PaymentOption = { id: 'payu' | 'transfer' | 'pickup'; name: string; description: string; pickup_only: boolean };
+export type StoreStatus = { loaded: boolean; checkoutEnabled: boolean; phase: 'live' | 'prelaunch'; notice: string; shipping: ShippingMethod[]; payments: PaymentOption[]; pickupAddress: string; pickupHours: string; invoiceEnabled: boolean; orderNote: string; legal: { terms: string; privacy: string; returns: string; shipping: string }; seller: { name: string; email: string; phone: string } };
+export const PRELAUNCH_STATUS: StoreStatus;
+export function normalizeStoreStatus(raw: unknown): StoreStatus;
+export function shippingCost(method: Pick<ShippingMethod, 'price' | 'free_from'>, subtotal: number): number;
 export function normalizeCart(raw: unknown, products?: CatalogItem[]): CartLine[];
 export function normalizePersonalization(value: unknown): Personalization | null | undefined;
 export function cartLineKey(line: Pick<CartLine, 'id' | 'size' | 'personalization'>): string;

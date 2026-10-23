@@ -1,0 +1,10 @@
+.sales-settings{display:grid;gap:18px}
+.sales-mode{border-left:4px solid #b7963a}.sales-mode.live{border-left-color:#2f7a4c}
+.sales-mode-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}.sales-mode-head h2{margin:4px 0 6px;font-size:21px}.sales-mode-head p{margin:0;color:var(--muted);max-width:720px;font-size:13px}
+.sales-checks{list-style:none;margin:16px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}.sales-checks li{display:flex;gap:9px;align-items:center;font-size:13px;padding:8px 10px;border-radius:4px;background:#fbf4e6;color:#7a5c14}.sales-checks li.ok{background:#eef5ee;color:#2f6a3a}
+.sales-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px}
+.sales-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0 0 12px;font-size:13px}.sales-dl div{display:contents}.sales-dl dt{color:var(--muted)}.sales-dl dd{margin:0}.sales-dl .mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.sales-form{max-width:none;margin-top:10px;gap:12px}.sales-form textarea{width:100%;border:1px solid #cdd3cf;border-radius:4px;padding:10px 13px;font:inherit;font-size:14px}.sales-form .account-field-row{grid-template-columns:1fr 1fr}
+.sales-save{margin-top:0}
+.method-form{margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}.method-form h3{margin:0 0 4px}
+@media (max-width:720px){.sales-form .account-field-row{grid-template-columns:1fr}}

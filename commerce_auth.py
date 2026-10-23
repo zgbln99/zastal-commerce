@@ -266,9 +266,13 @@ def require_user(handler, role=None):
     return user
 
 
+# Extra origins only for staging/E2E hosts (comma separated); production keeps the single HTTPS origin.
+ALLOWED_ORIGINS = {SITE_ORIGIN} | {item.strip().rstrip('/') for item in os.environ.get('ZASTAL_ALLOWED_ORIGINS', '').split(',') if item.strip()}
+
+
 def check_origin(handler):
     origin = handler.headers.get('Origin')
-    if (origin and origin.rstrip('/') != SITE_ORIGIN) or handler.headers.get('Sec-Fetch-Site') == 'cross-site':
+    if (origin and origin.rstrip('/') not in ALLOWED_ORIGINS) or handler.headers.get('Sec-Fetch-Site') == 'cross-site':
         raise AuthError(403, 'Żądanie pochodzi spoza sklepu.', 'csrf_invalid')
 
 

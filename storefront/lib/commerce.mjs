@@ -1,10 +1,32 @@
 import { productImages, safeImageUrl } from './product-media.mjs';
-const METHODS = { odbior: 0, paczkomat: 1299, kurier: 1499 };
-export const FREE_SHIPPING = 25000;
+// Delivery prices come only from the published store configuration; nothing is hardcoded.
 export function shippingCost(method, subtotal) {
-  if (!Object.hasOwn(METHODS, method)) throw new Error('Nieprawidłowa metoda dostawy');
-  return subtotal >= FREE_SHIPPING ? 0 : METHODS[method];
+  if (!method || typeof method !== 'object' || !Number.isSafeInteger(method.price) || method.price < 0) throw new Error('Nieprawidłowa metoda dostawy');
+  if (Number.isSafeInteger(method.free_from) && method.free_from >= 0 && subtotal >= method.free_from) return 0;
+  return method.price;
 }
+export function normalizeStoreStatus(raw) {
+  const value = raw && typeof raw === 'object' ? raw : {};
+  const config = value.config && typeof value.config === 'object' ? value.config : {};
+  const text = (input, limit = 400) => typeof input === 'string' ? input.slice(0, limit) : '';
+  const shipping = Array.isArray(config.shipping_methods) ? config.shipping_methods.filter(m => m && typeof m.code === 'string' && /^[a-z0-9_-]{2,32}$/.test(m.code) && Number.isSafeInteger(m.price) && m.price >= 0 && ['pickup', 'locker', 'courier'].includes(m.kind)).map(m => ({ code: m.code, name: text(m.name, 80) || m.code, kind: m.kind, price: m.price, free_from: Number.isSafeInteger(m.free_from) && m.free_from >= 0 ? m.free_from : null, requires_address: m.requires_address === true, carrier: text(m.carrier, 80), note: text(m.note, 300) })) : [];
+  const payments = Array.isArray(config.payment_methods) ? config.payment_methods.filter(p => p && ['payu', 'transfer', 'pickup'].includes(p.id)).map(p => ({ id: p.id, name: text(p.name, 80) || p.id, description: text(p.description, 200), pickup_only: p.pickup_only === true })) : [];
+  const legal = config.legal && typeof config.legal === 'object' ? config.legal : {};
+  const seller = config.seller && typeof config.seller === 'object' ? config.seller : {};
+  const https = input => typeof input === 'string' && /^https:\/\/[^\s]{1,390}$/.test(input) ? input : '';
+  return {
+    loaded: true,
+    checkoutEnabled: value.checkout_enabled === true && shipping.length > 0 && payments.length > 0,
+    phase: value.phase === 'live' ? 'live' : 'prelaunch',
+    notice: text(value.notice, 300),
+    shipping, payments,
+    pickupAddress: text(config.pickup_address, 350), pickupHours: text(config.pickup_hours, 200),
+    invoiceEnabled: config.invoice_enabled !== false, orderNote: text(config.order_note, 400),
+    legal: { terms: https(legal.terms_url), privacy: https(legal.privacy_url), returns: https(legal.returns_url), shipping: https(legal.shipping_url) },
+    seller: { name: text(seller.name, 160), email: text(seller.support_email, 254), phone: text(seller.support_phone, 40) },
+  };
+}
+export const PRELAUNCH_STATUS = Object.freeze({ loaded: false, checkoutEnabled: false, phase: 'prelaunch', notice: '', shipping: [], payments: [], pickupAddress: '', pickupHours: '', invoiceEnabled: true, orderNote: '', legal: { terms: '', privacy: '', returns: '', shipping: '' }, seller: { name: '', email: '', phone: '' } });
 export function normalizePersonalization(value) {
   if (value == null) return undefined;
   if (!value || typeof value !== 'object') return null;

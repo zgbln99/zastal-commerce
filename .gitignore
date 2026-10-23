@@ -24,3 +24,4 @@ home_media/
 .superpowers/
 .qa/
 *.tsbuildinfo
+.qa-e2e-server.*
