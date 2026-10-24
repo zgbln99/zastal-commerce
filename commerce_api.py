@@ -1,8 +1,8 @@
-"""Zastal Store v0.5 – accounts and transactional demo commerce API.
+"""Zastal Store commerce API.
 
-No live payments or carrier integrations. Real customer accounts use built-in
-SQLite with explicit transactions, variant stock ledger, purchased DTF transfers,
-production workflow and audit events. Keep behind HTTPS reverse proxy.
+Accounts, stock, fulfillment and gated live checkout use SQLite transactions.
+DPD tracking is read from a local cache refreshed by a separate worker.
+Keep behind an HTTPS reverse proxy.
 """
 import datetime as dt
 import hashlib
@@ -28,6 +28,7 @@ import commerce_sales as sales
 import commerce_payments as payments
 import commerce_returns as returns
 import commerce_pages as pages
+import commerce_dpd as dpd
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
@@ -106,6 +107,7 @@ def init():
         media.init_schema(c)
         ops.init_schema(c)
         sales.init_schema(c)
+        dpd.init_schema(c)
         payments.init_schema(c)
         returns.init_schema(c)
         pages.init_schema(c)
