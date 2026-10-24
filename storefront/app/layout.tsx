@@ -15,3 +15,5 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="pl"><body><CommerceRoot>{children}</CommerceRoot></body></html>;
 }
+
+import "./minimal-store.css";
