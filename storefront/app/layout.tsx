@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const live = (await storeStatus()).live;
   return {
     title: {default: "Zastal Store — oficjalny sklep kibica", template: "%s | Zastal Store"},
-    description: live ? "Oficjalny sklep Zastalu Zielona Góra: koszulki, bluzy, akcesoria i personalizowane nadruki z nazwiskiem i numerem. Dostawa na terenie Polski i odbiór osobisty." : "Odzież i akcesoria Zastalu Zielona Góra. Nowy sklep kibica z wyborem rozmiarów i dostępnością produktów. Sprzedaż online w przygotowaniu.",
+    description: live ? "Oficjalny sklep Zastalu Zielona Góra: koszulki, bluzy, akcesoria i personalizowane nadruki z nazwiskiem i numerem. Dostawa na terenie Polski i odbiór osobisty." : "Odzież i akcesoria Zastalu Zielona Góra. Odkryj kolekcję klubową, wybierz swój rozmiar i sprawdź możliwości personalizacji.",
     robots: live ? {index:true,follow:true} : {index:false,follow:false},
     metadataBase: new URL(process.env.ZASTAL_SITE_ORIGIN || "https://zastalstore.51-15-21-164.sslip.io"),
   };

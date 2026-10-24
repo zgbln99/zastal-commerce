@@ -16,14 +16,14 @@ export function PersonalizationEditorial({ product }: { product: Product | undef
       <div className="editorial-serial"><span>02 — PERSONALIZACJA</span><span>SKLEP ZASTALU / NADRUK</span></div>
       <div className="editorial-print-body">
         <span className="editorial-mini-label">WYBRANE PRODUKTY / NADRUK NA ZAMÓWIENIE</span>
-        <h2 id="editorial-print-title">Twoje nazwisko.<br/>Twój numer.</h2>
-        <p>Wybierz nazwisko zawodnika z aktualnej listy lub wpisz własne. Opcję nadruku znajdziesz podczas konfiguracji produktu.</p>
+        <h2 id="editorial-print-title">Nadruk z Twoim<br/>nazwiskiem</h2>
+        <p>Wybierz zawodnika z listy albo dodaj własne nazwisko i numer przy wybranym produkcie.</p>
         <div className="editorial-print-choices" aria-label="Dostępne opcje personalizacji">
           <span><b>01</b> Zawodnik z listy</span>
           <span><b>02</b> Własny napis i numer</span>
         </div>
         <Link className="editorial-print-action" href={"/produkt/" + product.id}>
-          Personalizuj ten produkt <ArrowUpRight size={18}/>
+          Dodaj swój nadruk <ArrowUpRight size={18}/>
         </Link>
       </div>
       <div className="editorial-print-foot"><span>PRODUKT Z OPCJĄ NADRUKU</span><span>{product.sku}</span></div>
@@ -43,8 +43,8 @@ export function AccessoriesEditorial({ products }: { products: Product[] }) {
   if (!products.length) return null;
   return <section className="container editorial-accessories" aria-labelledby="accessories-title">
     <div className="editorial-accessories-heading">
-      <div><span className="home-kicker">05 / DODATKI</span><h2 id="accessories-title">Małe rzeczy.<br/><em>Te same barwy.</em></h2></div>
-      <div className="editorial-accessories-intro"><p>Akcesoria, które możesz zabrać ze sobą nie tylko na mecz.</p><Link href="/sklep?category=Akcesoria">Zobacz akcesoria <ArrowUpRight size={17}/></Link></div>
+      <div><span className="home-kicker">05 / DODATKI</span><h2 id="accessories-title">Akcesoria<br/><em>Zastalu</em></h2></div>
+      <div className="editorial-accessories-intro"><p>Klubowe dodatki na mecz i na co dzień.</p><Link href="/sklep?category=Akcesoria">Zobacz akcesoria <ArrowUpRight size={17}/></Link></div>
     </div>
     <div className="editorial-accessories-grid">
       {products.slice(0, 3).map((product, index) => <Link key={product.id} href={"/produkt/" + product.id} className={"editorial-accessory accessory-" + index}>

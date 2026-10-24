@@ -1,0 +1,18 @@
+[Unit]
+Description=Zastal Store DPD parcel status refresh
+After=network-online.target zastal-store-api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=sentinelx
+WorkingDirectory=/var/lib/sentinelx/uploads/zastal-commerce-app
+EnvironmentFile=/var/lib/sentinelx/uploads/zastal-commerce-app/.runtime.env
+ExecStart=/usr/bin/python3 tools/dpd_worker.py --once --limit 20
+# Missing carrier configuration / transient carrier failures are reported by the
+# worker as exit 2. Timer retries without marking a permanent service failure.
+SuccessExitStatus=2
+TimeoutStartSec=300
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes

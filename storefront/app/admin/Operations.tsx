@@ -124,7 +124,7 @@ export default function Operations({request, activeTab, data, loading, onRefresh
   const [labelScanError, setLabelScanError] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
   const [refundAmount, setRefundAmount] = useState("");
-  const [shipment, setShipment] = useState({carrier:"", tracking_number:""});
+  const [shipment, setShipment] = useState({carrier:"DPD", tracking_number:""});
   const [cancelReason, setCancelReason] = useState("");
   const [newReturn, setNewReturn] = useState<{kind:"zwrot"|"reklamacja"; reason:string; description:string; qty:Record<number,number>} | null>(null);
   const [decision, setDecision] = useState<StaffReturn | null>(null);

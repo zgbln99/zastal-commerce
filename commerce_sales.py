@@ -13,6 +13,7 @@ import sqlite3
 import unicodedata
 
 import commerce_launch as launch
+import commerce_dpd as dpd
 
 SHIPPING_KINDS = ('pickup', 'locker', 'courier')
 PAYMENT_METHODS = ('payu', 'transfer', 'pickup')
@@ -260,7 +261,7 @@ def public_config(c, email_configured, payu_ready, mode):
         'pickup_address': config['pickup_address'], 'pickup_hours': config['pickup_hours'],
         'invoice_enabled': config['invoice_enabled'], 'order_note': config['order_note'],
         'legal': {key: values[key] for key in ('terms_url', 'privacy_url', 'returns_url', 'shipping_url')},
-        'seller': {'name': values['seller_name'], 'support_email': values['support_email'], 'support_phone': values['support_phone']},
+        'seller': {'name': values['seller_name'], 'support_email': values['support_email'], 'support_phone': values['support_phone'] if launch.valid_support_phone(values['support_phone']) else ''},
     }
 
 
@@ -329,7 +330,7 @@ def validate_checkout(data, methods, payments, config, live):
     consents_raw = data.get('consents') if isinstance(data.get('consents'), dict) else {}
     consents = {key: consents_raw.get(key) is True for key in ('terms', 'privacy', 'marketing')}
     if live and not (consents['terms'] and consents['privacy']):
-        raise SalesError(400, 'Zaakceptuj regulamin i politykę prywatności', 'consent_required')
+        raise SalesError(400, 'Zaakceptuj regulamin i potwierdź zapoznanie się z polityką prywatności', 'consent_required')
     return {'method': method, 'customer': {'email': email, 'name': name, 'phone': phone}, 'address': address,
             'locker_code': locker.upper(), 'payment': payment or ('pickup' if method['kind'] == 'pickup' else 'transfer'),
             'invoice': invoice, 'consents': consents}
@@ -367,6 +368,7 @@ def details(c, order_id):
             value[key] = json.loads(value[key]) if value[key] else {}
         except ValueError:
             value[key] = {}
+    value['shipment'] = dpd.public_shipment(c, order_id)
     return value
 
 
@@ -376,8 +378,8 @@ def public_details(value):
         return {'mode': 'test', 'payment_method': None, 'payment_status': 'unpaid'}
     keys = ('mode', 'customer_email', 'customer_name', 'customer_phone', 'shipping_code', 'shipping_name', 'shipping_kind',
             'address', 'locker_code', 'invoice', 'payment_method', 'payment_status', 'paid_at', 'carrier', 'tracking_number',
-            'tracking_url', 'shipped_at')
-    return {key: value[key] for key in keys}
+            'tracking_url', 'shipped_at', 'shipment')
+    return {key: value.get(key) for key in keys}
 
 
 def transfer_instructions(c, order_id, total):
@@ -441,6 +443,12 @@ def record_shipment(c, order_id, data):
         if not template.startswith('https://'):
             raise SalesError(400, 'Adres śledzenia musi używać HTTPS')
         url = template.replace('{tracking}', number.replace(' ', ''))
+    if carrier.casefold().startswith('dpd'):
+        carrier = 'DPD'
+        number = number.replace(' ', '').upper()
+        if not dpd.valid_waybill(number):
+            raise SalesError(400, 'Podaj poprawny numer przesyłki DPD (14 znaków)', 'invalid_dpd_waybill')
+        url = dpd.tracking_url(number)
     now = stamp()
     if detail:
         c.execute('UPDATE order_details SET carrier=?,tracking_number=?,tracking_url=?,shipped_at=?,updated=? WHERE order_id=?',

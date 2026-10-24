@@ -12,7 +12,7 @@ SOURCE_URL = 'https://basketzg.pl/players'
 VERIFIED_AT = '2026-10-10'
 CATEGORIES = ('Koszulki', 'Bluzy', 'Dzieci', 'Akcesoria')
 # Decoration methods the club can actually execute. DTF uses purchased finished transfers.
-DECORATION_METHODS = {'dtf': 'Transfer DTF (gotowy od dostawcy)', 'haft': 'Haft', 'haft_3d': 'Haft wypukły (3D)',
+DECORATION_METHODS = {'dtf': 'Nadruk DTF', 'haft': 'Haft', 'haft_3d': 'Haft wypukły (3D)',
                       'sitodruk': 'Sitodruk', 'inne': 'Inna metoda (opis w notatce)'}
 PRINT_FONTS = ('block', 'condensed', 'rounded')
 LAYOUT_AREAS = ('name', 'number')
