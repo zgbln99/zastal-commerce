@@ -49,7 +49,7 @@ body{background:#fff;color:var(--ink);-webkit-font-smoothing:antialiased}
 .slide-photo-caption{font-size:9px!important;letter-spacing:.08em!important;right:17px!important;top:25px!important;text-shadow:0 1px 10px #153d2a33}
 .home-collections.container{padding-top:78px!important}
 .home-section-heading{margin-bottom:29px!important;align-items:end!important}
-.home-kicker{font-size:10px!important;letter-spacing:.12em!important;margin-bottom:11px!important;color:#718077!important;font-weight:650!important}
+.home-kicker{font-size:13px!important;letter-spacing:0!important;margin-bottom:10px!important;color:#68736d!important;font-weight:500!important}
 .home-section-heading h2{font-size:clamp(28px,2.9vw,42px)!important;letter-spacing:-.048em!important;font-weight:700!important;line-height:1.09!important}
 .home-text-link{font-size:12px!important;font-weight:600!important;border-bottom:1px solid #2f5240!important;padding-bottom:7px!important;gap:13px!important}
 .home-collection-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:14px!important}

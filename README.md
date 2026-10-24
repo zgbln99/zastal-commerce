@@ -4,6 +4,10 @@ Polish fan-shop storefront and staff operations workspace for Zastal Zielona Gó
 
 **v0.11 — production-ready store behind a readiness gate.** Public browsing, customer accounts, live checkout (PayU, bank transfer, pay at pickup), configurable delivery, staff roles, live POS with cash shifts, returns/complaints, photo-based print preview, information pages, backups and a release runbook. Live checkout opens **only** when the server sets `ZASTAL_SALES_MODE=live` and every readiness check in **Sprzedaż i dostawy** passes; until then `POST /api/orders` keeps returning `503 store_prelaunch`. No card details are stored; customers pay on PayU's hosted page. See [docs/RELEASE_RUNBOOK.md](docs/RELEASE_RUNBOOK.md) for migrations, release, rollback and go-live, and [docs/AUDIT_2026-10-24.md](docs/AUDIT_2026-10-24.md) for the audit that preceded this release.
 
+## Wygląd
+
+Zasady projektowe sklepu (kolory, typografia, czego nie robić) są w `DESIGN.md`. Każda zmiana w `storefront/` ma je spełniać.
+
 ## What changed in v0.11
 
 | Area | Summary |

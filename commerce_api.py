@@ -900,14 +900,14 @@ class Handler(BaseHTTPRequestHandler):
                     if old['status']!=status and status in WORKFLOW_STATUS:
                         raise Invalid('Ten status nadają dedykowane kroki: Realizacja (pakowanie, wydanie), Płatności (opłacone), Wysyłka lub Zwroty')
                     if old['status']=='oczekuje_platnosci' and status not in ('anulowane','potwierdzone'):
-                        raise Invalid('Zamówienie czeka na płatność — potwierdź wpłatę w sekcji płatności')
+                        raise Invalid('Zamówienie czeka na płatność, potwierdź wpłatę w sekcji płatności')
                     if status=="anulowane" and old["status"]!="anulowane":
                         detail=sales.details(c,oid)
                         if detail and detail['payment_status']=='paid':
-                            sales.mark_payment(c,oid,'paid','Anulowano opłacone zamówienie — wymaga zwrotu wpłaty')
+                            sales.mark_payment(c,oid,'paid','Anulowano opłacone zamówienie, wymaga zwrotu wpłaty')
                             audit(c,'payment',oid,'Anulowano opłacone zamówienie: zleć zwrot w sekcji płatności')
-                        if c.execute('SELECT 1 FROM fulfillment_lines WHERE order_id=? AND printed_qty>0',(oid,)).fetchone():raise Invalid('Nadruk wykonany — anulowanie wymaga obsługi ręcznej')
-                        if c.execute("SELECT 1 FROM production_tasks WHERE order_id=? AND status NOT IN ('oczekuje')",(oid,)).fetchone():raise Invalid("Produkcja rozpoczęta — anulowanie wymaga obsługi ręcznej")
+                        if c.execute('SELECT 1 FROM fulfillment_lines WHERE order_id=? AND printed_qty>0',(oid,)).fetchone():raise Invalid('Nadruk wykonany, anulowanie wymaga obsługi ręcznej')
+                        if c.execute("SELECT 1 FROM production_tasks WHERE order_id=? AND status NOT IN ('oczekuje')",(oid,)).fetchone():raise Invalid("Produkcja rozpoczęta, anulowanie wymaga obsługi ręcznej")
                         if c.execute("SELECT 1 FROM production_tasks WHERE order_id=?",(oid,)).fetchone():raise Invalid("Usuń lub rozlicz rezerwacje DTF przed anulowaniem")
                         for line in json.loads(old["items"]):
                             sku=line.get("variant_sku") or line.get("sku","")+"-"+(line.get("size") or "UNI")

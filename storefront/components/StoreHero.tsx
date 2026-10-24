@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ArrowUpRight, ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
-import { DEFAULT_HOME, titleLines, text, num, type SectionSettings } from "../lib/home-layout";
+import { DEFAULT_HOME, titleLines, text, num, kicker, type SectionSettings } from "../lib/home-layout";
 import { autoplayAllowed, buildHeroSlides, carouselInterval, carouselKeyStep, nextSlide, swipeDirection } from "../lib/carousel.mjs";
 import { useStore } from "./StoreProvider";
 
@@ -47,17 +47,15 @@ export default function StoreHero({settings}: {settings?:SectionSettings}) {
     onTouchStart={event=>{if(event.touches.length===1){const point=event.touches[0];touch.current={x:point.clientX,y:point.clientY};}else touch.current=null;}}
     onTouchCancel={()=>{touch.current=null;}}
     onTouchEnd={event=>{if(touch.current&&event.changedTouches.length===1){const point=event.changedTouches[0];const step=swipeDirection(touch.current.x,touch.current.y,point.clientX,point.clientY);if(step&&slides.length>1)move(step);}touch.current=null;}}>
-    <div className="flagship-hero-topline"><span>ZASTAL / SKLEP KIBICA</span><span>ZIELONA GÓRA · OD 1946</span></div>
     <div className="flagship-slide" role="group" aria-roledescription="slajd" aria-label={`${index+1} z ${slides.length}`}>
       <div className="flagship-hero-content">
-        <p className="flagship-overline"><span/>{slide.eyebrow}</p>
+        {kicker(slide.eyebrow)&&<p className="flagship-overline">{kicker(slide.eyebrow)}</p>}
         <h1 id={headingId}>{titleLines(slide.title).map((line,i,lines)=><span key={i}>{line}{i<lines.length-1&&<br/>}</span>)}</h1>
         <p className="flagship-hero-lead">{slide.description}</p>
         <div className="flagship-hero-actions">
           {slide.cta_text&&<Link href={slide.cta_url} className="flagship-button-primary">{slide.cta_text} <ArrowUpRight size={18}/></Link>}
           {slide.secondary_text&&<Link href={slide.secondary_url} className="flagship-button-quiet">{slide.secondary_text} <ArrowRight size={17}/></Link>}
         </div>
-        <span className="flagship-collection-note">{index===0?"KLUBOWA KOLEKCJA / ZASTAL STORE":slide.product_name||"KOLEKCJA SKLEPU"}</span>
       </div>
       <figure className={"flagship-hero-media media-"+slide.image_role}>
         <img key={slide.image} className="flagship-hero-photo" src={slide.image} alt={slide.image_alt} fetchPriority={index===0?"high":"auto"} decoding="async"/>
@@ -68,12 +66,12 @@ export default function StoreHero({settings}: {settings?:SectionSettings}) {
     <div className="flagship-hero-footer">
       {slides.length>1?<>
         <div className="flagship-slide-selector" aria-label="Wybór slajdu">{slides.map((item,i)=><button type="button" key={item.id} className={i===index?"active":""} aria-label={`Slajd ${i+1}: ${item.title.replaceAll("|"," ")}`} aria-current={i===index?"true":undefined} onClick={()=>go(i)}><span className="flagship-progress-track"><span key={`${activeId}-${playing}`} className={"flagship-progress-fill "+(i===index&&playing?"playing":"")}/></span></button>)}</div>
-        <div className="flagship-carousel-controls"><span className="flagship-slide-count" aria-hidden="true">{String(index+1).padStart(2,"0")} <span>/ {String(slides.length).padStart(2,"0")}</span></span>
+        <div className="flagship-carousel-controls">
           <button type="button" aria-label="Poprzedni slajd" onClick={()=>move(-1)}><ChevronLeft size={19}/></button>
           <button type="button" aria-label="Następny slajd" onClick={()=>move(1)}><ChevronRight size={19}/></button>
           {s.autoplay!==false&&<button type="button" aria-label={paused?"Wznów automatyczne slajdy":"Wstrzymaj automatyczne slajdy"} aria-pressed={paused} onClick={()=>setPaused(value=>!value)}>{paused?<Play size={15}/>:<Pause size={15}/>}</button>}
         </div>
-      </>:<span className="flagship-single-note">W BARWACH ZASTALU</span>}
+      </>:null}
     </div>
     <span className="flagship-sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</span>
   </section>;

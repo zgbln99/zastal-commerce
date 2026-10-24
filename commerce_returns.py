@@ -241,7 +241,7 @@ def cancel_after_personalization(c, order_id, actor_id, reason):
     c.execute('INSERT INTO events(order_id,created,status) VALUES(?,?,?)', (order_id, now, 'anulowane'))
     detail = sales.details(c, order_id)
     if detail and detail['payment_status'] == 'paid':
-        sales.mark_payment(c, order_id, 'paid', 'Anulowano po personalizacji — rozlicz zwrot w zgłoszeniach')
+        sales.mark_payment(c, order_id, 'paid', 'Anulowano po personalizacji, rozlicz zwrot w zgłoszeniach')
     c.execute('INSERT INTO audit_log(kind,object_id,note,created) VALUES(?,?,?,?)',
               ('order', str(order_id), f'Administrator {actor_id}: anulowano po rozpoczęciu personalizacji; powód: {reason}', now))
     return {'ok': True, 'status': 'anulowane'}

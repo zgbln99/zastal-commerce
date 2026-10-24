@@ -305,10 +305,10 @@ def _message(c, row, config):
         action = 'verify' if row['kind'] == 'email_verification' else 'reset'
         link = os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/') + '/konto/email?action=' + action + '#token=' + raw
         if action == 'verify':
-            subject = 'Zastal Store — potwierdź adres e-mail'
+            subject = 'Zastal Store, potwierdź adres e-mail'
             body = f'Potwierdź adres e-mail swojego konta Zastal Store:\n\n{link}\n\nLink jest jednorazowy i ważny przez 24 godziny.\nJeżeli nie tworzono konta, zignoruj tę wiadomość.'
         else:
-            subject = 'Zastal Store — zmiana hasła'
+            subject = 'Zastal Store, zmiana hasła'
             body = f'Ustaw nowe hasło do konta Zastal Store:\n\n{link}\n\nLink jest jednorazowy i ważny przez godzinę.\nJeżeli nie proszono o zmianę hasła, zignoruj tę wiadomość.'
     else:
         order = c.execute('SELECT * FROM orders WHERE id=?', (row['order_id'],)).fetchone()

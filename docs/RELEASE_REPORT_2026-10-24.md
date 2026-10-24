@@ -17,6 +17,7 @@ Data: 2026-10-24. Punkt wyjścia: `main` @ `60c4d42` (v0.10). Wszystkie zmiany s
 | `190264d` | Strony informacyjne (regulamin, polityka prywatności, zwroty, dostawa, kontakt): prywatne szkice z oznaczonymi polami `[UZUPEŁNIJ]`, publikacja po potwierdzeniu przeglądu, bezpieczne renderowanie `/informacje/<slug>` |
 | `4488fb9` | Dynamiczna strona **Pomoc** (treści z konfiguracji live), README v0.11, dowody w `docs/evidence/`, ten raport |
 | (przegląd) | **Omnibus**: historia cen produktów (`product_prices`), komunikat „Najniższa cena z 30 dni przed obniżką” na karcie, w podglądzie i na stronie produktu; **odzyskanie linku do zamówienia** przez numer + e-mail (bez ujawniania istnienia zamówienia, limit prób); e-maile: „Zapłacono” dla zamówień już opłaconych, informacja o przedsprzedaży przy pozycji; panel: metryki tylko z opłaconych zamówień live, „Oczekują na płatność”, sprzedaż z dzisiaj, wyszukiwanie po kliencie/e-mailu/przesyłce, CSV z klientem i płatnością, statusy sterowane procesem zablokowane w ręcznej liście; tekst **Uruchomienia sklepu** zgodny z rzeczywistym przełącznikiem; `tools/healthcheck.sh` |
+| (design) | **DESIGN.md** z zasadami wyglądu; krój wyświetlany Barlow Semi Condensed (self-hosted) dla nagłówków i cen; usunięte numerowane etykiety sekcji, ozdobne mikro-napisy, celownik, pasek haseł pod hero i półpauzy w treści; nazwy produktów bez pauz; **CSP z nonce** per żądanie (`proxy.ts`, bez `'unsafe-inline'` dla skryptów); historia cen w formularzu produktu w panelu; nowe zrzuty `docs/evidence/home-*`, `product-desktop-1440.png` |
 
 Zachowano: istniejące API i dane, CMS strony głównej, galerie, konta, historię zamówień, POS testowy (nadal działa w trybie prelaunch), wygląd premium streetwear. Żadna migracja nie usuwa danych (tabela w runbooku).
 
@@ -55,7 +56,7 @@ Zrzuty ekranu (320–1440 px) i log: `docs/evidence/`. Pełny zestaw powstaje lo
 
 ## 5. Znane ograniczenia i następne kroki (poza blokadami powyżej)
 
-- CSP używa `'unsafe-inline'` dla skryptów Next (nonce wymaga middleware) — do zaostrzenia w kolejnej iteracji.
+- CSP: skrypty tylko z nonce (`storefront/proxy.ts`); style nadal `'unsafe-inline'` (atrybuty `style` w CMS i edytorze układu).
 - Podgląd nadruku jest poglądowy, dopóki układ nie zostanie oznaczony jako skalibrowany na fizycznym egzemplarzu.
 - Automatyczna wysyłka wiadomości wymaga działającego workera `zastal-store-email` (unit w `deploy/`).
 - Notatki projektu: w tej sesji nie było dostępu do Twojego Vaulta (ani notatek na Dysku Google o Zastalu), dlatego cała dokumentacja robocza jest w `docs/` repozytorium.

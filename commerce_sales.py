@@ -404,7 +404,7 @@ def mark_paid(c, order_id, amount, source, note=''):
     if detail['payment_status'] == 'paid':
         return False
     if order['status'] == 'anulowane':
-        raise SalesError(409, 'Zamówienie jest anulowane — zarejestruj zwrot wpłaty', 'order_cancelled')
+        raise SalesError(409, 'Zamówienie jest anulowane, zarejestruj zwrot wpłaty', 'order_cancelled')
     now = stamp()
     c.execute('UPDATE order_details SET payment_status=?,paid_at=?,paid_amount=?,payment_note=?,updated=? WHERE order_id=?',
               ('paid', now, amount, f'{source}: {note}'[:300], now, order_id))
@@ -507,11 +507,11 @@ def order_email(c, order, detail, kind, origin):
     link = f'{origin}/zamowienie?id={order["id"]}'
     lines = []
     if not live:
-        subject = f'Zastal Store — zamówienie testowe #{order["id"]}'
+        subject = f'Zastal Store, zamówienie testowe #{order["id"]}'
         lines += [f'Zamówienie testowe #{order["id"]}', f'Status: {status}', f'Kwota testowa: {amount}', '',
                   'To sprzedaż demonstracyjna. Dokument niefiskalny: nie jest paragonem ani fakturą i nie potwierdza rzeczywistej płatności.']
     elif kind == 'order_created':
-        subject = f'Zastal Store — potwierdzenie zamówienia {number}'
+        subject = f'Zastal Store, potwierdzenie zamówienia {number}'
         paid_now = detail['payment_status'] == 'paid'
         lines += [f'Dziękujemy za zamówienie {number}.', f'Status: {status}', (f'Zapłacono: {amount}' if paid_now else f'Do zapłaty: {amount}'), '']
         if paid_now:
@@ -527,10 +527,10 @@ def order_email(c, order, detail, kind, origin):
         elif detail['payment_status'] != 'paid':
             lines += ['Jeśli płatność online nie została ukończona, wróć do zamówienia i dokończ ją.', '']
     elif kind == 'order_paid':
-        subject = f'Zastal Store — płatność za {number} przyjęta'
+        subject = f'Zastal Store, płatność za {number} przyjęta'
         lines += [f'Otrzymaliśmy płatność za zamówienie {number} ({amount}).', 'Przekazujemy je do realizacji.', '']
     elif order['status'] == 'wyslane':
-        subject = f'Zastal Store — zamówienie {number} wysłane'
+        subject = f'Zastal Store, zamówienie {number} wysłane'
         lines += [f'Zamówienie {number} zostało nadane.']
         if detail['tracking_number']:
             lines.append(f'Przewoźnik: {detail["carrier"]} · numer przesyłki: {detail["tracking_number"]}')
@@ -538,7 +538,7 @@ def order_email(c, order, detail, kind, origin):
             lines.append(f'Śledzenie: {detail["tracking_url"]}')
         lines.append('')
     elif kind == 'return_update':
-        subject = f'Zastal Store — zgłoszenie do zamówienia {number}'
+        subject = f'Zastal Store, zgłoszenie do zamówienia {number}'
         latest = _safe(lambda: c.execute('SELECT kind,status,refund_amount,refund_method,note FROM returns WHERE order_id=? ORDER BY id DESC LIMIT 1', (order['id'],)).fetchone(), None)
         labels = {'zgloszony': 'przyjęliśmy zgłoszenie i sprawdzamy je', 'przyjety': 'zgłoszenie zostało zaakceptowane; odeślij produkt na adres zwrotów lub przynieś do sklepu',
                   'odrzucony': 'zgłoszenie zostało odrzucone', 'rozliczony': 'zgłoszenie zostało rozliczone'}
@@ -553,10 +553,10 @@ def order_email(c, order, detail, kind, origin):
             lines.append(f'Adres do zwrotów: {seller_info["returns_address"]}')
         lines.append('')
     elif order['status'] == 'anulowane':
-        subject = f'Zastal Store — zamówienie {number} anulowane'
+        subject = f'Zastal Store, zamówienie {number} anulowane'
         lines += [f'Zamówienie {number} zostało anulowane.', 'Jeśli dokonano wpłaty, zwrot nastąpi tą samą metodą płatności.', '']
     else:
-        subject = f'Zastal Store — zamówienie {number}: {status}'
+        subject = f'Zastal Store, zamówienie {number}: {status}'
         lines += [f'Status zamówienia {number}: {status}', '']
     raw_items = order['items'] if 'items' in order.keys() else '[]'
     items = json.loads(raw_items) if isinstance(raw_items, str) else raw_items or []
@@ -567,7 +567,7 @@ def order_email(c, order, detail, kind, origin):
             print_label = f' · nadruk {item["personalization"].get("name", "")} {item["personalization"].get("number", "")}'
         if isinstance(item.get('preorder'), dict) and item['preorder'].get('note'):
             print_label += f' · przedsprzedaż: {item["preorder"]["note"]}'
-        lines.append(f'  {item.get("qty", 1)} × {item.get("name", item.get("sku"))} / {item.get("size", "UNI")}{print_label} — {item.get("unit_price", 0) * item.get("qty", 1) / 100:.2f} PLN')
+        lines.append(f'  {item.get("qty", 1)} × {item.get("name", item.get("sku"))} / {item.get("size", "UNI")}{print_label}, {item.get("unit_price", 0) * item.get("qty", 1) / 100:.2f} PLN')
     if detail:
         lines += ['', f'Dostawa: {detail["shipping_name"] or detail["shipping_code"]}']
     lines += ['', f'Szczegóły zamówienia: {link}']

@@ -25,9 +25,9 @@ def seed(api, sales, auth):
     with api.connect() as c:
         for row in [
             (1, 'Bluza Zastal Logo', 'ZS-HD-001', 'Bluzy', 9900, 38), (2, 'Bluza Zastal Retro', 'ZS-HD-002', 'Bluzy', 9900, 19),
-            (3, 'Koszulka Wicemistrz Polski', 'ZS-TS-003', 'Koszulki', 6500, 24), (4, 'Koszulka The Final — ciemna', 'ZS-TS-004', 'Koszulki', 6000, 27),
-            (5, 'Koszulka The Final — jasna', 'ZS-TS-005', 'Koszulki', 6000, 17), (6, 'Koszulka Zastal Sulima', 'ZS-TS-006', 'Koszulki', 6000, 35),
-            (7, 'Zastal Express — koszulka', 'ZS-TS-007', 'Koszulki', 5500, 25), (8, 'Worek sportowy Zastal', 'ZS-AC-008', 'Akcesoria', 5000, 42),
+            (3, 'Koszulka Wicemistrz Polski', 'ZS-TS-003', 'Koszulki', 6500, 24), (4, 'Koszulka The Final ciemna', 'ZS-TS-004', 'Koszulki', 6000, 27),
+            (5, 'Koszulka The Final jasna', 'ZS-TS-005', 'Koszulki', 6000, 17), (6, 'Koszulka Zastal Sulima', 'ZS-TS-006', 'Koszulki', 6000, 35),
+            (7, 'Koszulka Zastal Express', 'ZS-TS-007', 'Koszulki', 5500, 25), (8, 'Worek sportowy Zastal', 'ZS-AC-008', 'Akcesoria', 5000, 42),
             (9, 'Koszulka dziecięca Wicemistrz', 'ZS-KD-009', 'Dzieci', 5500, 20), (10, 'Koszulka Zastal Trio', 'ZS-TS-010', 'Koszulki', 6000, 24),
             (11, 'Brelok Dziczek 3D', 'ZS-AC-011', 'Akcesoria', 3000, 60), (12, 'Magnes Zastal Dziczek', 'ZS-AC-012', 'Akcesoria', 2500, 45)]:
             c.execute('INSERT INTO products(id,name,sku,category,price,stock) VALUES(?,?,?,?,?,?)', row)

@@ -3,7 +3,7 @@ import {useState} from "react";
 import {ArrowRight,RotateCcw} from "lucide-react";
 import {fmt} from "../lib/catalog";
 export type PublicReturn={id:number;kind:"zwrot"|"reklamacja";status:string;items:{line_index:number;qty:number;name:string;size:string}[];reason:string;reason_label:string;description:string;refund_amount:number;refund_method:string;created:string;resolved_at:string|null};
-export const RETURN_STATUS:Record<string,string>={zgloszony:"Zgłoszone — sprawdzamy",przyjety:"Przyjęte — odeślij lub przynieś produkt",odrzucony:"Odrzucone",rozliczony:"Rozliczone"};
+export const RETURN_STATUS:Record<string,string>={zgloszony:"Zgłoszone, sprawdzamy",przyjety:"Przyjęte, odeślij lub przynieś produkt",odrzucony:"Odrzucone",rozliczony:"Rozliczone"};
 export const RETURN_REASONS:Record<string,string>={rozmiar:"Zły rozmiar",wada:"Wada produktu",niezgodny:"Produkt niezgodny z zamówieniem",odstapienie:"Odstąpienie od umowy (14 dni)",inny:"Inny powód"};
 type Line={name:string;size:string;qty:number;unit_price:number};
 /** Customer-side return / complaint form used on the receipt page and in the account. */

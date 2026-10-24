@@ -30,7 +30,7 @@ Sklep prowadzi: [NAZWA PODMIOTU], [ADRES], NIP [NIP], KRS/CEIDG [NUMER], e-mail:
 - Zamówienie nieopłacone w ciągu [LICZBA] godzin jest anulowane.
 
 ## 4. Dostawa
-- [METODY DOSTAWY, KOSZTY I TERMINY — zgodnie z panelem Sprzedaż i dostawy]
+- [METODY DOSTAWY, KOSZTY I TERMINY, zgodnie z panelem Sprzedaż i dostawy]
 
 ## 5. Odstąpienie od umowy
 - Konsument ma prawo odstąpić od umowy w terminie 14 dni bez podania przyczyny, z wyjątkami ustawowymi (m.in. rzeczy wyprodukowane według specyfikacji konsumenta).
@@ -52,7 +52,7 @@ Sklep prowadzi: [NAZWA PODMIOTU], [ADRES], NIP [NIP], KRS/CEIDG [NUMER], e-mail:
 - Realizacja zamówienia i umowy sprzedaży (art. 6 ust. 1 lit. b RODO).
 - Obowiązki podatkowe i rachunkowe (art. 6 ust. 1 lit. c RODO).
 - Obsługa reklamacji i zwrotów (art. 6 ust. 1 lit. b i f RODO).
-- Marketing za zgodą (art. 6 ust. 1 lit. a RODO) — zgoda jest dobrowolna i może być wycofana.
+- Marketing za zgodą (art. 6 ust. 1 lit. a RODO), zgoda jest dobrowolna i może być wycofana.
 
 ## Odbiorcy danych
 - Operator płatności PayU S.A., przewoźnicy, dostawca usług e-mail, hosting.

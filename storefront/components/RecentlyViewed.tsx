@@ -63,7 +63,7 @@ export default function RecentlyViewed({ currentId }: { currentId: number }) {
   if (!enabled) return <section className="recent-products"><p>Chcesz wracać do oglądanych produktów? Możesz zapisywać ich historię na tym urządzeniu.</p><button type="button" className="inline-link" onClick={toggle}>Włącz historię oglądania</button></section>;
   return <section className="recent-products" aria-labelledby="recent-products-heading">
     <div className="section-heading recent-products-heading">
-      <div><span className="eyebrow">HISTORIA PRZEGLĄDANIA / NA TYM URZĄDZENIU</span><h2 id="recent-products-heading">Ostatnio oglądane</h2></div>
+      <div><h2 id="recent-products-heading">Ostatnio oglądane</h2><span className="eyebrow">Zapisane na tym urządzeniu</span></div>
       <Link className="inline-link" href="/sklep">Powrót do sklepu <ArrowUpRight size={17}/></Link>
     </div>
     <button type="button" className="inline-link" onClick={toggle}>Wyłącz historię i usuń zapisane produkty</button>
