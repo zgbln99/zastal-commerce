@@ -125,17 +125,17 @@ export default function CheckoutClient(){
   <section className="prelaunch-content">
     <div className="prelaunch-main">
       <span className="eyebrow">ZASTAL STORE / KOMUNIKAT</span>
-      <h1>PRZYGOTOWUJEMY<br/>START <em>SPRZEDAŻY.</em></h1>
-      <p>Nowy sklep klubowy jest w trakcie uruchamiania. Możesz już odkrywać kolekcje i przygotować swój koszyk, ale nie przyjmujemy jeszcze nowych zamówień ani płatności.</p>
-      <p>Nie chcemy prosić Cię o zapłatę przed uruchomieniem bezpiecznej obsługi transakcji i dostaw.</p>
+      <h1>ZAMÓWIENIA ONLINE<br/><em>CHWILOWO NIEDOSTĘPNE.</em></h1>
+      <p>Zamówienia online są obecnie niedostępne. Możesz przeglądać kolekcję i zachować wybrane produkty w koszyku.</p>
+      <p>Na tym etapie nie pobieramy płatności.</p>
       <Link className="button button-dark" href="/sklep">WRÓĆ DO KOLEKCJI <ArrowRight size={18}/></Link>
     </div>
-    <aside className="prelaunch-aside"><div className="prelaunch-icon"><PackageCheck size={33}/></div><h2>Co uruchomimy?</h2>
+    <aside className="prelaunch-aside"><div className="prelaunch-icon"><PackageCheck size={33}/></div><h2>Dostawa i płatności</h2>
       <div><CheckCircle2 size={17}/><span>Zakupy i konto kibica</span></div>
       <div><CheckCircle2 size={17}/><span>Personalizacja koszulek</span></div>
       <div><Clock3 size={17}/><span>Bezpieczne płatności</span></div>
       <div><Clock3 size={17}/><span>Wysyłka i śledzenie zamówienia</span></div>
-      <small>Funkcje sprzedażowe będą dostępne po zakończeniu integracji i testów.</small>
+      <small>Dostępne sposoby dostawy i płatności zobaczysz przed potwierdzeniem zamówienia.</small>
     </aside>
   </section>
  </div>;
