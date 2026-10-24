@@ -75,7 +75,8 @@
 .admin-login-panel{background:#fff}
 .admin-login-panel>h1{font-family:"ZT Talk",Arial,sans-serif;font-weight:700;letter-spacing:-.035em}
 .admin-login-aside{background:#165114}
-.admin-login-brand>img,.admin-login-emblem>img{background:#fff;border-radius:10px;padding:9px}
+.admin-login-brand>img{width:242px;height:70px;object-fit:contain;background:#fff;border-radius:10px;padding:8px}
+.admin-login-emblem>img{background:#fff;border-radius:10px;padding:9px}
 .admin-sidebar-close{color:#fff}
 @media(max-width:1080px){.admin-sidebar{width:238px;flex-basis:238px}.admin-main{margin-left:238px}.admin-page{padding-inline:26px}}
 @media(max-width:760px){
