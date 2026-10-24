@@ -81,7 +81,9 @@ def init_schema(c):
             shipped_at TEXT, note TEXT NOT NULL DEFAULT '', created TEXT NOT NULL, updated TEXT NOT NULL);
     ''')
     present = {row['name'] for row in c.execute('PRAGMA table_info(order_details)')}
-    for column, definition in (('promo_code', "TEXT NOT NULL DEFAULT ''"), ('discount', 'INTEGER NOT NULL DEFAULT 0')):
+    for column, definition in (('promo_code', "TEXT NOT NULL DEFAULT ''"), ('discount', 'INTEGER NOT NULL DEFAULT 0'),
+                               ('gift_card_code', "TEXT NOT NULL DEFAULT ''"), ('gift_card_amount', 'INTEGER NOT NULL DEFAULT 0'),
+                               ('gift_email', "TEXT NOT NULL DEFAULT ''"), ('gift_message', "TEXT NOT NULL DEFAULT ''")):
         if column not in present:
             c.execute(f'ALTER TABLE order_details ADD COLUMN {column} {definition}')
     if not c.execute('SELECT 1 FROM shipping_methods LIMIT 1').fetchone():
@@ -281,6 +283,10 @@ def _field(data, key, label, maximum, required):
     return value
 
 
+EMAIL_METHOD = {'id': 0, 'code': 'email', 'name': 'Dostawa e-mailem', 'kind': 'pickup', 'price': 0, 'free_from': None, 'enabled': 1,
+                'requires_address': 0, 'carrier': '', 'tracking_url': '', 'sort': 0, 'note': 'Karty podarunkowe wysyłamy na adres e-mail po opłaceniu'}
+
+
 def validate_checkout(data, methods, payments, config, live):
     """Returns normalized customer/shipping/payment/invoice/consents. Strict when live."""
     fulfillment = data.get('fulfillment') if isinstance(data.get('fulfillment'), str) else None
@@ -346,17 +352,19 @@ def initial_status(payment, mode):
     return 'potwierdzone' if payment == 'pickup' else 'oczekuje_platnosci'
 
 
-def save_details(c, order_id, checkout, mode, promo=None):
+def save_details(c, order_id, checkout, mode, promo=None, gift=None):
     now = stamp()
     method = checkout['method']
     c.execute('''INSERT INTO order_details(order_id,mode,customer_email,customer_name,customer_phone,shipping_code,shipping_name,
-                 shipping_kind,address,locker_code,invoice,consents,payment_method,payment_status,created,updated,promo_code,discount)
-                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                 shipping_kind,address,locker_code,invoice,consents,payment_method,payment_status,created,updated,promo_code,discount,
+                 gift_card_code,gift_card_amount,gift_email,gift_message)
+                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
               (order_id, mode, checkout['customer']['email'], checkout['customer']['name'], checkout['customer']['phone'],
                method['code'], method['name'], method['kind'], json.dumps(checkout['address'], ensure_ascii=False),
                checkout['locker_code'], json.dumps(checkout['invoice'], ensure_ascii=False),
                json.dumps({**checkout['consents'], 'terms_version': settings(c)['terms_version'], 'accepted_at': now}, ensure_ascii=False),
-               checkout['payment'], 'unpaid', now, now, promo['code'] if promo else '', promo['discount'] if promo else 0))
+               checkout['payment'], 'unpaid', now, now, promo['code'] if promo else '', promo['discount'] if promo else 0,
+               (gift or {}).get('code', ''), (gift or {}).get('amount', 0), (gift or {}).get('email', ''), (gift or {}).get('message', '')))
 
 
 def details(c, order_id):
@@ -382,8 +390,12 @@ def public_details(value):
         return {'mode': 'test', 'payment_method': None, 'payment_status': 'unpaid'}
     keys = ('mode', 'customer_email', 'customer_name', 'customer_phone', 'shipping_code', 'shipping_name', 'shipping_kind',
             'address', 'locker_code', 'invoice', 'payment_method', 'payment_status', 'paid_at', 'carrier', 'tracking_number',
-            'tracking_url', 'shipped_at', 'shipment', 'promo_code', 'discount')
-    return {key: value.get(key) for key in keys}
+            'tracking_url', 'shipped_at', 'shipment', 'promo_code', 'discount', 'gift_card_amount', 'gift_email')
+    public = {key: value.get(key) for key in keys}
+    if value.get('gift_card_code'):
+        import commerce_giftcards as giftcards
+        public['gift_card_code'] = giftcards.mask(value['gift_card_code'])
+    return public
 
 
 def transfer_instructions(c, order_id, total):
@@ -414,6 +426,8 @@ def mark_paid(c, order_id, amount, source, note=''):
               ('paid', now, amount, f'{source}: {note}'[:300], now, order_id))
     if order['status'] in ('nowe', 'oczekuje_platnosci', 'potwierdzone'):
         _event(c, order_id, 'oplacone')
+    import commerce_giftcards as giftcards
+    giftcards.on_paid(c, order_id)
     return True
 
 
@@ -484,7 +498,11 @@ def expire_unpaid(c, hours=None):
 
 
 def restore_stock(c, order_id, items_json, reason):
+    import commerce_giftcards as giftcards
+    giftcards.release(c, order_id, reason)
     for line in json.loads(items_json):
+        if giftcards.is_gift_line(line):
+            continue
         sku = line.get('variant_sku') or line.get('sku', '') + '-' + (line.get('size') or 'UNI')
         variant = c.execute('SELECT * FROM product_variants WHERE sku=?', (sku,)).fetchone()
         if variant:
@@ -576,6 +594,8 @@ def order_email(c, order, detail, kind, origin):
         lines += ['', f'Dostawa: {detail["shipping_name"] or detail["shipping_code"]}']
         if detail.get('discount'):
             lines.append(f'Rabat ({detail.get("promo_code") or "kod"}): -{detail["discount"] / 100:.2f} PLN')
+        if detail.get('gift_card_amount'):
+            lines.append(f'Karta podarunkowa: -{detail["gift_card_amount"] / 100:.2f} PLN')
     lines.append(f'Razem do zapłaty: {(order["total"] if "total" in order.keys() else 0) / 100:.2f} PLN')
     lines += ['', f'Szczegóły zamówienia: {link}']
     seller = _safe(lambda: launch.values(c), {'seller_name': ''})

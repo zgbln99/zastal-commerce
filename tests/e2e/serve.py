@@ -40,6 +40,7 @@ def seed(api, sales, auth):
         c.execute("UPDATE product_options SET preorder=1,preorder_note='Wysyłka od 20 listopada',preorder_until='2026-11-20',size_guide='116: dł. 44 cm\n128: dł. 48 cm\n140: dł. 52 cm',description='Koszulka dla najmłodszych kibiców.\n\n## Materiał i krój\n- Bawełna 100%\n- Rozmiary według wzrostu dziecka' WHERE product_id=9")
         c.execute("INSERT INTO promo_codes(code,kind,value,min_subtotal,created) VALUES('KIBIC10','percent',10,5000,'2026-10-24T00:00:00+00:00')")
         c.execute("UPDATE product_options SET badge='limitowana' WHERE product_id=2")
+        c.execute("INSERT INTO gift_cards(code,initial_value,balance,status,issued_at,expires_at) VALUES('ZG-TEST-TEST-7777',10000,10000,'active','2026-10-24T00:00:00+00:00','2027-10-24')")
         import datetime as dt
         import commerce_pricing as pricing
         c.execute('UPDATE product_prices SET changed_at=? WHERE product_id=3', (pricing.stamp(dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=40)),))

@@ -46,9 +46,11 @@ export function normalizeCheckoutDetails(payload) {
     invoice: invoice.requested === true ? { requested: true, company: TEXT(invoice.company ?? '', 160), tax_id: TEXT(invoice.tax_id ?? '', 24), address: TEXT(invoice.address ?? '', 300) } : { requested: false },
     consents: { terms: consents.terms === true, privacy: consents.privacy === true, marketing: consents.marketing === true },
     ...(typeof payload.promo_code === 'string' && payload.promo_code ? { promo_code: TEXT(payload.promo_code, 24) } : {}),
+    ...(typeof payload.gift_card === 'string' && payload.gift_card ? { gift_card: TEXT(payload.gift_card, 24) } : {}),
+    ...(payload.gift && typeof payload.gift === 'object' ? { gift: { email: TEXT(payload.gift.email ?? '', 254), message: TEXT(payload.gift.message ?? '', 300) } } : {}),
   };
   const flat = [fields.customer.email, fields.customer.name, fields.customer.phone, fields.shipping.method, fields.shipping.locker_code, ...Object.values(fields.shipping.address), ...(fields.invoice.requested ? [fields.invoice.company, fields.invoice.tax_id, fields.invoice.address] : [])];
-  if (flat.some(value => value === null) || fields.payment === null || fields.shipping.method !== payload.fulfillment || fields.promo_code === null) return null;
+  if (flat.some(value => value === null) || fields.payment === null || fields.shipping.method !== payload.fulfillment || fields.promo_code === null || fields.gift_card === null || (fields.gift && (fields.gift.email === null || fields.gift.message === null))) return null;
   return fields;
 }
 

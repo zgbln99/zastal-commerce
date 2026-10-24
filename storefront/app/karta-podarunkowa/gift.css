@@ -1,0 +1,14 @@
+.gift-page{padding-bottom:60px}
+.gift-layout{display:grid;grid-template-columns:1.2fr 1fr;gap:32px;margin:28px 0 44px;align-items:start}
+.gift-how h2,.gift-products h2{font-size:24px;margin:0 0 14px}
+.gift-how ol{margin:0;padding-left:20px;display:grid;gap:12px;font-size:15px;line-height:1.65}
+.gift-how .quiet-note{margin-top:16px}
+.gift-balance{border:1px solid var(--line);border-radius:var(--radius);padding:22px;background:var(--paper)}
+.gift-balance h2{display:flex;align-items:center;gap:8px;font-size:18px;margin:0 0 14px}
+.gift-balance-fields{display:flex;gap:10px}
+.gift-balance-fields input{flex:1;min-height:46px;border:1px solid #cdd3cf;border-radius:var(--radius);padding:8px 12px;font:inherit;font-size:15px;letter-spacing:.04em;text-transform:uppercase}
+.gift-balance-fields .button{min-height:46px}
+.gift-balance-result{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0 0}
+.gift-balance-result div{display:grid;gap:2px}.gift-balance-result dt{font-size:12px;color:var(--muted)}.gift-balance-result dd{margin:0;font-weight:600;font-family:var(--font-display);font-size:20px}
+.gift-products{margin-top:12px}
+@media (max-width:860px){.gift-layout{grid-template-columns:1fr;gap:20px}.gift-balance-fields{flex-direction:column}}

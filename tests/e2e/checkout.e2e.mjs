@@ -141,6 +141,12 @@ try {
   const limited = await d.locator('.product-badge.badge-limitowana').count().catch(() => 0);
   await d.goto(WEB + '/sklep', { waitUntil: 'networkidle' });
   step('desktop: manual badge shows on the product card', (await d.locator('.product-badge.badge-limitowana').count()) === 1, String(limited));
+  await d.goto(WEB + '/karta-podarunkowa', { waitUntil: 'networkidle' });
+  await d.fill('input[aria-label="Kod karty podarunkowej"]', 'zg test test 7777');
+  await d.getByRole('button', { name: 'Sprawdź' }).click();
+  await d.waitForSelector('.gift-balance-result');
+  const balanceText = await d.locator('.gift-balance-result').innerText();
+  step('desktop: gift card balance page shows the balance', balanceText.includes('100,00'), balanceText.replace(/\n/g, ' ').slice(0, 60));
   await shot(d, '10-receipt-paid-1440');
 
   // ---------- Staff panel: login, sales settings, order payment panel, fulfillment queue

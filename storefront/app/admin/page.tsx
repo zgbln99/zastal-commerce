@@ -22,6 +22,7 @@ import SalesSettings from "./SalesSettings";
 import Returns from "./Returns";
 import Pages from "./Pages";
 import Marketing from "./Marketing";
+import GiftCards from "./GiftCards";
 
 const views:{id:OperationsTab; label:string; title:string; description:string; icon:ReactNode; cap?:string}[] = [
   {id:"homepage",cap:"cms",label:"Edytor strony",title:"Edytor strony głównej",description:"Sekcje, multimedia, widok telefonu, wersje robocze i publikacja.",icon:<LayoutDashboard size={19}/>},
@@ -41,6 +42,7 @@ const views:{id:OperationsTab; label:string; title:string; description:string; i
   {id:"labels", cap:"labels", label:"Etykiety", title:"Etykiety EAN i QR", description:"Weryfikacja kodów i wydruk dla konkretnych wariantów.", icon:<Tag size={19}/>},
   {id:"inventory_import",cap:"inventory",label:"Import magazynu",title:"Import stanów magazynowych",description:"Hurtowa aktualizacja stanów SKU z arkusza CSV.",icon:<Warehouse size={19}/>},
   {id:"marketing",cap:"settings",label:"Promocje i kody",title:"Promocje, kody i powiadomienia",description:"Kody rabatowe z limitami i ważnością oraz klienci czekający na brakujący rozmiar.",icon:<Tag size={19}/>},
+  {id:"giftcards",cap:"settings",label:"Karty podarunkowe",title:"Karty podarunkowe",description:"Wydawanie kart sprzedanych przy kasie, salda, historia użyć i blokowanie.",icon:<Tag size={19}/>},
   {id:"settings",cap:"settings",label:"Sprzedaż i dostawy",title:"Sprzedaż, płatności i dostawy",description:"Tryb sprzedaży, PayU, przelew, odbiór osobisty i metody dostawy.",icon:<Settings size={19}/>},
   {id:"launch",cap:"launch",label:"Uruchomienie sklepu",title:"Uruchomienie sprzedaży",description:"Konfiguracja podmiotu, lista warunków i gotowość operacyjna.",icon:<Settings size={19}/>},
   {id:"staff",cap:"staff",label:"Pracownicy",title:"Konta pracowników",description:"Loginy, role i uprawnienia personelu sklepu.",icon:<Users size={19}/>},
@@ -124,6 +126,7 @@ export default function Admin() {
       {activeTab==="staff"&&<Staff/>}
       {activeTab==="settings"&&<SalesSettings/>}
       {activeTab==="marketing"&&<Marketing/>}
+      {activeTab==="giftcards"&&<GiftCards/>}
       {activeTab==="returns"&&<Returns onOpenOrder={openOrder}/>}
       {activeTab==="pages"&&<Pages/>}
       {activeTab==="products"&&<Products inventory={data.inventory} onRefresh={refresh}/>}

@@ -164,7 +164,7 @@ def _consume_token(c, raw, kind):
 
 
 ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid', 'return_update')
-GUEST_KINDS = ('stock_alert',)
+GUEST_KINDS = ('stock_alert', 'gift_card_issued')
 
 
 def enqueue_guest(c, kind, recipient, dedupe):
@@ -318,6 +318,13 @@ def _message(c, row, config):
         else:
             subject = 'Zastal Store, zmiana hasła'
             body = f'Ustaw nowe hasło do konta Zastal Store:\n\n{link}\n\nLink jest jednorazowy i ważny przez godzinę.\nJeżeli nie proszono o zmianę hasła, zignoruj tę wiadomość.'
+    elif row['kind'] == 'gift_card_issued':
+        import commerce_giftcards as giftcards
+        composed = giftcards.card_message(c, int(row['dedupe_key'].rsplit(':', 1)[1]), os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
+        if not composed:
+            c.commit()
+            return None
+        subject, body = composed
     elif row['kind'] == 'stock_alert':
         import commerce_merch as merch
         composed = merch.alert_message(c, int(row['dedupe_key'].rsplit(':', 1)[1]), os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))

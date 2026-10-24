@@ -30,6 +30,7 @@ import commerce_returns as returns
 import commerce_pages as pages
 import commerce_pricing as pricing
 import commerce_merch as merch
+import commerce_giftcards as giftcards
 import commerce_dpd as dpd
 
 ROOT = Path(__file__).resolve().parent
@@ -115,6 +116,7 @@ def init():
         pages.init_schema(c)
         pricing.init_schema(c)
         merch.init_schema(c)
+        giftcards.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -156,7 +158,10 @@ def catalog(c):
     variants = [dict(x) for x in c.execute("SELECT id,product_id,size,sku,ean,stock FROM product_variants ORDER BY id")]
     by_product=defaultdict(list)
     for v in variants:by_product[v["product_id"]].append(v)
-    for p in products:p["variants"]=by_product[p["id"]]
+    for p in products:
+        p["variants"]=by_product[p["id"]]
+        if p.get('gift_card'):
+            for v in p['variants']:v['stock']=9999  # digital product: never runs out
     return products
 
 class Invalid(Exception): pass
@@ -178,6 +183,7 @@ def order_detail(c,receipt):
     if detail and detail['payment_method']=='payu':
         o['payment']=payments.public_payment(c,o['id'])
     o['returns']=returns.public_for_order(c,o['id'])
+    o['gift_cards']=giftcards.order_cards(c,o['id']) if detail and detail['payment_status'] in ('paid','partially_refunded') else []
     o['can_return']=bool(detail and detail['mode']=='live' and o['status'] in ('wydane','wyslane') and not any(r['status'] in ('zgloszony','przyjety') for r in o['returns']))
     return o
 
@@ -189,6 +195,7 @@ def checkout_reply(c,oid,total,token):
     reply['mode']=detail['mode'] if detail else 'test'
     reply['discount']=detail.get('discount',0) if detail else 0
     reply['promo_code']=detail.get('promo_code','') if detail else ''
+    reply['gift_card_amount']=detail.get('gift_card_amount',0) if detail else 0
     if detail and detail['payment_method']=='payu':
         reply['payment']={'method':'payu',**payments.public_payment(c,oid)}
     elif detail:
@@ -315,6 +322,11 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(200,order_detail(c,receipt)) if receipt else self.respond(404,{'error':'Nie znaleziono zamówienia'})
                 if path=='/api/admin/products':return self.respond(200,catalog(c))
                 if path=='/api/admin/promo':return self.respond(200,merch.list_codes(c))
+                if path=='/api/admin/giftcards':return self.respond(200,giftcards.admin_list(c))
+                gift_route=re.fullmatch(r'/api/admin/giftcards/([1-9][0-9]*)',path)
+                if gift_route:
+                    try:return self.respond(200,giftcards.admin_card(c,int(gift_route.group(1))))
+                    except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
                 if path=='/api/admin/stock-alerts':return self.respond(200,merch.pending_alerts(c))
                 price_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/prices',path)
                 if price_route:return self.respond(200,{'history':pricing.history(c,int(price_route.group(1))),'reduction':pricing.reduction(c,int(price_route.group(1)))})
@@ -423,6 +435,23 @@ class Handler(BaseHTTPRequestHandler):
                 with connect() as c:live=readiness(c)['mode']=='live'
                 if not live and not launch.isolated_test_workflow(DATABASE):
                     return self.respond(503,{'error':'Sprzedaż online zostanie uruchomiona po skonfigurowaniu usług sklepu. Konto klienta możesz już założyć.','code':'store_prelaunch'})
+            if path=='/api/giftcards/check':
+                data=self.body()
+                if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                try:
+                    with connect() as c:row=giftcards.lookup(c,data.get('code'))
+                except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,giftcards.public_view(row))
+            if path=='/api/admin/giftcards':
+                data=self.body()
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        card=giftcards.issue(c,data.get('value'),self.request_user['id'],data.get('recipient_email',''),data.get('message',''),data.get('expires_at',''),None,data.get('note',''))
+                        if data.get('send_email') is True and card['recipient_email']:mail.enqueue_guest(c,'gift_card_issued',card['recipient_email'],f"gift_card:{card['id']}")
+                        audit(c,'giftcard',card['id'],f"Wydano kartę {giftcards.mask(card['code'])} o wartości {card['initial_value']/100:.2f} PLN")
+                except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(201,card)
             if path=='/api/promo/check':
                 data=self.body()
                 if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
@@ -509,6 +538,7 @@ class Handler(BaseHTTPRequestHandler):
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
                     result=ops.create_sale(c,data,self.request_user['id'],live=readiness(c)['mode']=='live',can_discount='discounts' in auth.capabilities(self.request_user))
+                    result['gift_cards']=giftcards.order_cards(c,result['id'])
                     if not result['replayed']:mail.enqueue_order(c,result['id'])
                 return self.respond(200 if result['replayed'] else 201,result)
             completion_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)/complete',path)
@@ -629,12 +659,19 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute("BEGIN IMMEDIATE")
                     state=readiness(c);live=state['mode']=='live';mode='live' if live else 'test'
                     config=sales.settings(c)
-                    checkout=sales.validate_checkout(data,sales.shipping_methods(c,enabled_only=live),sales.payment_options(c,config,payments.ready()),config,live)
+                    gift_products={row['product_id'] for row in c.execute('SELECT product_id FROM product_options WHERE gift_card=1')}
+                    digital_only=all(line['id'] in gift_products for line in normalized)
+                    available_methods=[dict(sales.EMAIL_METHOD)] if digital_only else sales.shipping_methods(c,enabled_only=live)
+                    checkout=sales.validate_checkout(data,available_methods,sales.payment_options(c,config,payments.ready()),config,live)
+                    if digital_only and checkout['payment']=='pickup':raise Invalid('Kartę podarunkową wysyłamy e-mailem, wybierz płatność online albo przelew')
+                    gift_input=data.get('gift_card') if isinstance(data.get('gift_card'),str) and data.get('gift_card').strip() else None
+                    gift_meta=data.get('gift') if isinstance(data.get('gift'),dict) else {}
                     method=checkout['method']
                     identity={"items":normalized,"fulfillment":method['code']}
                     if extended:identity['checkout']={key_:checkout[key_] for key_ in ('customer','address','locker_code','payment','invoice','consents')}
                     promo_input=data.get('promo_code') if isinstance(data.get('promo_code'),str) and data.get('promo_code').strip() else None
                     if promo_input:identity['promo']=promo_input.strip().upper()
+                    if gift_input:identity['gift']=gift_input.strip().upper()
                     # Retain v0.4 fingerprints for old guest attempts; identity is checked separately.
                     fingerprint=hashlib.sha256(json.dumps(identity,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
                     if key:
@@ -649,12 +686,14 @@ class Handler(BaseHTTPRequestHandler):
                         p=c.execute("SELECT * FROM products WHERE id=?",(pid,)).fetchone()
                         v=c.execute("SELECT * FROM product_variants WHERE product_id=? AND size=?",(pid,size)).fetchone()
                         if not p or not v:raise Invalid("Wybierz poprawny wariant produktu")
+                        gift_line=pid in gift_products
                         release=personalization.product_options(c,pid)['release_at']
                         if merch.unreleased({'release_at':release}):raise Invalid(f"{p['name']}: premiera {merch.release_label(release)}. Do tego czasu produkt nie jest sprzedawany online.")
-                        if v["stock"]<qty:raise Invalid("Niewystarczająca dostępność wariantu "+size)
-                        c.execute("UPDATE product_variants SET stock=stock-? WHERE id=?",(qty,v["id"]))
-                        c.execute("UPDATE products SET stock=stock-? WHERE id=?",(qty,pid))
-                        c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(v["id"],-qty,"zamówienie" if live else "zamówienie testowe",stamp(),"checkout"))
+                        if not gift_line:
+                            if v["stock"]<qty:raise Invalid("Niewystarczająca dostępność wariantu "+size)
+                            c.execute("UPDATE product_variants SET stock=stock-? WHERE id=?",(qty,v["id"]))
+                            c.execute("UPDATE products SET stock=stock-? WHERE id=?",(qty,pid))
+                            c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(v["id"],-qty,"zamówienie" if live else "zamówienie testowe",stamp(),"checkout"))
                         printed,fee=personalization.snapshot(c,pid,line.get('personalization'))
                         unit_price=p['price']+fee
                         total+=unit_price*qty
@@ -664,6 +703,7 @@ class Handler(BaseHTTPRequestHandler):
                         extras=personalization.line_extras(c,pid)
                         if printed is not None:item.update({key_:extras[key_] for key_ in ('decoration_method','print_layout') if key_ in extras})
                         if 'preorder' in extras:item['preorder']=extras['preorder']
+                        if gift_line:item['gift_card']=True
                         result.append(item)
                     now=stamp()
                     subtotal=total
@@ -673,17 +713,32 @@ class Handler(BaseHTTPRequestHandler):
                         try:promo,discount=merch.find_code(c,promo_input,subtotal)
                         except merch.MerchError as ex:raise Invalid(str(ex))
                     total+=shipping-discount
-                    if total<=0 and checkout['payment']=='payu':raise Invalid('Zamówienie o wartości 0 zł nie wymaga płatności online. Wybierz inną płatność.')
+                    gift_applied=0
+                    if gift_input:
+                        try:_,gift_applied=giftcards.preview(c,gift_input,total)
+                        except giftcards.GiftError as ex:raise Invalid(str(ex))
+                    total-=gift_applied
+                    if total<=0 and checkout['payment']=='payu' and not gift_applied:raise Invalid('Zamówienie o wartości 0 zł nie wymaga płatności online. Wybierz inną płatność.')
                     status=sales.initial_status(checkout['payment'],mode)
                     cur=c.execute("INSERT INTO orders(created,items,total,status) VALUES(?,?,?,?)",(now,json.dumps(result,ensure_ascii=False),total,status))
                     oid=cur.lastrowid
                     tracking=secrets.token_urlsafe(32)
                     c.execute("INSERT INTO order_receipts(order_id,tracking_token,fulfillment,shipping_fee,subtotal,idempotency_key,fingerprint,customer_id) VALUES(?,?,?,?,?,?,?,?)",(oid,tracking,method['code'],shipping,subtotal,key,fingerprint,owner))
                     c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(oid,now,status))
-                    sales.save_details(c,oid,checkout,mode,{'code':promo['code'],'discount':discount} if promo else None)
+                    gift_record=None
+                    if gift_applied:
+                        card,gift_applied=giftcards.redeem(c,gift_input,total+gift_applied,oid,f'zamówienie {oid}')
+                        gift_record={'code':card['code'],'amount':gift_applied}
+                    if any(line['id'] in gift_products for line in normalized):
+                        try:gift_record={**(gift_record or {}),'email':giftcards._email(gift_meta.get('email','')),'message':giftcards._text(gift_meta.get('message',''),'wiadomość',300)}
+                        except giftcards.GiftError as ex:raise Invalid(str(ex))
+                    sales.save_details(c,oid,checkout,mode,{'code':promo['code'],'discount':discount} if promo else None,gift_record)
+                    if gift_applied and total==0:
+                        c.execute('UPDATE order_details SET payment_method=? WHERE order_id=?',('giftcard',oid))
+                        sales.mark_paid(c,oid,gift_applied,'Karta podarunkowa',giftcards.mask(gift_record['code']))
                     if promo:merch.consume(c,promo['id']);audit(c,'order',oid,f"Kod rabatowy {promo['code']}: -{discount/100:.2f} PLN")
                     audit(c,"order",oid,"Utworzono zamówienie" if live else "Utworzono zamówienie demonstracyjne")
-                    if live and checkout['payment']=='payu':
+                    if live and checkout['payment']=='payu' and total>0:
                         order_row=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
                         try:payments.create_order(c,order_row,{**sales.details(c,oid),'tracking_token':tracking,'shipping_fee':shipping},self.client_ip(),result)
                         except payments.PaymentError as ex:
@@ -763,6 +818,7 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute('BEGIN IMMEDIATE')
                     oid=int(cancel_route.group(1))
                     result=returns.cancel_after_personalization(c,oid,self.request_user['id'],data.get('reason'))
+                    giftcards.release(c,oid,'anulowanie zamówienia')
                     mail.enqueue_order(c,oid,'order_status_changed')
                 return self.respond(200,result)
             if path=='/api/admin/orders/expire-unpaid':
@@ -902,6 +958,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(200,result)
                 except LookupError as ex:return self.respond(404,{'error':str(ex)})
                 except media.Conflict as ex:return self.respond(409,{'error':str(ex)})
+            gift_patch=re.fullmatch(r'/api/admin/giftcards/([1-9][0-9]*)',path)
+            if gift_patch:
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        card=giftcards.set_status(c,int(gift_patch.group(1)),data.get('status'),data.get('note',''))
+                        audit(c,'giftcard',card['id'],f"Karta {giftcards.mask(card['code'])}: {card['status']}")
+                except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,card)
             promo_patch=re.fullmatch(r'/api/admin/promo/([1-9][0-9]*)',path)
             if promo_patch:
                 try:
@@ -969,7 +1034,9 @@ class Handler(BaseHTTPRequestHandler):
                         if c.execute('SELECT 1 FROM fulfillment_lines WHERE order_id=? AND printed_qty>0',(oid,)).fetchone():raise Invalid('Nadruk wykonany, anulowanie wymaga obsługi ręcznej')
                         if c.execute("SELECT 1 FROM production_tasks WHERE order_id=? AND status NOT IN ('oczekuje')",(oid,)).fetchone():raise Invalid("Produkcja rozpoczęta, anulowanie wymaga obsługi ręcznej")
                         if c.execute("SELECT 1 FROM production_tasks WHERE order_id=?",(oid,)).fetchone():raise Invalid("Usuń lub rozlicz rezerwacje DTF przed anulowaniem")
+                        giftcards.release(c,oid,'anulowanie zamówienia')
                         for line in json.loads(old["items"]):
+                            if giftcards.is_gift_line(line):continue
                             sku=line.get("variant_sku") or line.get("sku","")+"-"+(line.get("size") or "UNI")
                             v=c.execute("SELECT * FROM product_variants WHERE sku=?",(sku,)).fetchone()
                             if v:

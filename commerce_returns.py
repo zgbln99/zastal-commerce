@@ -221,7 +221,7 @@ def cancel_after_personalization(c, order_id, actor_id, reason):
     for index, line in enumerate(json.loads(order['items'])):
         sku = line.get('variant_sku') or line.get('sku', '') + '-' + (line.get('size') or 'UNI')
         variant = c.execute('SELECT * FROM product_variants WHERE sku=?', (sku,)).fetchone()
-        if not variant:
+        if not variant or line.get('gift_card') is True:
             continue
         qty = int(line.get('qty', 1))
         lost = min(qty, max(printed.get(index, 0), qty if index in started else 0)) if 'personalization' in line else 0

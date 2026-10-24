@@ -30,9 +30,10 @@ Wszystkie kroki wykonuje osoba z dostępem do serwera. Żaden krok nie kasuje ba
 | `email_outbox` | `user_id` może być NULL, dodana kolumna `recipient` (zamówienia gości) | bez utraty |
 | `pos_sales` | przebudowa: `demo` 0/1, zmiana, rabat, dokument fiskalny, gotówka | bez utraty |
 | `product_options` | nowe kolumny: metoda znakowania, przedsprzedaż, rozmiarówka, układ nadruku | ALTER TABLE |
-| nowe tabele | `store_settings`, `shipping_methods`, `order_details`, `payments`, `payment_notifications`, `payment_refunds`, `pos_shifts`, `returns`, `product_prices`, `stock_alerts`, `promo_codes` | tworzone puste (`product_prices` dostaje bieżące ceny) |
+| nowe tabele | `store_settings`, `shipping_methods`, `order_details`, `payments`, `payment_notifications`, `payment_refunds`, `pos_shifts`, `returns`, `product_prices`, `stock_alerts`, `promo_codes`, `gift_cards`, `gift_card_transactions` | tworzone puste (`product_prices` dostaje bieżące ceny) |
 | `product_options` (2) | kolumny: opis, odznaka, premiera, data dodania | ALTER TABLE |
-| `order_details` (2) | kolumny: kod rabatowy, rabat | ALTER TABLE |
+| `order_details` (2) | kolumny: kod rabatowy, rabat, karta podarunkowa (kod, kwota, e-mail i wiadomość obdarowanego) | ALTER TABLE |
+| `pos_sales` (2) | kolumna: kwota z karty podarunkowej | ALTER TABLE |
 
 Migracje są idempotentne (testy `test_staff`, `test_sales` uruchamiają `init()` dwukrotnie i na starym schemacie).
 

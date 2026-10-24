@@ -121,6 +121,9 @@ def _normalized_sale(data):
                 or not re.fullmatch(r'[A-Za-z0-9/_. -]{1,40}', fiscal['number'].strip())):
             raise OpsError(400, 'Podaj rodzaj i numer dokumentu z kasy fiskalnej (paragon lub faktura)', 'fiscal_document_required')
         fiscal = {'kind': fiscal['kind'], 'number': fiscal['number'].strip()}
+    gift_card = data.get('gift_card')
+    if gift_card is not None and (not isinstance(gift_card, str) or not 1 <= len(gift_card.strip()) <= 40):
+        raise OpsError(400, 'Nieprawidłowy kod karty podarunkowej')
     cash_received = data.get('cash_received', 0)
     if isinstance(cash_received, bool) or not isinstance(cash_received, int) or not 0 <= cash_received <= 100000000:
         raise OpsError(400, 'Nieprawidłowa kwota przyjętej gotówki')
@@ -146,7 +149,7 @@ def _normalized_sale(data):
                 raise OpsError(400, str(ex), 'invalid_personalization') from ex
         normalized.append(item)
     identity = {'items': normalized, 'payment_method': payment, 'customer_id': customer}
-    extras = {'discount': discount, 'discount_reason': reason.strip(), 'fiscal': fiscal, 'cash_received': cash_received, 'handover': handover}
+    extras = {'discount': discount, 'discount_reason': reason.strip(), 'fiscal': fiscal, 'cash_received': cash_received, 'gift_card': gift_card.strip() if gift_card else None, 'handover': handover}
     if discount or fiscal or cash_received or handover:
         identity['extras'] = extras
     fingerprint = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
@@ -155,13 +158,15 @@ def _normalized_sale(data):
 
 def _sale_result(c, oid, replayed):
     row = c.execute('''SELECT o.id,o.total,o.items,o.status,r.tracking_token,s.demo,s.discount,s.discount_reason,s.fiscal_kind,
-        s.fiscal_number,s.cash_received,s.change_due,s.payment_method,s.shift_id FROM orders o
+        s.fiscal_number,s.cash_received,s.change_due,s.payment_method,s.shift_id,s.gift_card_amount FROM orders o
         JOIN order_receipts r ON r.order_id=o.id JOIN pos_sales s ON s.order_id=o.id WHERE o.id=?''', (oid,)).fetchone()
     return {'id': row['id'], 'total': row['total'], 'items': json.loads(row['items']), 'status': row['status'],
             'tracking_token': row['tracking_token'], 'demo': bool(row['demo']), 'replayed': replayed,
             'payment_method': row['payment_method'], 'discount': row['discount'], 'discount_reason': row['discount_reason'],
             'fiscal': {'kind': row['fiscal_kind'], 'number': row['fiscal_number']} if row['fiscal_number'] else None,
-            'cash_received': row['cash_received'], 'change_due': row['change_due'], 'shift_id': row['shift_id']}
+            'cash_received': row['cash_received'], 'change_due': row['change_due'], 'shift_id': row['shift_id'],
+            'gift_card_amount': row['gift_card_amount'], 'due': row['total'] - row['gift_card_amount'],
+            'gift_cards': __import__('commerce_giftcards').order_cards(c, row['id'])}
 
 
 def open_shift(c, register):
@@ -195,7 +200,8 @@ def create_sale(c, data, actor_id, live=False, can_discount=False, register='Kas
         variant = c.execute('SELECT * FROM product_variants WHERE product_id=? AND size=?', (pid, size)).fetchone()
         if not product or not variant:
             raise OpsError(400, 'Wybierz istniejący wariant', 'invalid_variant')
-        if variant['stock'] < qty:
+        gift_product = bool(personalization.product_options(c, pid).get('gift_card'))
+        if variant['stock'] < qty and not gift_product:
             raise OpsError(409, 'Niewystarczająca dostępność wariantu ' + size, 'insufficient_stock')
         try:
             printed, fee = personalization.snapshot(c, pid, line.get('personalization'))
@@ -215,8 +221,12 @@ def create_sale(c, data, actor_id, live=False, can_discount=False, register='Kas
             item.update({key: facts[key] for key in ('decoration_method', 'print_layout') if key in facts})
         if 'preorder' in facts:
             item['preorder'] = facts['preorder']
+        if gift_product:
+            item['gift_card'] = True
         result.append(item)
         total += unit_price * qty
+        if gift_product:
+            continue
         c.execute('UPDATE product_variants SET stock=stock-? WHERE id=?', (qty, variant['id']))
         c.execute('''INSERT INTO stock_events(variant_id,delta,reason,created,source)
             VALUES(?,?,?,?,?)''', (variant['id'], -qty, 'sprzedaż POS demonstracyjna', _stamp(), 'pos-demo'))
@@ -228,9 +238,19 @@ def create_sale(c, data, actor_id, live=False, can_discount=False, register='Kas
     if discount > subtotal:
         raise OpsError(400, 'Rabat nie może przekraczać wartości koszyka', 'discount_too_high')
     total = subtotal - discount
-    if payment == 'cash' and extras['cash_received'] and extras['cash_received'] < total:
+    import commerce_giftcards as giftcards
+    gift_applied = 0
+    if extras.get('gift_card'):
+        if not live:
+            raise OpsError(409, 'Karty podarunkowe obsługuje tylko sprzedaż rzeczywista (zmiana kasowa, dokument fiskalny)', 'gift_card_live_only')
+        try:
+            _, gift_applied = giftcards.preview(c, extras['gift_card'], total)
+        except giftcards.GiftError as ex:
+            raise OpsError(ex.status, str(ex), ex.code) from ex
+    due = total - gift_applied
+    if payment == 'cash' and extras['cash_received'] and extras['cash_received'] < due:
         raise OpsError(400, 'Przyjęta gotówka jest niższa niż kwota do zapłaty', 'cash_insufficient')
-    change = extras['cash_received'] - total if payment == 'cash' and extras['cash_received'] else 0
+    change = extras['cash_received'] - due if payment == 'cash' and extras['cash_received'] else 0
     needs_work = any('personalization' in item for item in result)
     status = 'do_kompletacji' if needs_work or not extras['handover'] else 'wydane'
     now = _stamp()
@@ -250,6 +270,11 @@ def create_sale(c, data, actor_id, live=False, can_discount=False, register='Kas
         payment_status,paid_at,paid_amount,payment_note,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)''',
               (oid, 'live' if live else 'test', '', 'odbior', 'Sprzedaż stacjonarna', 'pickup', 'pos_' + payment,
                'paid', now, total, f'POS {PAYMENT_LABELS[payment]}' + (f'; {fiscal["kind"]} {fiscal["number"]}' if fiscal['number'] else ''), now, now))
+    if gift_applied:
+        card, applied = giftcards.redeem(c, extras['gift_card'], total, oid, f'sprzedaż POS {oid}')
+        c.execute('UPDATE pos_sales SET gift_card_amount=? WHERE order_id=?', (applied, oid))
+        c.execute('UPDATE order_details SET gift_card_code=?,gift_card_amount=? WHERE order_id=?', (card['code'], applied, oid))
+    giftcards.on_paid(c, oid, actor_id)
     c.execute('INSERT INTO fulfillment_revisions(order_id) VALUES(?)', (oid,))
     c.execute('INSERT INTO events(order_id,created,status) VALUES(?,?,?)', (oid, now, status))
     label = 'Sprzedaż stacjonarna' if live else 'Sprzedaż demonstracyjna'
@@ -275,9 +300,10 @@ def shift_summary(c, shift):
         discounts += row['discounts']
     refunds = c.execute('''SELECT COALESCE(SUM(r.refund_amount),0) FROM returns r JOIN pos_sales s ON s.order_id=r.order_id
         WHERE r.status='rozliczony' AND r.refund_method='cash' AND r.shift_id=?''', (shift['id'],)).fetchone()[0] if _table(c, 'returns') else 0
-    expected = shift['opening_cash'] + by_method['cash']['total'] - refunds
+    gift_cash = c.execute('''SELECT COALESCE(SUM(s.gift_card_amount),0) FROM pos_sales s WHERE s.shift_id=? AND s.demo=0 AND s.payment_method='cash\'''', (shift['id'],)).fetchone()[0]
+    expected = shift['opening_cash'] + by_method['cash']['total'] - gift_cash - refunds
     value = dict(shift)
-    value.update({'by_method': by_method, 'discounts': discounts, 'cash_refunds': refunds, 'expected_cash': expected,
+    value.update({'by_method': by_method, 'discounts': discounts, 'cash_refunds': refunds, 'gift_card_cash': gift_cash, 'expected_cash': expected,
                   'sales': sum(item['sales'] for item in by_method.values()), 'turnover': sum(item['total'] for item in by_method.values())})
     if shift['status'] == 'closed' and shift['closing_cash'] is not None:
         value['difference'] = shift['closing_cash'] - expected
