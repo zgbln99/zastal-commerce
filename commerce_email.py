@@ -164,7 +164,9 @@ def _consume_token(c, raw, kind):
 
 
 ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid', 'return_update')
-GUEST_KINDS = ('stock_alert', 'gift_card_issued')
+GUEST_KINDS = ('stock_alert', 'gift_card_issued', 'staff_digest')
+# Intermediate workflow steps are not customer events; packing is news only for pickup orders.
+QUIET_STATUSES = ('potwierdzone', 'do_kompletacji', 'nanoszenie_dtf', 'kontrola_jakosci')
 
 
 def enqueue_guest(c, kind, recipient, dedupe):
@@ -181,7 +183,17 @@ def enqueue_order(c, order_id, kind='order_created', suffix='', resend=False):
     key = f'{kind}:{order_id}' + (f':{suffix}' if suffix else '')
     if kind == 'order_status_changed':
         status = c.execute('SELECT status FROM orders WHERE id=?', (order_id,)).fetchone()
-        key += f':{status["status"] if status else ""}'
+        current = status['status'] if status else ''
+        if current in QUIET_STATUSES:
+            return None
+        if current == 'spakowane':
+            try:
+                kind_row = c.execute('SELECT shipping_kind FROM order_details WHERE order_id=?', (order_id,)).fetchone()
+            except sqlite3.OperationalError:
+                kind_row = None
+            if not kind_row or kind_row['shipping_kind'] != 'pickup':
+                return None
+        key += f':{current}'
     if row and row['role'] == 'customer' and row['active']:
         return _queue(c, row, kind, order_id, key, resend=resend)
     try:
@@ -318,6 +330,9 @@ def _message(c, row, config):
         else:
             subject = 'Zastal Store, zmiana hasła'
             body = f'Ustaw nowe hasło do konta Zastal Store:\n\n{link}\n\nLink jest jednorazowy i ważny przez godzinę.\nJeżeli nie proszono o zmianę hasła, zignoruj tę wiadomość.'
+    elif row['kind'] == 'staff_digest':
+        import commerce_digest as digest
+        subject, body = digest.message(c, row['dedupe_key'].rsplit(':', 1)[1], os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
     elif row['kind'] == 'gift_card_issued':
         import commerce_giftcards as giftcards
         composed = giftcards.card_message(c, int(row['dedupe_key'].rsplit(':', 1)[1]), os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))

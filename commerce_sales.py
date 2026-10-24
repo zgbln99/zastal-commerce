@@ -31,12 +31,12 @@ SETTINGS = {
     'transfer_enabled': 'bool', 'transfer_recipient': 160, 'transfer_account': 40, 'transfer_bank': 80,
     'transfer_title_prefix': 24, 'pickup_payment_enabled': 'bool', 'payu_enabled': 'bool',
     'pickup_address': 350, 'pickup_hours': 200, 'invoice_enabled': 'bool', 'fiscal_confirmed': 'bool',
-    'unpaid_hours': 'int', 'order_note': 400, 'terms_version': 40,
+    'unpaid_hours': 'int', 'order_note': 400, 'terms_version': 40, 'digest_enabled': 'bool', 'digest_email': 254,
 }
 DEFAULTS = {'transfer_enabled': False, 'transfer_recipient': '', 'transfer_account': '', 'transfer_bank': '',
             'transfer_title_prefix': 'ZASTAL', 'pickup_payment_enabled': False, 'payu_enabled': False,
             'pickup_address': '', 'pickup_hours': '', 'invoice_enabled': True, 'fiscal_confirmed': False,
-            'unpaid_hours': 72, 'order_note': '', 'terms_version': ''}
+            'unpaid_hours': 72, 'order_note': '', 'terms_version': '', 'digest_enabled': False, 'digest_email': ''}
 LEGACY_SHIPPING = (
     ('odbior', 'Odbiór osobisty', 'pickup', 0, None, 1, 0, '', '', 10),
     ('paczkomat', 'Automat paczkowy', 'locker', 1299, 25000, 0, 1, '', '', 20),
@@ -551,6 +551,20 @@ def order_email(c, order, detail, kind, origin):
     elif kind == 'order_paid':
         subject = f'Zastal Store, płatność za {number} przyjęta'
         lines += [f'Otrzymaliśmy płatność za zamówienie {number} ({amount}).', 'Przekazujemy je do realizacji.', '']
+    elif order['status'] == 'spakowane' and detail['shipping_kind'] == 'pickup':
+        subject = f'Zastal Store, zamówienie {number} czeka na odbiór'
+        lines += [f'Zamówienie {number} jest spakowane i czeka na Ciebie w sklepie klubowym.']
+        if config.get('pickup_address'):
+            lines.append(f'Adres: {config["pickup_address"]}')
+        if config.get('pickup_hours'):
+            lines.append(f'Godziny odbioru: {config["pickup_hours"]}')
+        if detail['payment_status'] != 'paid':
+            lines.append(f'Przy odbiorze zapłacisz {amount}.')
+        lines += ['Przy odbiorze podaj numer zamówienia.', '']
+    elif order['status'] == 'wydane':
+        subject = f'Zastal Store, zamówienie {number} odebrane'
+        lines += [f'Zamówienie {number} zostało wydane. Dziękujemy i do zobaczenia w hali!', '',
+                  'Zwrot lub reklamację możesz zgłosić na stronie zamówienia (link poniżej) albo w koncie klienta.', '']
     elif order['status'] == 'wyslane':
         subject = f'Zastal Store, zamówienie {number} wysłane'
         lines += [f'Zamówienie {number} zostało nadane.']

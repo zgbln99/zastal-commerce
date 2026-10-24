@@ -32,6 +32,7 @@ import commerce_pricing as pricing
 import commerce_merch as merch
 import commerce_giftcards as giftcards
 import commerce_reports as reports
+import commerce_digest as digest
 import commerce_dpd as dpd
 
 ROOT = Path(__file__).resolve().parent
@@ -341,6 +342,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path=='/api/admin/products':return self.respond(200,catalog(c))
                 if path=='/api/admin/promo':return self.respond(200,merch.list_codes(c))
                 if path=='/api/admin/giftcards':return self.respond(200,giftcards.admin_list(c))
+                if path=='/api/admin/digest':return self.respond(200,digest.build(c))
                 gift_route=re.fullmatch(r'/api/admin/giftcards/([1-9][0-9]*)',path)
                 if gift_route:
                     try:return self.respond(200,giftcards.admin_card(c,int(gift_route.group(1))))
@@ -460,6 +462,12 @@ class Handler(BaseHTTPRequestHandler):
                     with connect() as c:row=giftcards.lookup(c,data.get('code'))
                 except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
                 return self.respond(200,giftcards.public_view(row))
+            if path=='/api/admin/digest/send':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    address=digest.enqueue(c)
+                    if address:audit(c,'digest',0,f'Wysłano podsumowanie dnia na {address}')
+                return self.respond(200 if address else 400,{'queued':bool(address),'recipient':address,**({} if address else {'error':'Włącz podsumowanie i podaj adres e-mail w Sprzedaży i dostawach (albo e-mail kontaktowy w Uruchomieniu sklepu).'})})
             if path=='/api/admin/giftcards':
                 data=self.body()
                 try:

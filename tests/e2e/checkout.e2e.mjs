@@ -157,6 +157,8 @@ try {
   await d.getByRole('button', { name: 'Zaloguj się' }).click();
   await d.waitForSelector('.admin-shell', { timeout: 15000 });
   step('admin: login over session cookie works', true);
+  await d.waitForSelector('.digest');
+  step('admin: dashboard shows the daily digest panel', (await d.locator('.digest-item').count()) === 7);
   await shot(d, '11-admin-dashboard-1440');
   await d.locator('.admin-navitem', { hasText: 'Sprzedaż i dostawy' }).first().click();
   await d.waitForSelector('.sales-settings .sales-checks');

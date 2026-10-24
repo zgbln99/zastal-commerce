@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import commerce_api as api
 import commerce_email as mail
 import commerce_merch as merch
+import commerce_digest as digest
 import commerce_sales as sales
 
 
@@ -26,10 +27,11 @@ def main():
         for oid in cancelled:
             mail.enqueue_order(c, oid, 'order_status_changed')
         restock_alerts = merch.notify_available(c)
+        digest_sent = digest.send_daily(c)
         now = int(time.time())
         sessions = c.execute('DELETE FROM auth_sessions WHERE expires<=?', (now,)).rowcount
         tokens = c.execute('DELETE FROM email_tokens WHERE expires<=? AND consumed IS NULL', (now - 7 * 86400,)).rowcount
-    print(json.dumps({'cancelled_unpaid': cancelled, 'expired_sessions': sessions, 'expired_tokens': tokens, 'restock_alerts': restock_alerts}))
+    print(json.dumps({'cancelled_unpaid': cancelled, 'expired_sessions': sessions, 'expired_tokens': tokens, 'restock_alerts': restock_alerts, 'digest_sent_to': digest_sent}))
     return 0
 
 
