@@ -1,7 +1,6 @@
 "use client";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { PrintLayout, PrintArea } from "../lib/commerce.mjs";
-import "./print-preview.css";
 
 const FONTS: Record<PrintLayout["font"], string> = { block: "Inter, 'Arial Black', Arial, sans-serif", condensed: "'Arial Narrow', 'Roboto Condensed', Inter, sans-serif", rounded: "'Trebuchet MS', 'Verdana', Inter, sans-serif" };
 const WIDTH_FACTOR = { block: 0.64, condensed: 0.5, rounded: 0.62 } as const;

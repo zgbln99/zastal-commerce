@@ -1,0 +1,78 @@
+/* Component-level restyle of the pages that keep their original markup (checkout, account, help, favourites, players,
+   gift card, info pages). Written with @apply on the existing class names so the kit's tokens, radii and buttons are
+   the same everywhere without touching the forms' logic or the E2E hooks. */
+
+.store-site .container { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
+
+/* Type */
+.store-site h1, .store-site h2, .store-site h3 { @apply font-sans tracking-tight text-foreground; }
+.store-site .page-heading { @apply mb-8 mt-2 max-w-2xl; }
+.store-site .page-heading h1 { @apply text-3xl font-medium leading-[1.1] sm:text-4xl; }
+.store-site .page-heading p { @apply mt-3 text-base text-muted-foreground; }
+.store-site .eyebrow, .store-site .section-kicker { @apply text-xs font-medium uppercase tracking-[0.2em] text-primary; }
+.store-site .breadcrumbs { @apply flex flex-wrap items-center gap-2 py-5 text-xs text-muted-foreground; }
+.store-site .breadcrumbs a:hover { @apply text-foreground; }
+.store-site .section-heading { @apply mb-6 flex flex-wrap items-end justify-between gap-4; }
+.store-site .section-heading h2 { @apply text-2xl font-medium sm:text-3xl; }
+.store-site .quiet-note, .store-site .input-hint { @apply text-sm text-muted-foreground; }
+.store-site .field-error { @apply text-sm font-medium text-destructive; }
+.store-site .inline-link { @apply inline-flex items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline; }
+
+/* Buttons shared by the remaining pages */
+.store-site .button, .store-site .button-dark, .store-site .button-outline, .store-site .button-white {
+  @apply inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg border px-5 text-sm font-medium transition-colors select-none disabled:pointer-events-none disabled:opacity-50;
+}
+.store-site .button-dark { @apply border-primary bg-primary text-primary-foreground hover:bg-primary/90; }
+.store-site .button-outline, .store-site .button-white { @apply border-border bg-background text-foreground hover:bg-muted; }
+.store-site .icon-btn { @apply inline-flex size-10 items-center justify-center rounded-full border border-transparent bg-transparent text-foreground transition-colors hover:bg-muted; }
+
+/* Form controls */
+.store-site input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .store-site select, .store-site textarea {
+  @apply w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground shadow-none outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30;
+}
+.store-site input[type="checkbox"], .store-site input[type="radio"] { @apply accent-primary; }
+.store-site label { @apply text-sm; }
+
+/* Panels */
+.store-site .checkout-panel, .store-site .checkout-summary, .store-site .account-panel, .store-site .auth-card, .store-site .help-content,
+.store-site .gift-panel, .store-site .promo-box, .store-site .gift-box, .store-site .order-lookup, .store-site .receipt-page > section,
+.store-site .return-request, .store-site .my-cards, .store-site .player-card, .store-site .stock-alert, .store-site .release-countdown {
+  @apply rounded-xl border border-border bg-card text-card-foreground shadow-none;
+}
+.store-site .checkout-panel, .store-site .checkout-summary, .store-site .account-panel, .store-site .auth-card, .store-site .help-content, .store-site .gift-panel { @apply p-6; }
+.store-site .checkout-panel-heading h2, .store-site .account-panel h2, .store-site .help-content h2, .store-site .gift-panel h2 { @apply text-xl font-medium tracking-tight; }
+.store-site .empty-state { @apply flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-14 text-center text-muted-foreground; }
+.store-site .empty-state h1, .store-site .empty-state h2 { @apply text-2xl font-medium text-foreground; }
+.store-site .delivery-option, .store-site .consent-row { @apply rounded-lg border border-border; }
+.store-site .delivery-option:has(input:checked) { @apply border-primary bg-accent; }
+.store-site .account-navigation a, .store-site .help-nav a { @apply rounded-full; }
+.store-site .account-navigation a.active, .store-site .help-nav a.active { @apply bg-primary text-primary-foreground; }
+.store-site .player-card { @apply p-5; }
+.store-site .player-number { @apply text-primary; }
+.store-site .store-toast { @apply fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-foreground px-5 py-3 text-sm text-background shadow-lg; }
+.store-site .storage-note { @apply fixed bottom-6 right-6 z-50 max-w-xs rounded-lg border border-border bg-background p-4 text-xs text-muted-foreground shadow-lg; }
+.store-site .skip-link { @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground; }
+
+/* Product badges: one pill shape, colour tells the kind */
+.store-site .product-badge { @apply inline-flex items-center rounded-full border border-border bg-background/90 px-2.5 py-1 text-xs font-medium text-foreground backdrop-blur-sm; }
+.store-site .product-badge.preorder, .store-site .product-badge.badge-premiera { @apply border-primary bg-primary text-primary-foreground; }
+.store-site .product-badge.badge-promocja, .store-site .product-badge.badge-wyprzedaz { @apply border-transparent bg-orange text-white; }
+.store-site .product-badge.badge-limitowana { @apply border-transparent bg-foreground text-background; }
+.store-site .product-badge.badge-bestseller, .store-site .product-badge.badge-nowosc { @apply border-transparent bg-accent text-accent-foreground; }
+
+/* Omnibus notice */
+.store-site .price-reduction { @apply flex flex-col gap-0.5 text-xs text-muted-foreground; }
+.store-site .price-reduction s { @apply text-sm; }
+.store-site .price-reduction.compact { @apply mt-0.5; }
+
+/* Product grid used by the favourites, gift and related sections */
+.store-site .product-grid { @apply grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 sm:gap-x-6 sm:gap-y-10 lg:grid-cols-4; }
+
+/* Dialogs */
+.store-site .modal-backdrop { @apply fixed inset-0 z-[150] flex items-center justify-center bg-foreground/40 p-4 backdrop-blur-sm; }
+.store-site .modal-backdrop.is-drawer { @apply items-stretch justify-end p-0; }
+.store-site .store-modal { @apply relative flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-y-auto rounded-2xl bg-background p-6 text-foreground shadow-2xl; }
+.store-site .modal-backdrop.is-drawer .store-modal { @apply h-dvh max-h-none max-w-md rounded-none; }
+.store-site .modal-title { @apply mb-4 flex items-start justify-between gap-4; }
+.store-site .modal-title h2 { @apply text-xl font-medium; }
+.store-site .modal-title p { @apply mt-1 text-sm text-muted-foreground; }

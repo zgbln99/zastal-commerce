@@ -11,28 +11,36 @@ Klient kupuje na telefonie, często z trybun. Priorytet: zdjęcie produktu, cena
 
 ## 2. Tokeny
 
+Warstwa wizualna jest zbudowana na zestawie **kairoui „essentials”** (Tailwind v4 + zmienne shadcn + `TextureButton` z Base UI),
+wypełnionym barwami klubu. Źródłem prawdy są zmienne w `storefront/app/tailwind.css`; poniżej ich znaczenie.
+
 ```yaml
-colors:
-  forest: "#174c37"   # kolor klubu; przyciski główne, aktywne stany, stopka
-  ink: "#18211e"      # tekst
-  muted: "#68736d"    # tekst pomocniczy, etykiety
-  line: "#e4e7e2"     # linie podziału, obramowania pól
-  paper: "#f6f7f3"    # tła sekcji i kafli produktów
-  accent: "#e6bf45"   # żółty klubowy; tylko drobne akcenty (odznaki), nigdy tła sekcji
+colors (oklch, zmienne shadcn):
+  primary: "oklch(0.40 0.13 145)"  # zieleń Zastalu; przyciski główne, aktywne pigułki, numery zawodników
+  foreground: "oklch(0.22 0.02 150)"   # tekst
+  muted-foreground: "oklch(0.48 0.02 150)"  # tekst pomocniczy (kontrast ≥ 4.5:1 na tle)
+  background: "oklch(0.985 0.004 145)"; card: biały; muted: "oklch(0.955 0.006 145)"  # tła strony, kart, kafli zdjęć
+  accent: "oklch(0.93 0.03 145)"     # jasnozielone podświetlenie (wybrana dostawa, chipy filtrów)
+  orange (--brand-orange): "oklch(0.70 0.19 55)"  # pomarańcz klubowy: odznaki Promocja/Wyprzedaż, licznik ulubionych, ostatnie sztuki
+  border / input: "oklch(0.90 0.008 145)"
+  destructive: "oklch(0.58 0.19 28)"
 typography:
-  display: "Barlow Semi Condensed 600/700 (self-hosted, OFL)"  # nagłówki h1-h3, ceny
-  body: "Inter 400-800 (self-hosted)"                            # treść, formularze, nawigacja
-  body_size: 14px
-  h1: "clamp(41px, 4.4vw, 61px)"; hero "clamp(46px, 5.6vw, 80px)"
-  h2: 28-40px zależnie od sekcji
-radius: 3px   # jeden promień dla przycisków, pól i kafli; brak pigułek
-spacing: 8px grid; sekcje strony głównej 56-96px odstępu
-container: max 1336px, 44px marginesu bocznego na desktopie, 16px na telefonie
+  face: "ZT Talk" (medium/semibold/bold, self-hosted); zapas Inter
+  h1: "text-3xl sm:text-4xl lg:text-5xl, font-medium, tracking-tight, leading 1.05-1.1"; hero "text-5xl sm:text-6xl lg:text-7xl"
+  h2 sekcji: "text-2xl sm:text-3xl font-medium"
+  eyebrow: "text-xs uppercase tracking-[0.2em] text-primary"
+  body: text-sm / text-base, tekst pomocniczy text-xs
+radius: "--radius: 0.7rem" (przyciski rounded-lg, karty rounded-xl, kafle kolekcji i panele rounded-2xl, pigułki nawigacji i filtrów rounded-full)
+container: max-w-7xl (1280px), 16px marginesu na telefonie, 24/32px wyżej
+header: stały (fixed) pasek 64px + rząd kategorii 44px na desktopie; strony zaczynają się pod nim, hero strony głównej wchodzi pod niego
 touch: min 44px wysokości dla przycisków i pól
 ```
 
-Jeden kolor akcentu na stronie. Nie wprowadzaj fioletów, gradientów, neonów ani poświaty.
-Cienie tylko w modalach i menu, delikatne, w odcieniu tła.
+Nazwy zmiennych, które czytają starsze arkusze (`--forest`, `--ink`, `--line`, `--paper`, `--legacy-muted`, `--legacy-accent`, `--legacy-radius`),
+są podpięte do powyższych tokenów w tym samym pliku. Nie definiuj ich ponownie.
+
+Jeden kolor akcentu (pomarańcz) i jeden kolor marki (zieleń). Nie wprowadzaj fioletów, neonów ani poświaty.
+Gradienty tylko dwa: przyciemnienie zdjęć pod tekstem (hero, kafle kolekcji, banery) i wewnętrzny gradient `TextureButton`.
 
 ## 3. Typografia i teksty
 
@@ -70,11 +78,20 @@ Cienie tylko w modalach i menu, delikatne, w odcieniu tła.
 
 ## 6. Komponenty
 
-- Przyciski: `button-dark` (forest, biały tekst) dla akcji głównej, `button-outline` dla drugorzędnej. Jedna akcja główna w widoku.
-  Tekst przycisku w jednej linii, do 3 słów. Ten sam zamiar = ta sama etykieta w całym sklepie.
-- Pola formularzy: etykieta nad polem, pomoc pod polem, błąd pod polem czerwonym `#a63b2b`. Bez placeholderów jako etykiet.
-- Ikony: tylko `lucide-react`, `strokeWidth` 1.4-1.8, rozmiar 15-21px. Bez emoji.
-- Stany: ładowanie (szkielet lub „Sprawdzanie ceny…”), pusty (zdanie + link do sklepu), błąd (zdanie, co zrobić).
+- Warstwy CSS: `legacy` (dawne arkusze stron: zamówienie, konto, pomoc, zawodnicy, karta) < `theme` < `base` < `components` (`kit.css`, nadpisania przez `@apply`) < `utilities`.
+  Nowe komponenty piszemy klasami Tailwind; starsze strony dostają wygląd zestawu przez `kit.css`, bez zmiany ich markupu.
+- Przyciski: `TextureButton` (`components/templates/essentials/ui/texture-button.tsx`) dla akcji głównej (`primary`), drugorzędnej (`secondary`)
+  i na ciemnym tle (`inverse`). W starszych formularzach klasa `button button-dark` ma ten sam wygląd. Jedna akcja główna w widoku, tekst do 3 słów.
+- Pigułki (`rounded-full border h-9`): nawigacja kategorii, filtry, rozmiary. Stan aktywny: `bg-primary text-primary-foreground`.
+- Karta produktu: zdjęcie 4:5 w `rounded-xl bg-muted`, powiększenie przy najechaniu, serce w prawym górnym rogu, odznaka-pigułka w lewym,
+  przycisk „Wybierz rozmiar / Dodaj do koszyka” pojawia się na desktopie przy najechaniu, na telefonie jest widoczny stale.
+- Odznaki (`.product-badge`): jedna forma pigułki, kolor mówi o rodzaju (Premiera/Przedsprzedaż zieleń, Promocja/Wyprzedaż pomarańcz,
+  Edycja limitowana czerń, Nowość/Bestseller jasna zieleń, Wyprzedane/Ostatnie sztuki białe).
+- Pola formularzy: `rounded-lg border-input h-11`, pierścień `ring-ring/30` w fokusie; etykieta nad polem, pomoc pod polem, błąd pod polem (`.field-error`).
+- Dialogi: koszyk, menu i filtry jako szuflady z prawej (`Modal drawer`), szybki podgląd i wyszukiwarka wyśrodkowane; tło `bg-foreground/40` z rozmyciem.
+- Ikony: `reicon-react` w nowych komponentach (rozmiar 14-20px), `lucide-react` w starszych widokach i panelu. Bez emoji.
+- Stany: ładowanie („Sprawdzanie ceny…”), pusty (`.empty-state`: ikona, zdanie, przycisk do sklepu), błąd (zdanie, co zrobić).
+- Ruch: `.animate-rise` dla treści hero (tylko gdy użytkownik nie wyłączył animacji), powiększenie zdjęć 500 ms, przejścia kolorów.
 
 ## 7. Ruch i dostępność
 

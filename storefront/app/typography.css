@@ -15,7 +15,7 @@
 .product-price-row>div>strong{font-size:34px}
 .quick-price{font-size:26px}
 /* Small labels above headings: plain sentence case, no tracking, no numbering. */
-.eyebrow,.section-kicker,.home-kicker,.flagship-overline,.editorial-print-product-label span,.editorial-accessory-info>div>span,.shop-category-label small,.product-detail-top .eyebrow{font-family:var(--font-body);font-size:13px;letter-spacing:0;font-weight:500;text-transform:none;color:var(--muted)}
+.eyebrow,.section-kicker,.home-kicker,.flagship-overline,.editorial-print-product-label span,.editorial-accessory-info>div>span,.shop-category-label small,.product-detail-top .eyebrow{font-family:var(--font-body);font-size:13px;letter-spacing:0;font-weight:500;text-transform:none;color:var(--legacy-muted)}
 .flagship-overline{color:#cfe0cb;font-size:14px}
 .flagship-overline>span{display:none}
 .page-heading .eyebrow,.product-detail-top .eyebrow{font-size:13px}
@@ -24,7 +24,7 @@
 .editorial-print-choices span svg{color:var(--forest)}
 .editorial-accessories-heading{display:block}
 .editorial-accessories-intro{max-width:520px;margin-top:10px}
-.editorial-accessories-intro p{font-size:15px;line-height:1.65;color:var(--muted);margin:0 0 12px}
+.editorial-accessories-intro p{font-size:15px;line-height:1.65;color:var(--legacy-muted);margin:0 0 12px}
 .shop-category-header h2{font-size:24px;margin:0;font-family:var(--font-display);font-weight:700}
-.shop-category-label small{font-size:12px;font-weight:500;color:var(--muted)}
+.shop-category-label small{font-size:12px;font-weight:500;color:var(--legacy-muted)}
 .editorial-print-visual{background:#e4ebe2}

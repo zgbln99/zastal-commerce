@@ -2,7 +2,6 @@
 import {createContext,useCallback,useContext,useEffect,useRef,useState} from "react";
 import {Check,Copy,KeyRound} from "lucide-react";
 import Modal from "./Modal";
-import "../app/konto/account.css";
 export type User={id:number;identifier:string;name:string;role:string;created:string;email_verified?:boolean;capabilities?:string[]};
 export const isStaff=(user:User|null|undefined)=>Array.isArray(user?.capabilities);
 export const can=(user:User|null|undefined,capability:string)=>!!user?.capabilities?.includes(capability);

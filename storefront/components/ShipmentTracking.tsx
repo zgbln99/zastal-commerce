@@ -1,5 +1,4 @@
 import {ArrowUpRight,Package} from "lucide-react";
-import "./shipment-tracking.css";
 
 export type ShipmentEvent={code:string;label:string;occurred_at:string};
 export type Shipment={carrier:string;tracking_number:string;tracking_url:string;status_code:string|null;status_label:string;occurred_at:string|null;checked_at:string|null;events:ShipmentEvent[];sync_state:"not_configured"|"pending"|"ok"|"error";source:"dpd"|null};

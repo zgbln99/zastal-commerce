@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import ProductDetail from "./ProductDetail";
-import "./product.css";
 import { catalog } from "../../../lib/catalog";
 import { storeStatus } from "../../../lib/store-status";
 

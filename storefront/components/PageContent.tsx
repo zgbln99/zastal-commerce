@@ -1,5 +1,4 @@
 import { parseBlocks, type Inline } from "../lib/page-content.mjs";
-import "./page-content.css";
 const Line = ({ inline }: { inline: Inline[] }) => <>{inline.map((part, index) => part.type === "link" ? <a key={index} href={part.href} target={part.href.startsWith("/") ? undefined : "_blank"} rel={part.href.startsWith("/") ? undefined : "noreferrer"}>{part.text}</a> : <span key={index}>{part.text}</span>)}</>;
 /** Renders restricted page text as headings, paragraphs and lists. Never injects HTML. */
 export default function PageContent({ content, className = "" }: { content: string; className?: string }) {

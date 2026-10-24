@@ -2,7 +2,6 @@
 import { useId } from "react";
 import { fmt } from "../lib/catalog";
 import type { Player, Product } from "../lib/commerce.mjs";
-import "./personalization.css";
 import PrintPreview from "./PrintPreview";
 export type PrintSelection = { mode: "none" | "player" | "custom"; playerId: string; name: string; number: string };
 export default function PersonalizationControls({ product, value, onChange, players, status, error, retry }: { product: Product; value: PrintSelection; onChange: (value: PrintSelection) => void; players: Player[]; status: "loading" | "ready" | "error"; error: string; retry: () => Promise<void> }) {

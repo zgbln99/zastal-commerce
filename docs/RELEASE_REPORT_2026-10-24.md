@@ -24,6 +24,7 @@ Data: 2026-10-24. Punkt wyjścia: `main` @ `60c4d42` (v0.10). Wszystkie zmiany s
 | (ops 2) | **Etykiety na drukarkę etykiet**: format rolki 50 × 30 mm (każda etykieta osobną stroną, margines 0) obok arkusza A4, kolejka wydruku z wieloma wariantami, „Wszystkie rozmiary według stanu”, skaner aparatem przy weryfikacji; **e-maile do klienta**: „czeka na odbiór” (adres, godziny, kwota do zapłaty przy odbiorze) po spakowaniu zamówienia z odbiorem, „odebrane” po wydaniu, „wysłane” z numerem przesyłki, bez wiadomości o etapach wewnętrznych (kompletacja, nadruk, kontrola); **podsumowanie dnia dla obsługi**: panel „Dzisiaj do zrobienia” na Przeglądzie i codzienny e-mail po 7:00 (realizacja, odbiory, brak płatności ponad 24 h, otwarte zwroty, kończące się i wyprzedane rozmiary z liczbą czekających, produkty bez sprzedaży 60 dni, wczorajsza sprzedaż), włączany w Sprzedaży i dostawach |
 
 Zachowano: istniejące API i dane, CMS strony głównej, galerie, konta, historię zamówień, POS testowy (nadal działa w trybie prelaunch), wygląd premium streetwear. Żadna migracja nie usuwa danych (tabela w runbooku).
+| Przebudowa wizualna (zestaw kairoui „essentials”) | Tailwind v4 + zmienne shadcn + `TextureButton` (Base UI) w barwach klubu: stały nagłówek z wyszukiwarką i pigułkami kategorii, pełnoekranowe hero ze zdjęciem kibiców, kafle kolekcji, siatka produktów z sercem i odznakami, panele „Twoje nazwisko. Twój numer.” i Retro, karty usług, 4-kolumnowa stopka z kontaktem; sklep z pasekiem filtrów-pigułek; strona produktu z galerią, pigułkami rozmiarów i akordeonami; koszyk/menu/filtry jako szuflady. Strony zamówienia, konta, pomocy, zawodników i karty podarunkowej dostają ten sam wygląd przez `kit.css` (warstwa `components`), stare arkusze trafiły do warstwy `legacy`; usunięto 10 nakładających się arkuszy CSS. Panel administracyjny bez zmian. |
 
 ## 2. Wyniki testów (na HEAD gałęzi)
 
@@ -31,10 +32,11 @@ Zachowano: istniejące API i dane, CMS strony głównej, galerie, konta, histori
 | --- | --- |
 | `ZASTAL_TEST_MODE=isolated-only python3 -m unittest discover -s tests` | **191 / 191 OK** (nowe: `test_merch`, `test_giftcards`, `test_reports`, `test_digest`, rozszerzony `test_personalization`)
 | (było) | 158 / 158 OK (było 136; nowe: `test_staff`, `test_sales` z PayU/POS/zwrotami, `test_pages`, `test_pricing`, rozszerzony `test_personalization`) |
-| `node --test tests/*.test.mjs` | **84 / 84 OK** (było 81) |
+| `node --test tests/*.test.mjs` | **84 / 84 OK** (test `admin-context` czyta alias `@/` i pakiet ikon ESM) |
 | `npx tsc --noEmit` | bez błędów |
 | `npm run build` (Next 16.4.3) | OK, bez ostrzeżenia bezpieczeństwa |
-| E2E Playwright (`tests/e2e/checkout.e2e.mjs` na izolowanym sklepie w trybie live z atrapą PayU) | **35 / 35 OK**: panel podsumowania dnia, raport sprzedaży, kafelki Dnia meczowego, legenda dostępności rozmiarów, saldo karty podarunkowej, kod rabatowy w checkoucie, strona Zawodnicy, ręczna odznaka, komunikat Omnibus, formularz odzyskania linku, mobilny checkout 390 px z przelewem, walidacja formularza, PayU z podpisaną notyfikacją i potwierdzeniem opłacenia, panel (ustawienia, potwierdzenie wpłaty, kolejka realizacji, edytor układu nadruku, kasjer z ograniczoną nawigacją), POS (otwarcie zmiany, sprzedaż z numerem paragonu, raport zmiany, kiosk), zwroty, strony informacyjne, pomoc |
+| Zrzuty ekranu 1440 px i 390 px: strona główna, sklep, produkt, koszyk, zamówienie, pomoc, zawodnicy, karta, konto, ulubione | bez błędów konsoli, treści czytelne |
+| E2E Playwright (`tests/e2e/checkout.e2e.mjs` na izolowanym sklepie w trybie live z atrapą PayU) | **35 / 35 OK** (powtórzone po przebudowie wizualnej): panel podsumowania dnia, raport sprzedaży, kafelki Dnia meczowego, legenda dostępności rozmiarów, saldo karty podarunkowej, kod rabatowy w checkoucie, strona Zawodnicy, ręczna odznaka, komunikat Omnibus, formularz odzyskania linku, mobilny checkout 390 px z przelewem, walidacja formularza, PayU z podpisaną notyfikacją i potwierdzeniem opłacenia, panel (ustawienia, potwierdzenie wpłaty, kolejka realizacji, edytor układu nadruku, kasjer z ograniczoną nawigacją), POS (otwarcie zmiany, sprzedaż z numerem paragonu, raport zmiany, kiosk), zwroty, strony informacyjne, pomoc |
 
 Zrzuty ekranu (320–1440 px) i log: `docs/evidence/`. Pełny zestaw powstaje lokalnie w `.qa/e2e/` po uruchomieniu scenariusza.
 

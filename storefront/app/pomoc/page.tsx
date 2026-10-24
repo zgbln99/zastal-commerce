@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { ArrowRight, ArrowUpRight, ChevronRight } from "lucide-react";
 import { storeStatus } from "../../lib/store-status";
 import OrderLookup from "../../components/OrderLookup";
-import "./help.css";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {

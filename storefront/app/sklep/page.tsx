@@ -1,8 +1,6 @@
 import type {Metadata} from "next";
 import ShopClient from "./ShopClient";
 import { Suspense } from "react";
-import "./shop.css";
-import "../shop-category.css";
 export const metadata:Metadata={
  title:"Wszystkie produkty",
  description:"Odkryj kolekcję Zastalu Zielona Góra: koszulki, bluzy, akcesoria i odzież dziecięcą. Sprawdź rozmiary, dostępność i opcje personalizacji.",

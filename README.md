@@ -7,6 +7,8 @@ Polish fan-shop storefront and staff operations workspace for Zastal Zielona Gó
 ## Wygląd
 
 Zasady projektowe sklepu (kolory, typografia, czego nie robić) są w `DESIGN.md`. Każda zmiana w `storefront/` ma je spełniać.
+Warstwa wizualna to zestaw kairoui „essentials” (Tailwind v4, zmienne shadcn, `TextureButton`) wypełniony barwami klubu;
+wejściem stylów jest `storefront/app/tailwind.css`, a starsze arkusze są w nim ładowane do warstwy `legacy`.
 
 ## What changed in v0.11
 

@@ -1,16 +1,4 @@
 import type { Metadata } from "next";
-import "./globals.css";
-import "./storefront-refresh.css";
-import "./editorial.css";
-import "./club-editorial.css";
-import "./flagship-hero.css";
-import "./cms-sections.css";
-import "./product-media.css";
-import "./typography.css";
-import "./brand-system.css";
-import "./rebuild-v2.css";
-import "./storefront-v3.css";
-import "./storefront-v4.css";
 import "./tailwind.css";
 import CommerceRoot from "../components/CommerceRoot";
 import { storeStatus } from "../lib/store-status";
