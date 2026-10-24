@@ -52,7 +52,10 @@ Cienie tylko w modalach i menu, delikatne, w odcieniu tła.
   jedna sekcja kampanii, akcesoria, linki serwisowe, stopka. Każda sekcja ma inny układ; nie powtarzaj
   dwóch sąsiednich sekcji „zdjęcie z lewej, tekst z prawej”.
 - Karta produktu: zdjęcie w proporcji 3:4 na tle `paper`, kategoria i rozmiary małym tekstem, nazwa, cena.
-  Odznaki na zdjęciu tylko ze znaczeniem („Przedsprzedaż”, „Retro”, „Ostatnie sztuki”).
+  Jedna odznaka na zdjęciu, tylko ze znaczeniem i tylko z danych: Wyprzedane, Przedsprzedaż, Premiera (z datą),
+  Promocja (po obniżce z historii cen), Bestseller (opłacona sprzedaż z 30 dni), Nowość (30 dni od dodania),
+  Wyprzedaż i Edycja limitowana (ustawiane ręcznie), Ostatnie sztuki (stan ≤ 3). Kolory odznak: czerwień `#a63b2b`
+  dla Promocji i Wyprzedaży, `forest` dla Bestsellera, żółty klubowy dla Nowości, `ink` dla Premiery i edycji limitowanej.
 - Strona produktu: galeria z lewej, panel zakupu z prawej, na telefonie jedno pod drugim; cena, rozmiary,
   dostępność, przycisk, dostawa i zwroty widoczne bez rozwijania. Informacja Omnibus pod ceną.
 - Siatki: 2 kolumny na telefonie, 3-4 na desktopie, odstęp 20-24px.

@@ -80,6 +80,10 @@ def init_schema(c):
             carrier TEXT NOT NULL DEFAULT '', tracking_number TEXT NOT NULL DEFAULT '', tracking_url TEXT NOT NULL DEFAULT '',
             shipped_at TEXT, note TEXT NOT NULL DEFAULT '', created TEXT NOT NULL, updated TEXT NOT NULL);
     ''')
+    present = {row['name'] for row in c.execute('PRAGMA table_info(order_details)')}
+    for column, definition in (('promo_code', "TEXT NOT NULL DEFAULT ''"), ('discount', 'INTEGER NOT NULL DEFAULT 0')):
+        if column not in present:
+            c.execute(f'ALTER TABLE order_details ADD COLUMN {column} {definition}')
     if not c.execute('SELECT 1 FROM shipping_methods LIMIT 1').fetchone():
         c.executemany('''INSERT INTO shipping_methods(code,name,kind,price,free_from,enabled,requires_address,carrier,tracking_url,sort)
                          VALUES(?,?,?,?,?,?,?,?,?,?)''', LEGACY_SHIPPING)
@@ -342,17 +346,17 @@ def initial_status(payment, mode):
     return 'potwierdzone' if payment == 'pickup' else 'oczekuje_platnosci'
 
 
-def save_details(c, order_id, checkout, mode):
+def save_details(c, order_id, checkout, mode, promo=None):
     now = stamp()
     method = checkout['method']
     c.execute('''INSERT INTO order_details(order_id,mode,customer_email,customer_name,customer_phone,shipping_code,shipping_name,
-                 shipping_kind,address,locker_code,invoice,consents,payment_method,payment_status,created,updated)
-                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                 shipping_kind,address,locker_code,invoice,consents,payment_method,payment_status,created,updated,promo_code,discount)
+                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
               (order_id, mode, checkout['customer']['email'], checkout['customer']['name'], checkout['customer']['phone'],
                method['code'], method['name'], method['kind'], json.dumps(checkout['address'], ensure_ascii=False),
                checkout['locker_code'], json.dumps(checkout['invoice'], ensure_ascii=False),
                json.dumps({**checkout['consents'], 'terms_version': settings(c)['terms_version'], 'accepted_at': now}, ensure_ascii=False),
-               checkout['payment'], 'unpaid', now, now))
+               checkout['payment'], 'unpaid', now, now, promo['code'] if promo else '', promo['discount'] if promo else 0))
 
 
 def details(c, order_id):
@@ -378,7 +382,7 @@ def public_details(value):
         return {'mode': 'test', 'payment_method': None, 'payment_status': 'unpaid'}
     keys = ('mode', 'customer_email', 'customer_name', 'customer_phone', 'shipping_code', 'shipping_name', 'shipping_kind',
             'address', 'locker_code', 'invoice', 'payment_method', 'payment_status', 'paid_at', 'carrier', 'tracking_number',
-            'tracking_url', 'shipped_at', 'shipment')
+            'tracking_url', 'shipped_at', 'shipment', 'promo_code', 'discount')
     return {key: value.get(key) for key in keys}
 
 
@@ -570,6 +574,9 @@ def order_email(c, order, detail, kind, origin):
         lines.append(f'  {item.get("qty", 1)} × {item.get("name", item.get("sku"))} / {item.get("size", "UNI")}{print_label}, {item.get("unit_price", 0) * item.get("qty", 1) / 100:.2f} PLN')
     if detail:
         lines += ['', f'Dostawa: {detail["shipping_name"] or detail["shipping_code"]}']
+        if detail.get('discount'):
+            lines.append(f'Rabat ({detail.get("promo_code") or "kod"}): -{detail["discount"] / 100:.2f} PLN')
+    lines.append(f'Razem do zapłaty: {(order["total"] if "total" in order.keys() else 0) / 100:.2f} PLN')
     lines += ['', f'Szczegóły zamówienia: {link}']
     seller = _safe(lambda: launch.values(c), {'seller_name': ''})
     if live and seller['seller_name']:

@@ -29,6 +29,7 @@ import commerce_payments as payments
 import commerce_returns as returns
 import commerce_pages as pages
 import commerce_pricing as pricing
+import commerce_merch as merch
 import commerce_dpd as dpd
 
 ROOT = Path(__file__).resolve().parent
@@ -113,6 +114,7 @@ def init():
         returns.init_schema(c)
         pages.init_schema(c)
         pricing.init_schema(c)
+        merch.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -146,6 +148,7 @@ def compatible_products(c):
         product.update(media.public_gallery(c, product))
         product['price_reduction'] = pricing.reduction(c, product['id'])
         product['sizes'] = [v['size'] for v in c.execute('SELECT size FROM product_variants WHERE product_id=? ORDER BY id', (product['id'],))]
+    merch.annotate(c, products)
     return products
 
 def catalog(c):
@@ -184,6 +187,8 @@ def checkout_reply(c,oid,total,token):
     detail=sales.details(c,oid)
     reply['status']=order['status'] if order else 'nowe'
     reply['mode']=detail['mode'] if detail else 'test'
+    reply['discount']=detail.get('discount',0) if detail else 0
+    reply['promo_code']=detail.get('promo_code','') if detail else ''
     if detail and detail['payment_method']=='payu':
         reply['payment']={'method':'payu',**payments.public_payment(c,oid)}
     elif detail:
@@ -309,6 +314,8 @@ class Handler(BaseHTTPRequestHandler):
                     receipt=c.execute('SELECT * FROM order_receipts WHERE order_id=? AND customer_id=?',(oid,self.request_user['id'])).fetchone()
                     return self.respond(200,order_detail(c,receipt)) if receipt else self.respond(404,{'error':'Nie znaleziono zamówienia'})
                 if path=='/api/admin/products':return self.respond(200,catalog(c))
+                if path=='/api/admin/promo':return self.respond(200,merch.list_codes(c))
+                if path=='/api/admin/stock-alerts':return self.respond(200,merch.pending_alerts(c))
                 price_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/prices',path)
                 if price_route:return self.respond(200,{'history':pricing.history(c,int(price_route.group(1))),'reduction':pricing.reduction(c,int(price_route.group(1)))})
                 gallery_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/gallery',path)
@@ -416,6 +423,38 @@ class Handler(BaseHTTPRequestHandler):
                 with connect() as c:live=readiness(c)['mode']=='live'
                 if not live and not launch.isolated_test_workflow(DATABASE):
                     return self.respond(503,{'error':'Sprzedaż online zostanie uruchomiona po skonfigurowaniu usług sklepu. Konto klienta możesz już założyć.','code':'store_prelaunch'})
+            if path=='/api/promo/check':
+                data=self.body()
+                if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                subtotal=data.get('subtotal',0)
+                if isinstance(subtotal,bool) or not isinstance(subtotal,int) or subtotal<0:raise Invalid('Nieprawidłowa wartość koszyka')
+                try:
+                    with connect() as c:row,discount=merch.find_code(c,data.get('code'),subtotal)
+                except merch.MerchError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,merch.public_code(row,discount))
+            if path=='/api/stock-alerts':
+                data=self.body()
+                if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        result=merch.subscribe(c,data.get('product_id'),data.get('size'),data.get('email'))
+                except merch.MerchError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,result)
+            if path=='/api/admin/promo':
+                data=self.body()
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        result=merch.save_code(c,data)
+                        audit(c,'promo',result['id'],f"Utworzono kod {result['code']}")
+                except merch.MerchError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(201,result)
+            if path=='/api/admin/stock-alerts/notify':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    queued=merch.notify_available(c)
+                return self.respond(200,{'queued':queued})
             if path=='/api/orders/lookup':
                 data=self.body()
                 number=data.get('order');email=data.get('email')
@@ -530,6 +569,7 @@ class Handler(BaseHTTPRequestHandler):
                                       (variant['id'],delta,reason.strip(),stamp(),'inventory-import'))
                             changes.append({'sku':sku,'old':variant['stock'],'new':stock,'delta':delta})
                             affected.add(variant['product_id'])
+                    merch.notify_available(c)
                     for product_id in affected:
                         c.execute('UPDATE products SET stock=(SELECT COALESCE(SUM(stock),0) FROM product_variants WHERE product_id=?) WHERE id=?',
                                   (product_id,product_id))
@@ -593,6 +633,8 @@ class Handler(BaseHTTPRequestHandler):
                     method=checkout['method']
                     identity={"items":normalized,"fulfillment":method['code']}
                     if extended:identity['checkout']={key_:checkout[key_] for key_ in ('customer','address','locker_code','payment','invoice','consents')}
+                    promo_input=data.get('promo_code') if isinstance(data.get('promo_code'),str) and data.get('promo_code').strip() else None
+                    if promo_input:identity['promo']=promo_input.strip().upper()
                     # Retain v0.4 fingerprints for old guest attempts; identity is checked separately.
                     fingerprint=hashlib.sha256(json.dumps(identity,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
                     if key:
@@ -607,6 +649,8 @@ class Handler(BaseHTTPRequestHandler):
                         p=c.execute("SELECT * FROM products WHERE id=?",(pid,)).fetchone()
                         v=c.execute("SELECT * FROM product_variants WHERE product_id=? AND size=?",(pid,size)).fetchone()
                         if not p or not v:raise Invalid("Wybierz poprawny wariant produktu")
+                        release=personalization.product_options(c,pid)['release_at']
+                        if merch.unreleased({'release_at':release}):raise Invalid(f"{p['name']}: premiera {merch.release_label(release)}. Do tego czasu produkt nie jest sprzedawany online.")
                         if v["stock"]<qty:raise Invalid("Niewystarczająca dostępność wariantu "+size)
                         c.execute("UPDATE product_variants SET stock=stock-? WHERE id=?",(qty,v["id"]))
                         c.execute("UPDATE products SET stock=stock-? WHERE id=?",(qty,pid))
@@ -624,14 +668,20 @@ class Handler(BaseHTTPRequestHandler):
                     now=stamp()
                     subtotal=total
                     shipping=sales.shipping_cost(method,subtotal)
-                    total+=shipping
+                    promo=None;discount=0
+                    if promo_input:
+                        try:promo,discount=merch.find_code(c,promo_input,subtotal)
+                        except merch.MerchError as ex:raise Invalid(str(ex))
+                    total+=shipping-discount
+                    if total<=0 and checkout['payment']=='payu':raise Invalid('Zamówienie o wartości 0 zł nie wymaga płatności online. Wybierz inną płatność.')
                     status=sales.initial_status(checkout['payment'],mode)
                     cur=c.execute("INSERT INTO orders(created,items,total,status) VALUES(?,?,?,?)",(now,json.dumps(result,ensure_ascii=False),total,status))
                     oid=cur.lastrowid
                     tracking=secrets.token_urlsafe(32)
                     c.execute("INSERT INTO order_receipts(order_id,tracking_token,fulfillment,shipping_fee,subtotal,idempotency_key,fingerprint,customer_id) VALUES(?,?,?,?,?,?,?,?)",(oid,tracking,method['code'],shipping,subtotal,key,fingerprint,owner))
                     c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(oid,now,status))
-                    sales.save_details(c,oid,checkout,mode)
+                    sales.save_details(c,oid,checkout,mode,{'code':promo['code'],'discount':discount} if promo else None)
+                    if promo:merch.consume(c,promo['id']);audit(c,'order',oid,f"Kod rabatowy {promo['code']}: -{discount/100:.2f} PLN")
                     audit(c,"order",oid,"Utworzono zamówienie" if live else "Utworzono zamówienie demonstracyjne")
                     if live and checkout['payment']=='payu':
                         order_row=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
@@ -728,6 +778,7 @@ class Handler(BaseHTTPRequestHandler):
                     cur=c.execute('INSERT INTO products(name,sku,category,price,stock) VALUES(?,?,?,?,?)',
                                   tuple(product[key] for key in ('name','sku','category','price','stock')))
                     pid=cur.lastrowid
+                    product['created_at']=stamp()
                     personalization.save_options(c,pid,product)
                     pricing.record(c,pid,product['price'],self.request_user['id'])
                     sizes=sizes_for(product)
@@ -851,6 +902,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(200,result)
                 except LookupError as ex:return self.respond(404,{'error':str(ex)})
                 except media.Conflict as ex:return self.respond(409,{'error':str(ex)})
+            promo_patch=re.fullmatch(r'/api/admin/promo/([1-9][0-9]*)',path)
+            if promo_patch:
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        result=merch.save_code(c,data,int(promo_patch.group(1)))
+                        audit(c,'promo',result['id'],f"Zmieniono kod {result['code']}")
+                except merch.MerchError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,result)
             if path.startswith('/api/admin/products/'):
                 pid=int(path.rsplit('/',1)[1])
                 with connect() as c:
@@ -934,6 +994,7 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute("UPDATE products SET stock=stock+? WHERE id=?",(delta,v["product_id"]))
                     c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(vid,delta,reason,stamp(),"admin"))
                     audit(c,"stock",vid,f"{delta:+} szt. ({reason})")
+                    if delta>0:merch.notify_available(c)
                 return self.respond(200,{"ok":True})
             if path.startswith("/api/admin/transfers/") and path.endswith("/receive"):
                 tid=int(path.split("/")[-2]);qty=int(data.get("quantity",0))

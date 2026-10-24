@@ -18,6 +18,7 @@ Data: 2026-10-24. Punkt wyjścia: `main` @ `60c4d42` (v0.10). Wszystkie zmiany s
 | `4488fb9` | Dynamiczna strona **Pomoc** (treści z konfiguracji live), README v0.11, dowody w `docs/evidence/`, ten raport |
 | (przegląd) | **Omnibus**: historia cen produktów (`product_prices`), komunikat „Najniższa cena z 30 dni przed obniżką” na karcie, w podglądzie i na stronie produktu; **odzyskanie linku do zamówienia** przez numer + e-mail (bez ujawniania istnienia zamówienia, limit prób); e-maile: „Zapłacono” dla zamówień już opłaconych, informacja o przedsprzedaży przy pozycji; panel: metryki tylko z opłaconych zamówień live, „Oczekują na płatność”, sprzedaż z dzisiaj, wyszukiwanie po kliencie/e-mailu/przesyłce, CSV z klientem i płatnością, statusy sterowane procesem zablokowane w ręcznej liście; tekst **Uruchomienia sklepu** zgodny z rzeczywistym przełącznikiem; `tools/healthcheck.sh` |
 | (design) | **DESIGN.md** z zasadami wyglądu; krój wyświetlany Barlow Semi Condensed (self-hosted) dla nagłówków i cen; usunięte numerowane etykiety sekcji, ozdobne mikro-napisy, celownik, pasek haseł pod hero i półpauzy w treści; nazwy produktów bez pauz; **CSP z nonce** per żądanie (`proxy.ts`, bez `'unsafe-inline'` dla skryptów); historia cen w formularzu produktu w panelu; nowe zrzuty `docs/evidence/home-*`, `product-desktop-1440.png` |
+| (merch) | **Opisy produktów** z szablonem per kategoria i walidacją pól; dane strukturalne Product/BreadcrumbList i og:image; **odznaki** (Promocja z Omnibusa, Bestseller z opłaconej sprzedaży 30 dni, Nowość 30 dni od dodania, Wyprzedaż, Edycja limitowana, Premiera; ręczny wybór w formularzu produktu); **premiery** (data i godzina, odliczanie, blokada zakupu online do premiery egzekwowana przez API); **„Daj znać, gdy wróci”** (zapis e-maila na brakujący rozmiar, automatyczna wiadomość po przyjęciu towaru lub z timera utrzymania); **kody rabatowe** (procent/kwota, minimum, ważność, limit użyć, sprawdzanie i naliczanie po stronie serwera, rabat na zamówieniu, w e-mailu i w panelu); **strona Zawodnicy** (kadra z linkiem do koszulki z gotowym wyborem zawodnika); pasek „do bezpłatnej dostawy brakuje…” w koszyku; nowa zakładka panelu **Promocje i kody** |
 
 Zachowano: istniejące API i dane, CMS strony głównej, galerie, konta, historię zamówień, POS testowy (nadal działa w trybie prelaunch), wygląd premium streetwear. Żadna migracja nie usuwa danych (tabela w runbooku).
 
@@ -25,11 +26,12 @@ Zachowano: istniejące API i dane, CMS strony głównej, galerie, konta, histori
 
 | Zestaw | Wynik |
 | --- | --- |
-| `ZASTAL_TEST_MODE=isolated-only python3 -m unittest discover -s tests` | **158 / 158 OK** (było 136; nowe: `test_staff`, `test_sales` z PayU/POS/zwrotami, `test_pages`, `test_pricing`, rozszerzony `test_personalization`) |
+| `ZASTAL_TEST_MODE=isolated-only python3 -m unittest discover -s tests` | **184 / 184 OK** (nowe: `test_merch`, rozszerzony `test_personalization`)
+| (było) | 158 / 158 OK (było 136; nowe: `test_staff`, `test_sales` z PayU/POS/zwrotami, `test_pages`, `test_pricing`, rozszerzony `test_personalization`) |
 | `node --test tests/*.test.mjs` | **84 / 84 OK** (było 81) |
 | `npx tsc --noEmit` | bez błędów |
 | `npm run build` (Next 16.4.3) | OK, bez ostrzeżenia bezpieczeństwa |
-| E2E Playwright (`tests/e2e/checkout.e2e.mjs` na izolowanym sklepie w trybie live z atrapą PayU) | **27 / 27 OK**: komunikat Omnibus, formularz odzyskania linku, mobilny checkout 390 px z przelewem, walidacja formularza, PayU z podpisaną notyfikacją i potwierdzeniem opłacenia, panel (ustawienia, potwierdzenie wpłaty, kolejka realizacji, edytor układu nadruku, kasjer z ograniczoną nawigacją), POS (otwarcie zmiany, sprzedaż z numerem paragonu, raport zmiany, kiosk), zwroty, strony informacyjne, pomoc |
+| E2E Playwright (`tests/e2e/checkout.e2e.mjs` na izolowanym sklepie w trybie live z atrapą PayU) | **30 / 30 OK**: kod rabatowy w checkoucie, strona Zawodnicy, ręczna odznaka, komunikat Omnibus, formularz odzyskania linku, mobilny checkout 390 px z przelewem, walidacja formularza, PayU z podpisaną notyfikacją i potwierdzeniem opłacenia, panel (ustawienia, potwierdzenie wpłaty, kolejka realizacji, edytor układu nadruku, kasjer z ograniczoną nawigacją), POS (otwarcie zmiany, sprzedaż z numerem paragonu, raport zmiany, kiosk), zwroty, strony informacyjne, pomoc |
 
 Zrzuty ekranu (320–1440 px) i log: `docs/evidence/`. Pełny zestaw powstaje lokalnie w `.qa/e2e/` po uruchomieniu scenariusza.
 

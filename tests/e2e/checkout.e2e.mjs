@@ -63,6 +63,9 @@ try {
   await page.waitForURL('**/zamowienie');
   await page.waitForSelector('input[type="email"]');
   await fillCheckout(page, { email: 'kibic@example.test', name: 'Jan Kibic', delivery: 'kurier', payment: 'transfer' });
+  await page.fill('input[aria-label="Kod rabatowy"]', 'kibic10');
+  await page.getByRole('button', { name: 'Zastosuj' }).click();
+  await page.waitForSelector('.promo-applied');
   await shot(page, '04-checkout-390');
   const [response] = await Promise.all([
     page.waitForResponse(r => r.url().endsWith('/api/orders') && r.request().method() === 'POST'),
@@ -70,6 +73,7 @@ try {
   ]);
   const created = await response.json();
   step('mobile: transfer order created', response.status() === 201 && created.status === 'oczekuje_platnosci', `ZS-${created.id}`);
+  step('mobile: promo code reduced the total', created.promo_code === 'KIBIC10' && created.discount > 0, `-${(created.discount / 100).toFixed(2)} zł`);
   await page.waitForURL('**/zamowienie?id=*');
   await page.waitForSelector('.receipt-success');
   const receiptText = await page.locator('.receipt-page').innerText();
@@ -130,6 +134,13 @@ try {
   await d.waitForSelector('.receipt-success');
   const paidText = await d.locator('.receipt-page').innerText();
   step('desktop: receipt shows paid status and print snapshot', paidText.includes('Płatność przyjęta') && paidText.includes('KIBIC') && paidText.includes('Opłacone'));
+  await d.goto(WEB + '/zawodnicy', { waitUntil: 'networkidle' });
+  await d.waitForSelector('.player-card');
+  const playerLinks = await d.locator('.player-card a[href*="zawodnik="]').count();
+  step('desktop: players page links every player to a personalised shirt', playerLinks >= 10, String(playerLinks));
+  const limited = await d.locator('.product-badge.badge-limitowana').count().catch(() => 0);
+  await d.goto(WEB + '/sklep', { waitUntil: 'networkidle' });
+  step('desktop: manual badge shows on the product card', (await d.locator('.product-badge.badge-limitowana').count()) === 1, String(limited));
   await shot(d, '10-receipt-paid-1440');
 
   // ---------- Staff panel: login, sales settings, order payment panel, fulfillment queue

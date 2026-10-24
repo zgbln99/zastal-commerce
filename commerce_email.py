@@ -164,6 +164,14 @@ def _consume_token(c, raw, kind):
 
 
 ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid', 'return_update')
+GUEST_KINDS = ('stock_alert',)
+
+
+def enqueue_guest(c, kind, recipient, dedupe):
+    """One-off message to an address without an account or order (e.g. back-in-stock alert)."""
+    if kind not in GUEST_KINDS:
+        raise ValueError('Nieznany rodzaj wiadomości')
+    return _queue(c, None, kind, None, dedupe, recipient)
 
 
 def enqueue_order(c, order_id, kind='order_created', suffix='', resend=False):
@@ -293,7 +301,7 @@ def _message(c, row, config):
     c.execute('BEGIN IMMEDIATE')
     current = c.execute("SELECT 1 FROM email_outbox WHERE id=? AND status='sending' AND lease_token=?", (row['id'], row['lease_token'])).fetchone()
     user = c.execute("SELECT * FROM users WHERE id=? AND active=1 AND role='customer'", (row['user_id'],)).fetchone() if row['user_id'] else None
-    recipient = user['identifier'] if user else (row['recipient'] if row['kind'] in ORDER_KINDS else None)
+    recipient = user['identifier'] if user else (row['recipient'] if row['kind'] in ORDER_KINDS + GUEST_KINDS else None)
     if not current or not recipient:
         c.commit()
         return None
@@ -310,6 +318,13 @@ def _message(c, row, config):
         else:
             subject = 'Zastal Store, zmiana hasła'
             body = f'Ustaw nowe hasło do konta Zastal Store:\n\n{link}\n\nLink jest jednorazowy i ważny przez godzinę.\nJeżeli nie proszono o zmianę hasła, zignoruj tę wiadomość.'
+    elif row['kind'] == 'stock_alert':
+        import commerce_merch as merch
+        composed = merch.alert_message(c, int(row['dedupe_key'].rsplit(':', 1)[1]), os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
+        if not composed:
+            c.commit()
+            return None
+        subject, body = composed
     else:
         order = c.execute('SELECT * FROM orders WHERE id=?', (row['order_id'],)).fetchone()
         if not order:

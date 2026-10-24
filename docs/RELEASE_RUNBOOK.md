@@ -30,7 +30,9 @@ Wszystkie kroki wykonuje osoba z dostępem do serwera. Żaden krok nie kasuje ba
 | `email_outbox` | `user_id` może być NULL, dodana kolumna `recipient` (zamówienia gości) | bez utraty |
 | `pos_sales` | przebudowa: `demo` 0/1, zmiana, rabat, dokument fiskalny, gotówka | bez utraty |
 | `product_options` | nowe kolumny: metoda znakowania, przedsprzedaż, rozmiarówka, układ nadruku | ALTER TABLE |
-| nowe tabele | `store_settings`, `shipping_methods`, `order_details`, `payments`, `payment_notifications`, `payment_refunds`, `pos_shifts`, `returns` | tworzone puste |
+| nowe tabele | `store_settings`, `shipping_methods`, `order_details`, `payments`, `payment_notifications`, `payment_refunds`, `pos_shifts`, `returns`, `product_prices`, `stock_alerts`, `promo_codes` | tworzone puste (`product_prices` dostaje bieżące ceny) |
+| `product_options` (2) | kolumny: opis, odznaka, premiera, data dodania | ALTER TABLE |
+| `order_details` (2) | kolumny: kod rabatowy, rabat | ALTER TABLE |
 
 Migracje są idempotentne (testy `test_staff`, `test_sales` uruchamiają `init()` dwukrotnie i na starym schemacie).
 
@@ -73,7 +75,8 @@ Adres notyfikacji do wpisania w panelu PayU: `https://<domena>/api/payments/payu
 - `tools/healthcheck.sh [origin]` — jedna sonda dla crona/monitoringu (katalog przez Nginx, strona główna, `/health` lokalnie); kod wyjścia ≠ 0 = alarm, np. `*/5 * * * * /…/tools/healthcheck.sh || logger -t zastal-store 'healthcheck FAILED'`.
 - `journalctl -u zastal-store-email -n 50` — worker outboxu; panel **Poczta sklepu** pokazuje kolejkę i błędy.
 - Panel **Przegląd** → zamówienia w toku; **Zwroty i reklamacje** → otwarte zgłoszenia; **Sprzedaż i dostawy** → gotowość.
-- Timer utrzymania anuluje nieopłacone zamówienia po `unpaid_hours` i zwalnia rezerwacje.
+- Timer utrzymania anuluje nieopłacone zamówienia po `unpaid_hours`, zwalnia rezerwacje i kolejkuje e-maile „produkt znów dostępny” (`restock_alerts` w wyniku).
+- Panel **Promocje i kody** → kody rabatowe (użycia, limity) i lista klientów czekających na rozmiar.
 - Kopie: `/var/lib/sentinelx/backups/zastal` (30 ostatnich); raz w miesiącu `--verify` na losowej kopii.
 
 ## 6. Testy przed wydaniem (lokalnie lub na stagingu)

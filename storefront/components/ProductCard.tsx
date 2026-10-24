@@ -26,10 +26,7 @@ export default function ProductCard({ product, eager = false }: { product: Produ
   return <article className="product-card" onMouseEnter={() => setAlternate(window.matchMedia("(hover: hover) and (pointer: fine)").matches)} onMouseLeave={() => setAlternate(false)} onFocusCapture={() => setAlternate(true)} onBlurCapture={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setAlternate(false); }}>
     <div className="product-image-wrap">
       <Link href={"/produkt/" + product.id} className="product-image-link" aria-label={product.name}><ProductImage product={product} media={current} eager={eager}/></Link>
-      {product.id === 2 && <span className="product-badge">Retro</span>}
-      {product.preorder && <span className="product-badge preorder">Przedsprzedaż</span>}
-      {product.verified && !available && <span className="product-badge">Wyprzedane</span>}
-      {lastPieces && <span className="product-badge">Ostatnie sztuki</span>}
+      {product.verified && !available ? <span className="product-badge">Wyprzedane</span> : product.preorder ? <span className="product-badge preorder">Przedsprzedaż</span> : product.badge_info ? <span className={"product-badge badge-" + product.badge_info.code}>{product.badge_info.label}</span> : lastPieces ? <span className="product-badge">Ostatnie sztuki</span> : null}
       <button className={"favorite-button " + (liked ? "is-favorite" : "")} onClick={() => store.favorite(product.id)} aria-label={(liked ? "Usuń z ulubionych: " : "Dodaj do ulubionych: ") + product.name} aria-pressed={liked} disabled={!store.hydrated}><Heart size={18} fill={liked ? "currentColor" : "none"}/></button>
       <button className="card-quick" onClick={() => needsSelection ? store.setQuickId(product.id) : store.add(product.id, "UNI")} disabled={store.status !== "ready" || !product.verified || !available}><Plus size={16}/> {product.personalization_enabled ? "Wybierz nadruk" : product.sizes ? "Wybierz rozmiar" : "Dodaj do koszyka"}</button>
     </div>

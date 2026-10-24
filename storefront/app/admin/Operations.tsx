@@ -10,7 +10,7 @@ import type {OrderPrint} from "../../lib/commerce.mjs";
 import {ApiError,type ApiRequest} from "../../components/AuthProvider";
 import {ReturnDecision,type StaffReturn} from "./Returns";
 
-export type OperationsTab = "dashboard" | "orders" | "inventory" | "transfers" | "production" | "labels" | "audit" | "products" | "customers" | "account" | "players" | "launch" | "inventory_import" | "homepage" | "pos" | "fulfillment" | "email" | "staff" | "settings" | "returns" | "pages";
+export type OperationsTab = "dashboard" | "orders" | "inventory" | "transfers" | "production" | "labels" | "audit" | "products" | "customers" | "account" | "players" | "launch" | "inventory_import" | "homepage" | "pos" | "fulfillment" | "email" | "staff" | "settings" | "returns" | "pages" | "marketing";
 export type Variant = {id:number; product_id:number; size:string; sku:string; ean:string; stock:number; name:string; category:string; price:number};
 export type Batch = {id:number; design:string; supplier:string; reference:string; ordered:number; received:number; available:number; cost_unit:number; created:string};
 export type Order = {id:number; created:string; items:string; total:number; status:string; fulfillment?:string; shipping_fee?:number; subtotal?:number;customer?:{id:number;identifier:string;name:string};mode?:string|null;payment_status?:string|null;payment_method?:string|null;customer_email?:string|null;customer_name?:string|null;shipping_code?:string|null;shipping_name?:string|null;tracking_number?:string|null};

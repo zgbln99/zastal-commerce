@@ -19,11 +19,11 @@ LAYOUT_AREAS = ('name', 'number')
 DEFAULT_OPTIONS = {'image': '', 'subtitle': '', 'personalization_enabled': False,
                    'personalization_required': False, 'personalization_fee': 0,
                    'decoration_method': 'dtf', 'preorder': False, 'preorder_note': '', 'preorder_until': '',
-                   'size_guide': '', 'print_layout': None, 'description': ''}
+                   'size_guide': '', 'print_layout': None, 'description': '', 'badge': '', 'release_at': '', 'created_at': ''}
 EXTENDED_COLUMNS = {'decoration_method': "TEXT NOT NULL DEFAULT 'dtf'", 'preorder': 'INTEGER NOT NULL DEFAULT 0',
                     'preorder_note': "TEXT NOT NULL DEFAULT ''", 'preorder_until': "TEXT NOT NULL DEFAULT ''",
                     'size_guide': "TEXT NOT NULL DEFAULT ''", 'print_layout': "TEXT NOT NULL DEFAULT ''",
-                    'description': "TEXT NOT NULL DEFAULT ''"}
+                    'description': "TEXT NOT NULL DEFAULT ''", 'badge': "TEXT NOT NULL DEFAULT ''", 'release_at': "TEXT NOT NULL DEFAULT ''", 'created_at': "TEXT NOT NULL DEFAULT ''"}
 ROSTER = (
     ('Kuba Galewski', 'GALEWSKI', '1'), ('Andrzej Mazurczak', 'MAZURCZAK', '3'),
     ('Conley Garrison', 'GARRISON', '0'), ('Filip Matczak', 'MATCZAK', '8'),
@@ -196,6 +196,11 @@ def validate_product(data, existing=None):
         raise ValueError('Przedsprzedaż wymaga informacji o planowanej wysyłce')
     values['size_guide'] = text(values['size_guide'], 'rozmiarówka', 2000, empty=True)
     values['description'] = description_value(values['description'])
+    import commerce_merch as merch
+    if values['badge'] not in merch.MANUAL_BADGES:
+        raise ValueError('Wybierz odznakę z listy')
+    values['release_at'] = merch.release_value(values['release_at'])
+    values['created_at'] = (existing or {}).get('created_at') or ''  # never settable by clients
     values['print_layout'] = layout_value(values['print_layout'])
     values.pop('decoration_method_label', None)
     return values
@@ -219,17 +224,17 @@ def description_value(value):
 def save_options(c, pid, value):
     layout = json.dumps(value['print_layout'], ensure_ascii=False, sort_keys=True) if value.get('print_layout') else ''
     c.execute('''INSERT INTO product_options(product_id,image,subtitle,personalization_enabled,personalization_required,personalization_fee,
-        decoration_method,preorder,preorder_note,preorder_until,size_guide,print_layout,description)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET
+        decoration_method,preorder,preorder_note,preorder_until,size_guide,print_layout,description,badge,release_at,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET
         image=excluded.image,subtitle=excluded.subtitle,
         personalization_enabled=excluded.personalization_enabled,
         personalization_required=excluded.personalization_required,
         personalization_fee=excluded.personalization_fee,
         decoration_method=excluded.decoration_method,preorder=excluded.preorder,preorder_note=excluded.preorder_note,
-        preorder_until=excluded.preorder_until,size_guide=excluded.size_guide,print_layout=excluded.print_layout,description=excluded.description''',
+        preorder_until=excluded.preorder_until,size_guide=excluded.size_guide,print_layout=excluded.print_layout,description=excluded.description,badge=excluded.badge,release_at=excluded.release_at''',
         (pid, value['image'], value['subtitle'], value['personalization_enabled'], value['personalization_required'],
          value['personalization_fee'], value['decoration_method'], int(value['preorder']), value['preorder_note'],
-         value['preorder_until'], value['size_guide'], layout, value.get('description', '')))
+         value['preorder_until'], value['size_guide'], layout, value.get('description', ''), value.get('badge', ''), value.get('release_at', ''), value.get('created_at', '')))
 
 
 def line_extras(c, product_id):
