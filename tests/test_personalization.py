@@ -296,6 +296,7 @@ class PersonalizationTests(unittest.TestCase):
             'personalization_enabled': True, 'personalization_required': True, 'personalization_fee': 3500,
             'decoration_method': 'haft', 'preorder': True, 'preorder_note': 'Wysyłka od 20 listopada', 'preorder_until': '2026-11-20',
             'size_guide': 'S 48 cm / M 51 cm', 'image': '/assets/photos/product-3.webp',
+            'description': 'Koszulka na mecz.\n\n## Materiał i krój\n- Bawełna 100%',
             'print_layout': {'image': '/assets/photos/product-3.webp', 'areas': {'name': {'x': 30, 'y': 18, 'w': 40, 'h': 6}, 'number': {'x': 35, 'y': 28, 'w': 30, 'h': 22}}, 'color': '#FFFFFF', 'font': 'block', 'calibrated': False}})
         self.assertEqual(code, 201, product)
         self.assertEqual(product['decoration_method'], 'haft')
@@ -305,8 +306,10 @@ class PersonalizationTests(unittest.TestCase):
         self.assertEqual(product['print_layout']['color'], '#ffffff')
         public = self.guest.request('GET', '/api/catalog/' + str(product['id']))[1]
         self.assertEqual(public['size_guide'], 'S 48 cm / M 51 cm')
+        self.assertEqual(public['description'], 'Koszulka na mecz.\n\n## Materiał i krój\n- Bawełna 100%')
         self.assertEqual(public['preorder_note'], 'Wysyłka od 20 listopada')
         for bad in [{'decoration_method': 'laser'}, {'preorder': True, 'preorder_note': ''}, {'preorder_until': '20-11-2026'},
+                    {'description': 'Materiał: [np. bawełna 100%]'}, {'description': 'Opis <b>pogrubiony</b>'},
                     {'print_layout': {'image': '/assets/photos/product-3.webp', 'areas': {'name': {'x': 90, 'y': 0, 'w': 20, 'h': 5}}}},
                     {'print_layout': {'image': '', 'areas': {'name': {'x': 1, 'y': 1, 'w': 5, 'h': 5}}}},
                     {'print_layout': {'image': '/assets/photos/product-3.webp', 'areas': {'logo': {'x': 1, 'y': 1, 'w': 5, 'h': 5}}}}]:

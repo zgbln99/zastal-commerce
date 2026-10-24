@@ -19,10 +19,11 @@ LAYOUT_AREAS = ('name', 'number')
 DEFAULT_OPTIONS = {'image': '', 'subtitle': '', 'personalization_enabled': False,
                    'personalization_required': False, 'personalization_fee': 0,
                    'decoration_method': 'dtf', 'preorder': False, 'preorder_note': '', 'preorder_until': '',
-                   'size_guide': '', 'print_layout': None}
+                   'size_guide': '', 'print_layout': None, 'description': ''}
 EXTENDED_COLUMNS = {'decoration_method': "TEXT NOT NULL DEFAULT 'dtf'", 'preorder': 'INTEGER NOT NULL DEFAULT 0',
                     'preorder_note': "TEXT NOT NULL DEFAULT ''", 'preorder_until': "TEXT NOT NULL DEFAULT ''",
-                    'size_guide': "TEXT NOT NULL DEFAULT ''", 'print_layout': "TEXT NOT NULL DEFAULT ''"}
+                    'size_guide': "TEXT NOT NULL DEFAULT ''", 'print_layout': "TEXT NOT NULL DEFAULT ''",
+                    'description': "TEXT NOT NULL DEFAULT ''"}
 ROSTER = (
     ('Kuba Galewski', 'GALEWSKI', '1'), ('Andrzej Mazurczak', 'MAZURCZAK', '3'),
     ('Conley Garrison', 'GARRISON', '0'), ('Filip Matczak', 'MATCZAK', '8'),
@@ -194,25 +195,41 @@ def validate_product(data, existing=None):
     if values['preorder'] and not values['preorder_note']:
         raise ValueError('Przedsprzedaż wymaga informacji o planowanej wysyłce')
     values['size_guide'] = text(values['size_guide'], 'rozmiarówka', 2000, empty=True)
+    values['description'] = description_value(values['description'])
     values['print_layout'] = layout_value(values['print_layout'])
     values.pop('decoration_method_label', None)
     return values
 
 
+def description_value(value):
+    """Plain-text product description (paragraphs, '## ' headings, '- ' lists). No HTML, no unfilled [template fields]."""
+    if value is None:
+        value = ''
+    if not isinstance(value, str) or len(value) > 4000 or any(ord(ch) < 32 and ch not in '\n\t\r' for ch in value):
+        raise ValueError('Opis produktu: maksymalnie 4000 znaków, bez znaków sterujących')
+    value = value.replace('\r\n', '\n').strip('\n')
+    if re.search(r'<\s*/?\s*[a-zA-Z]', value):
+        raise ValueError('Opis produktu nie może zawierać znaczników HTML')
+    unfilled = [token for token in re.findall(r'\[[^\]\n]{1,80}\](?!\()', value)]
+    if unfilled:
+        raise ValueError(f'Opis produktu ma niewypełnione pola szablonu: {unfilled[0]}')
+    return value
+
+
 def save_options(c, pid, value):
     layout = json.dumps(value['print_layout'], ensure_ascii=False, sort_keys=True) if value.get('print_layout') else ''
     c.execute('''INSERT INTO product_options(product_id,image,subtitle,personalization_enabled,personalization_required,personalization_fee,
-        decoration_method,preorder,preorder_note,preorder_until,size_guide,print_layout)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET
+        decoration_method,preorder,preorder_note,preorder_until,size_guide,print_layout,description)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET
         image=excluded.image,subtitle=excluded.subtitle,
         personalization_enabled=excluded.personalization_enabled,
         personalization_required=excluded.personalization_required,
         personalization_fee=excluded.personalization_fee,
         decoration_method=excluded.decoration_method,preorder=excluded.preorder,preorder_note=excluded.preorder_note,
-        preorder_until=excluded.preorder_until,size_guide=excluded.size_guide,print_layout=excluded.print_layout''',
+        preorder_until=excluded.preorder_until,size_guide=excluded.size_guide,print_layout=excluded.print_layout,description=excluded.description''',
         (pid, value['image'], value['subtitle'], value['personalization_enabled'], value['personalization_required'],
          value['personalization_fee'], value['decoration_method'], int(value['preorder']), value['preorder_note'],
-         value['preorder_until'], value['size_guide'], layout))
+         value['preorder_until'], value['size_guide'], layout, value.get('description', '')))
 
 
 def line_extras(c, product_id):

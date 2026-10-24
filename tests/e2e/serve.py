@@ -37,7 +37,7 @@ def seed(api, sales, auth):
         c.execute("INSERT INTO product_options(product_id,image,subtitle,personalization_enabled,personalization_required,personalization_fee,decoration_method,print_layout) VALUES(1,'/assets/photos/product-1.webp','Klasyczna bluza z kapturem • zieleń',1,0,2500,'dtf',?)", (layout,))
         for pid in range(2, 13):
             c.execute('INSERT INTO product_options(product_id,image,subtitle) VALUES(?,?,?)', (pid, f'/assets/photos/product-{pid}.webp', 'Kolekcja klubowa'))
-        c.execute("UPDATE product_options SET preorder=1,preorder_note='Wysyłka od 20 listopada',preorder_until='2026-11-20',size_guide='116: dł. 44 cm\n128: dł. 48 cm\n140: dł. 52 cm' WHERE product_id=9")
+        c.execute("UPDATE product_options SET preorder=1,preorder_note='Wysyłka od 20 listopada',preorder_until='2026-11-20',size_guide='116: dł. 44 cm\n128: dł. 48 cm\n140: dł. 52 cm',description='Koszulka dla najmłodszych kibiców.\n\n## Materiał i krój\n- Bawełna 100%\n- Rozmiary według wzrostu dziecka' WHERE product_id=9")
         import datetime as dt
         import commerce_pricing as pricing
         c.execute('UPDATE product_prices SET changed_at=? WHERE product_id=3', (pricing.stamp(dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=40)),))

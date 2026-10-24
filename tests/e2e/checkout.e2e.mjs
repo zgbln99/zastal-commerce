@@ -48,7 +48,7 @@ try {
   step('mobile: order lookup form answers without leaking', true);
   await shot(page, '00-help-390');
   await page.goto(WEB + '/produkt/9', { waitUntil: 'networkidle' });
-  step('mobile: preorder product shows note and size guide', (await page.locator('.product-preorder-note').count()) === 1 && (await page.locator('.product-size-guide').count()) === 1);
+  step('mobile: preorder product shows note, size guide and structured description', (await page.locator('.product-preorder-note').count()) === 1 && (await page.locator('.product-size-guide').count()) === 1 && (await page.locator('.product-description h2').count()) === 1 && (await page.locator('script[type="application/ld+json"]').count()) >= 1);
   await shot(page, '02a-product-preorder-390');
   await page.goto(WEB + '/produkt/3', { waitUntil: 'networkidle' });
   const omnibus = await page.locator('.product-price-row .price-reduction').innerText().catch(() => '');
