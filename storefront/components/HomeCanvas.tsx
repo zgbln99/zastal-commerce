@@ -1,5 +1,5 @@
 "use client";
-import {Fragment,useState} from "react";
+import {useState} from "react";
 import Link from "next/link";
 import {ArrowRight,ArrowUpRight,PackageCheck,Ruler,UserRound} from "lucide-react";
 import ProductCard,{ProductImage} from "./ProductCard";
@@ -112,6 +112,6 @@ function Block({section}:{section:HomeSection}){
 function ChevronRightIcon(){return <ArrowUpRight size={17}/>;}
 export default function HomeCanvas({config}:{config:HomeConfig}){
  return <div className="home-page cms-home">
-  {config.sections.filter(section=>section.enabled).map((section,index)=><Fragment key={section.id}><Block section={section}/>{section.type==="hero"&&index===0&&<div className="club-strip" aria-label="Zastal Zielona Góra"><span>Zastal Zielona Góra</span><span>Od 1946</span><span>Oficjalny sklep kibica</span></div>}</Fragment>)}
+  {config.sections.filter(section=>section.enabled).map(section=><Block key={section.id} section={section}/>)}
  </div>;
 }
