@@ -133,10 +133,10 @@ def enqueue(c, now=None):
 
 
 def send_daily(c, now=None):
-    """Called by the maintenance timer: sends after SEND_HOUR local time, at most once per day."""
+    """Called by the maintenance timer: weekdays only, after SEND_HOUR local time, at most once per day."""
     now = now or now_utc()
     local = now.astimezone(LOCAL)
-    if local.hour < SEND_HOUR:
+    if local.weekday() >= 5 or local.hour < SEND_HOUR:
         return ''
     row = c.execute("SELECT value FROM store_settings WHERE key='digest_last_sent'").fetchone()
     if row and row['value'] >= local.strftime('%Y-%m-%d'):

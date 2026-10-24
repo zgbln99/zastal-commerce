@@ -91,10 +91,15 @@ class DigestTests(unittest.TestCase):
         self.assertEqual(self.outbox('staff_digest'), [('staff_digest', 'sklep@example.test', 'staff_digest:' + data['date'])])
         with api.connect() as c:
             self.assertEqual(digest.send_daily(c), '')  # already sent today
-            tomorrow = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1)
-            tomorrow = tomorrow.replace(hour=9)
-            self.assertEqual(digest.send_daily(c, tomorrow), 'sklep@example.test')
-            self.assertEqual(digest.send_daily(c, tomorrow.replace(hour=5) + dt.timedelta(days=1)), '')  # before 07:00
+            monday = dt.datetime.now(digest.LOCAL) + dt.timedelta(days=1)
+            while monday.weekday() != 0:
+                monday += dt.timedelta(days=1)
+            monday = monday.replace(hour=9)
+            saturday = monday + dt.timedelta(days=5)
+            self.assertEqual(digest.send_daily(c, monday), 'sklep@example.test')
+            self.assertEqual(digest.send_daily(c, monday.replace(hour=5) + dt.timedelta(days=1)), '')  # before 07:00
+            self.assertEqual(digest.send_daily(c, saturday), '')  # weekend: nothing automatic
+            self.assertEqual(digest.send_daily(c, saturday + dt.timedelta(days=1)), '')
             subject, body = digest.message(c, data['date'], 'https://store.example.test')
             self.assertIn('podsumowanie dnia', subject)
             self.assertIn(f"ZS-{paid['id']:05d}", body)

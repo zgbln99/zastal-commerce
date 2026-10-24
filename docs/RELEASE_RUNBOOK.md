@@ -76,7 +76,7 @@ Adres notyfikacji do wpisania w panelu PayU: `https://<domena>/api/payments/payu
 - `tools/healthcheck.sh [origin]` — jedna sonda dla crona/monitoringu (katalog przez Nginx, strona główna, `/health` lokalnie); kod wyjścia ≠ 0 = alarm, np. `*/5 * * * * /…/tools/healthcheck.sh || logger -t zastal-store 'healthcheck FAILED'`.
 - `journalctl -u zastal-store-email -n 50` — worker outboxu; panel **Poczta sklepu** pokazuje kolejkę i błędy.
 - Panel **Przegląd** → zamówienia w toku; **Zwroty i reklamacje** → otwarte zgłoszenia; **Sprzedaż i dostawy** → gotowość.
-- Timer utrzymania anuluje nieopłacone zamówienia po `unpaid_hours`, zwalnia rezerwacje, kolejkuje e-maile „produkt znów dostępny” (`restock_alerts`) i raz dziennie po 7:00 wysyła podsumowanie dla obsługi (`digest_sent_to`), jeśli włączone w **Sprzedaż i dostawy**.
+- Timer utrzymania anuluje nieopłacone zamówienia po `unpaid_hours`, zwalnia rezerwacje, kolejkuje e-maile „produkt znów dostępny” (`restock_alerts`) i w dni robocze po 7:00 wysyła podsumowanie dla obsługi (`digest_sent_to`), jeśli włączone w **Sprzedaż i dostawy**.
 - Etykiety: zakładka **Etykiety** drukuje na arkusz A4 albo na drukarkę etykiet (rolka 50 × 30 mm, w oknie drukowania format 50 × 30 i margines 0).
 - Panel **Promocje i kody** → kody rabatowe (użycia, limity) i lista klientów czekających na rozmiar.
 - Panel **Raporty** → sprzedaż dziennie i CSV dla księgowości (`/api/admin/reports/sales.csv?from=&to=&by=day|product|orders`).
