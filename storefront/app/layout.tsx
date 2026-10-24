@@ -10,6 +10,7 @@ import "./typography.css";
 import "./brand-system.css";
 import "./rebuild-v2.css";
 import "./storefront-v3.css";
+import "./storefront-v4.css";
 import CommerceRoot from "../components/CommerceRoot";
 import { storeStatus } from "../lib/store-status";
 export const dynamic = "force-dynamic";

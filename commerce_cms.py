@@ -64,23 +64,23 @@ for _slide in (2, 3):
 
 DEFAULT = {"version": 1, "sections": [
  {"id": "hero-main", "type": "hero", "enabled": True, "settings": {
-    "eyebrow": "KLUBOWA KOLEKCJA", "title": "W barwach Zastalu.",
-    "description": "Koszulki, bluzy i dodatki dla kibiców z Zielonej Góry.",
-    "image": "/assets/photos/fans.webp", "cta_text": "Przejdź do sklepu",
+    "eyebrow": "KLUBOWA KOLEKCJA", "title": "Sklep Zastalu Zielona Góra",
+    "description": "Koszulki, bluzy i akcesoria z klubowej kolekcji.",
+    "image": "/assets/photos/fans.webp", "cta_text": "Zobacz produkty",
     "cta_url": "/sklep", "secondary_text": "Zobacz koszulki",
     "secondary_url": "/sklep?category=Koszulki", "height": 620,
     "overlay": 72, "alignment": "left"}},
  {"id": "shop-categories", "type": "categories", "enabled": True, "settings": {
     "eyebrow": "01 / KATEGORIE", "title": "Kolekcje", "cta_text": "Cały sklep",
     "categories": "Koszulki,Bluzy,Dzieci,Akcesoria", "columns": 4}},
- {"id": "print-studio", "type": "personalization", "enabled": True, "settings": {
-    "eyebrow": "02 / PERSONALIZACJA", "title": "Twoje nazwisko. Twój numer.",
-    "description": "Wybierz zawodnika z listy lub wpisz własne nazwisko i numer.",
-    "button_text": "Personalizuj ten produkt", "product_id": 1}},
  {"id": "merch-grid", "type": "products", "enabled": True, "settings": {
     "eyebrow": "03 / PRODUKTY", "title": "W klubowym sklepie",
     "category": "Wszystko", "count": 8, "columns": 4, "show_filters": True,
     "cta_text": "Wszystkie produkty", "product_ids": ""}},
+ {"id": "print-studio", "type": "personalization", "enabled": True, "settings": {
+    "eyebrow": "02 / PERSONALIZACJA", "title": "Twoje nazwisko. Twój numer.",
+    "description": "Wybierz zawodnika z listy lub wpisz własne nazwisko i numer.",
+    "button_text": "Personalizuj ten produkt", "product_id": 1}},
  {"id": "retro-feature", "type": "retro", "enabled": True, "settings": {
     "eyebrow": "04 / ZASTAL RETRO", "title": "Klasyczny znak. Klubowa bluza.",
     "description": "Retro logo Zastalu na zielonej bluzie.",

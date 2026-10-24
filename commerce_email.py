@@ -164,7 +164,7 @@ def _consume_token(c, raw, kind):
 
 
 ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid', 'return_update')
-GUEST_KINDS = ('stock_alert', 'gift_card_issued', 'staff_digest')
+GUEST_KINDS = ('stock_alert', 'gift_card_issued', 'staff_digest', 'test_email')
 # Intermediate workflow steps are not customer events; packing is news only for pickup orders.
 QUIET_STATUSES = ('potwierdzone', 'do_kompletacji', 'nanoszenie_dtf', 'kontrola_jakosci')
 
@@ -230,7 +230,7 @@ def dispatch(handler, path, c):
         '/api/auth/email/status': 'GET', '/api/admin/email': 'GET',
         '/api/auth/password-reset/request': 'POST', '/api/auth/password-reset/confirm': 'POST',
         '/api/auth/email/verify': 'POST', '/api/account/email/verification': 'POST',
-        '/api/admin/email/retry': 'POST'}
+        '/api/admin/email/retry': 'POST', '/api/admin/email/test': 'POST'}
     if path not in paths:
         return False
     if path.startswith('/api/admin/'):
@@ -275,6 +275,14 @@ def dispatch(handler, path, c):
         auth.rate(handler, 'email_verify_request', str(user['id']), count=5, window=3600)
         user = auth.begin_account_write(handler, c)
         queue_verification(c, user)
+    elif path == '/api/admin/email/test':
+        auth.rate(handler, 'email_admin_test', count=5, window=3600)
+        recipient = auth.identifier_value(data.get('recipient'), email=True)
+        c.execute('BEGIN IMMEDIATE')
+        message_id = enqueue_guest(c, 'test_email', recipient, 'test_email:' + secrets.token_urlsafe(16))
+        c.commit()
+        handler.respond(200, {'ok': True, 'id': message_id})
+        return True
     else:
         auth.rate(handler, 'email_admin_retry', count=30, window=3600)
         identifier = data.get('id')
@@ -330,6 +338,9 @@ def _message(c, row, config):
         else:
             subject = 'Zastal Store, zmiana hasła'
             body = f'Ustaw nowe hasło do konta Zastal Store:\n\n{link}\n\nLink jest jednorazowy i ważny przez godzinę.\nJeżeli nie proszono o zmianę hasła, zignoruj tę wiadomość.'
+    elif row['kind'] == 'test_email':
+        subject = 'Zastal Store, test poczty'
+        body = 'To wiadomość testowa ze sklepu Zastal.\n\nJej status w panelu Poczta sklepu pokaże, czy serwer SMTP przyjął wiadomość.'
     elif row['kind'] == 'staff_digest':
         import commerce_digest as digest
         subject, body = digest.message(c, row['dedupe_key'].rsplit(':', 1)[1], os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))

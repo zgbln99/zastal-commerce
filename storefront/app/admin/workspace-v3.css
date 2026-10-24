@@ -22,3 +22,5 @@
 .admin-panel-head h2{font-size:19px}
 .admin-navitem.active{box-shadow:inset 3px 0 #ef7d00}
 @media(max-width:760px){.admin-command-bar{padding:20px}.admin-command-actions{display:block}.admin-command-actions button{width:100%;padding:14px 0;border-bottom:1px solid #e6ece4}.admin-command-actions button:last-child{border-bottom:0}.admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.staff-mail-test{display:flex;gap:10px;max-width:620px}.staff-mail-test input{flex:1;min-width:0;border:1px solid #cbd9ca;padding:10px 12px;font-size:14px}.staff-mail-test button{white-space:nowrap}@media(max-width:560px){.staff-mail-test{flex-direction:column}}
