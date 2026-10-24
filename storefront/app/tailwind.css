@@ -1,5 +1,5 @@
 /* Tailwind v4 for shadcn/ui components. Preflight is NOT imported on purpose: the storefront keeps its own base
-   styles, so adding the component kit does not reset the existing look. Tokens map the kit to the club palette. */
+   styles, so adding the component kit does not reset the existing look. Tokens follow brand-system.css (ZT Talk, club green #165114, orange #ef7d00). */
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "tw-animate-css";
@@ -9,40 +9,40 @@
 :root {
   --radius: 0.1875rem;
   --background: #ffffff;
-  --foreground: #18211e;
+  --foreground: #19231b;
   --card: #ffffff;
-  --card-foreground: #18211e;
+  --card-foreground: #19231b;
   --popover: #ffffff;
-  --popover-foreground: #18211e;
-  --primary: #174c37;
+  --popover-foreground: #19231b;
+  --primary: #165114;
   --primary-foreground: #ffffff;
-  --secondary: #f6f7f3;
-  --secondary-foreground: #18211e;
-  --muted: #f6f7f3;
-  --muted-foreground: #68736d;
-  --accent: #e6bf45;
-  --accent-foreground: #18211e;
+  --secondary: #f7f8f3;
+  --secondary-foreground: #19231b;
+  --muted: #f7f8f3;
+  --muted-foreground: #5e6d60;
+  --accent: #ef7d00;
+  --accent-foreground: #ffffff;
   --destructive: #a63b2b;
-  --border: #e4e7e2;
-  --input: #cdd3cf;
-  --ring: #174c37;
-  --chart-1: #174c37;
-  --chart-2: #e6bf45;
-  --chart-3: #68736d;
+  --border: #dbe2d9;
+  --input: #c9d3c7;
+  --ring: #ef7d00;
+  --chart-1: #165114;
+  --chart-2: #ef7d00;
+  --chart-3: #5e6d60;
   --chart-4: #a63b2b;
   --chart-5: #0b4b37;
-  --sidebar: #f6f7f3;
-  --sidebar-foreground: #18211e;
-  --sidebar-primary: #174c37;
+  --sidebar: #f7f8f3;
+  --sidebar-foreground: #19231b;
+  --sidebar-primary: #165114;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e4e7e2;
-  --sidebar-accent-foreground: #18211e;
-  --sidebar-border: #e4e7e2;
-  --sidebar-ring: #174c37;
+  --sidebar-accent: #dbe2d9;
+  --sidebar-accent-foreground: #19231b;
+  --sidebar-border: #dbe2d9;
+  --sidebar-ring: #ef7d00;
 }
 
 .dark {
-  --background: #0f1a14;
+  --background: #0f1a0f;
   --foreground: #e6ede8;
   --card: #15231b;
   --card-foreground: #e6ede8;
@@ -54,7 +54,7 @@
   --secondary-foreground: #e6ede8;
   --muted: #1c2d23;
   --muted-foreground: #9db3a4;
-  --accent: #e6bf45;
+  --accent: #ef7d00;
   --accent-foreground: #0f1a14;
   --destructive: #e07b6a;
   --border: #27382e;
@@ -106,6 +106,6 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-  --font-display: "Barlow Semi Condensed", Inter, Arial, sans-serif;
+  --font-sans: "ZT Talk", Inter, Arial, sans-serif;
+  --font-display: "ZT Talk", "Barlow Semi Condensed", Arial, sans-serif;
 }
