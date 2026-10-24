@@ -4,7 +4,7 @@
 
 Przesyłki wysyłamy za pośrednictwem DPD. Metody dostępne dla Twojego adresu, koszt oraz termin otrzymania zamówienia widzisz przed jego złożeniem. Ostateczna kwota w kasie obejmuje wybraną dostawę. Informację o nadaniu i numer przesyłki przekazujemy po wysyłce.
 
-Termin dostawy obejmuje przygotowanie towaru oraz przewóz. Przy personalizacji potrzebny jest również czas wykonania nadruku. Dla przedsprzedaży obowiązuje termin podany w ofercie przed zakupem, wraz z informacją o wysyłce pozostałych produktów z tego zamówienia.
+Przewidywany czas przewozu DPD wynosi 1–3 dni od nadania. Do terminu otrzymania zamówienia doliczamy czas przygotowania produktu, a przy personalizacji także wykonania nadruku. Termin całkowity pokazujemy przed zakupem. Dla przedsprzedaży obowiązuje termin podany w ofercie przed zakupem, wraz z informacją o wysyłce pozostałych produktów z tego zamówienia.
 
 ## Odbiór osobisty
 

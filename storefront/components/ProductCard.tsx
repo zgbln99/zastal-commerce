@@ -11,7 +11,7 @@ export function ProductImage({ product, media, className = "", eager = false, sh
   const source = current?.url || "/assets/product-unavailable.svg";
   const [failed, setFailed] = useState("");
   const broken = failed === source;
-  return <><img src={broken ? "/assets/product-unavailable.svg" : source} alt={broken ? "Zdjęcie produktu niedostępne" : current?.alt || product.name || "Produkt"} className={className} loading={eager ? "eager" : "lazy"} decoding="async" onError={() => setFailed(source)}/>{showLabel && current?.illustrative && !broken && <small className="product-media-label">Materiał poglądowy</small>}</>;
+  return <><img src={broken ? "/assets/product-unavailable.svg" : source} alt={broken ? "Zdjęcie produktu niedostępne" : current?.alt || product.name || "Produkt"} className={className} loading={eager ? "eager" : "lazy"} decoding="async" onError={() => setFailed(source)}/></>;
 }
 export default function ProductCard({ product, eager = false }: { product: Product; eager?: boolean }) {
   const store = useStore();

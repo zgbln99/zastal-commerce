@@ -74,7 +74,7 @@ class LaunchTests(unittest.TestCase):
         self.assertFalse(data["can_activate"])
         self.assertEqual(data["completed"],0)
         payload={"seller_name":"Klub Sportowy TEST","tax_id":"5261040828","business_address":"Testowa 1, 00-001 Warszawa",
-                 "support_email":"kontakt@example.org","brand_approved":True}
+                 "support_email":"kontakt@example.org","support_phone":"+48 601 234 567","brand_approved":True}
         status,updated=self.client.request("PATCH","/api/admin/launch",payload)
         self.assertEqual(status,200)
         self.assertTrue(updated["settings"]["brand_approved"])

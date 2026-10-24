@@ -80,10 +80,19 @@ def https_url(url):
     return parsed.scheme == "https" and bool(parsed.netloc) and not parsed.username and not parsed.password
 
 
+def valid_support_phone(value):
+    """Require a real contact before live sales; staged test numbers stay private."""
+    value = value.strip()
+    digits = re.sub(r'[^0-9]', '', value)
+    return bool(re.fullmatch(r'\+?[0-9][0-9 -]{7,17}', value) and
+                9 <= len(digits) <= 15 and len(set(digits)) > 1 and
+                'test' not in value.casefold())
+
+
 def checks(v):
     return {
         "seller": bool(v["seller_name"].strip() and niptax_ok(v["tax_id"]) and
-                       v["business_address"].strip() and
+                       v["business_address"].strip() and valid_support_phone(v["support_phone"]) and
                        re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", v["support_email"])),
         "policies": all(https_url(v[key]) for key in ("terms_url","privacy_url","returns_url","shipping_url")),
         "brand": bool(v["brand_approved"]),

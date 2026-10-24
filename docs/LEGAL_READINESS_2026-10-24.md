@@ -19,8 +19,9 @@ Odsyłacze do nieopublikowanych stron nie powinny prowadzić klienta do pustej s
 
 ## Dane i decyzje sprzedawcy potrzebne przed sprzedażą
 
-- Telefon do szybkiego kontaktu z klientami. Nie używać telefonu IOD jako numeru sklepu.
-- Obszar dostawy DPD, stawki brutto i ewentualny próg darmowej dostawy; czas przygotowania, transportu i personalizacji. Terminy przedsprzedaży ustalać per produkt.
+- Przed włączeniem sprzedaży podmienić lub zweryfikować packshoty produktów 1–7, 9 i 10: metadane oznaczają je jako zdjęcia ilustracyjne. Usunięto tę techniczną etykietę z widoku klienta, ale nie wolno przedstawiać odmiennego wzoru jako dokładnego towaru.
+- Telefon do szybkiego kontaktu z klientami. W panelu jest wyłącznie testowe 000 000 000 (test), ukryte przed klientem i odrzucane przez warunek gotowości sprzedaży. Nie używać telefonu IOD jako numeru sklepu.
+- Obszar dostawy DPD, stawki brutto i ewentualny próg darmowej dostawy; czas przygotowania i personalizacji. Przewóz po nadaniu: deklarowane 1–3 dni. Terminy przedsprzedaży ustalać per produkt.
 - Czy odbiór osobisty ma pozostać; dokładne miejsce i zasady/godziny odbioru.
 - Dostępne metody płatności, terminy wpłaty i sposób postępowania po braku płatności. Domyślne 72 godziny w kodzie nie są potwierdzoną decyzją biznesową.
 - Potwierdzenie, że sklep i jego klienci podlegają obsłudze opublikowanego IOD.

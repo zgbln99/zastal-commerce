@@ -20,7 +20,7 @@ Potwierdzenie umowy z jej warunkami, treścią regulaminu i pouczeniem o odstąp
 
 Kasa pokazuje metody płatności dostępne dla Twojego zamówienia oraz termin płatności, jeśli wybrana metoda go wymaga. Nie każda metoda musi być dostępna przy każdym zamówieniu. Instrukcje i dane do płatności otrzymasz w potwierdzeniu. Nie wysyłaj nam danych swojej karty płatniczej.
 
-Przewoźnikiem przesyłek sklepu jest DPD. Odbiór osobisty można wybrać, jeśli kasa udostępnia tę opcję. Obszar dostawy, koszt i termin otrzymania zamówienia podajemy przed zakupem. Przy odbiorze osobistym informujemy o miejscu i zasadach odbioru. Szczegóły opisuje strona [Dostawa](/informacje/dostawa).
+Przewoźnikiem przesyłek sklepu jest DPD; przewóz po nadaniu trwa zwykle 1–3 dni. Odbiór osobisty można wybrać, jeśli kasa udostępnia tę opcję. Obszar dostawy, koszt i termin otrzymania zamówienia podajemy przed zakupem. Przy odbiorze osobistym informujemy o miejscu i zasadach odbioru. Szczegóły opisuje strona [Dostawa](/informacje/dostawa).
 
 Termin obejmuje przygotowanie zamówienia i doręczenie. Jeżeli nie uzgodniliśmy innego terminu, wydajemy towar bez zbędnej zwłoki, najpóźniej w ciągu 30 dni od zawarcia umowy z konsumentem. O przeszkodzie w realizacji informujemy niezwłocznie; zmiana uzgodnionego terminu wymaga Twojej zgody. Zachowujesz ustawowe uprawnienia w razie opóźnienia.
 

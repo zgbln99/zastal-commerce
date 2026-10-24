@@ -62,7 +62,7 @@ export default function StoreHero({settings}: {settings?:SectionSettings}) {
       <figure className={"flagship-hero-media media-"+slide.image_role}>
         <img key={slide.image} className="flagship-hero-photo" src={slide.image} alt={slide.image_alt} fetchPriority={index===0?"high":"auto"} decoding="async"/>
         {slide.image_role==="lifestyle"&&<span className="flagship-hero-shade" aria-hidden="true"/>}
-        {slide.image_illustrative&&<figcaption className="flagship-hero-caption">Materiał poglądowy</figcaption>}
+
       </figure>
     </div>
     <div className="flagship-hero-footer">
