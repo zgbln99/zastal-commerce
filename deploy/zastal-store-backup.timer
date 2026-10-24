@@ -1,0 +1,9 @@
+[Unit]
+Description=Nightly Zastal Store backup at 03:20
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

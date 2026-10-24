@@ -1,0 +1,9 @@
+[Unit]
+Description=Zastal Store nightly backup (SQLite online backup + CMS media)
+
+[Service]
+Type=oneshot
+User=sentinelx
+WorkingDirectory=/var/lib/sentinelx/uploads/zastal-commerce-app
+EnvironmentFile=/var/lib/sentinelx/uploads/zastal-commerce-app/.runtime.env
+ExecStart=/usr/bin/python3 tools/backup_sqlite.py --out /var/lib/sentinelx/backups/zastal --keep 30
