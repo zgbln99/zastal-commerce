@@ -38,6 +38,10 @@ try {
   const page = await mobile.newPage();
   await page.goto(WEB + '/', { waitUntil: 'networkidle' });
   await shot(page, '01-home-390');
+  await page.goto(WEB + '/pomoc', { waitUntil: 'networkidle' });
+  const helpText = await page.locator('.help-content').innerText();
+  step('mobile: help page describes live delivery and payment options', helpText.includes('Kurier') && helpText.includes('Zwroty i reklamacje') && !helpText.includes('wstrzymane'));
+  await shot(page, '00-help-390');
   await page.goto(WEB + '/produkt/9', { waitUntil: 'networkidle' });
   step('mobile: preorder product shows note and size guide', (await page.locator('.product-preorder-note').count()) === 1 && (await page.locator('.product-size-guide').count()) === 1);
   await shot(page, '02a-product-preorder-390');

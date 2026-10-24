@@ -1,0 +1,27 @@
+ok  mobile: help page describes live delivery and payment options
+ok  mobile: preorder product shows note and size guide
+ok  mobile: product added to cart
+ok  mobile: transfer order created — ZS-1
+ok  mobile: receipt shows transfer instructions
+ok  mobile: receipt has no demo wording
+ok  mobile: client validation blocks invalid submission — 9 field errors
+ok  desktop: print preview renders name and number on the product photo
+ok  desktop: PayU order created with redirect — https://payu.example.test/pay?payu-fake=ZS-00002-e31370bf
+ok  desktop: signed PayU notification accepted — completed
+ok  desktop: receipt shows paid status and print snapshot
+ok  admin: login over session cookie works
+ok  admin: readiness shows live mode with all checks — 10/10
+ok  admin: transfer confirmed moves order to opłacone
+ok  admin: paid orders are in the fulfillment queue — ZS-00001, ZS-00002
+ok  admin: product editor shows the draggable print layout
+ok  admin: cashier navigation is limited by capabilities — Przegląd, Kasa POS, Klienci, Etykiety, Ustawienia konta
+ok  pos: cashier opened a shift with opening cash
+ok  pos: live sale recorded with fiscal receipt reference and change
+ok  pos: shift closed with expected-vs-counted report
+ok  returns: staff registered a counter return on the order
+ok  returns: return settled with transfer refund and visible in history
+ok  pages: published page renders publicly with safe links
+ok  pages: unpublished drafts return 404
+ok  pos: kiosk layout hides admin chrome
+
+25/25 E2E checks passed
