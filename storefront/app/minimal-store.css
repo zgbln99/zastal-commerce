@@ -1,0 +1,72 @@
+/* Minimal fashion storefront, integrated with the existing Zastal CMS and commerce components. */
+:root{--paper:#fff;--cream:#f8f8f6;--ink:#171a17;--forest:#174e37;--muted:#777b77;--line:#e7e7e3;--radius:0}
+body{background:#fff;color:#191b19}
+.container{max-width:1450px;width:calc(100% - 96px)}
+.store-header{height:80px;border-bottom:1px solid #eee;background:rgba(255,255,255,.97);backdrop-filter:blur(12px)}
+.store-nav{gap:32px}
+.store-nav a{font-size:13px;letter-spacing:.015em;font-weight:500}
+.store-logo img{width:152px}
+.store-footer{background:#f7f7f5;border-color:#ecece9}
+.footer-grid{padding-top:72px;padding-bottom:55px}
+.button,.card-quick,.product-image-wrap,.category-tile,.store-modal{border-radius:0}
+.button-dark{background:#181c19}
+.button-dark:hover:not(:disabled){background:#315b43}
+.home-page .home-section-heading h2,.home-page .section-heading h2{font-weight:550;letter-spacing:-.045em;font-size:clamp(26px,2.65vw,40px);line-height:1.1}
+.home-page .home-text-link{font-size:13px;letter-spacing:.01em;text-decoration:underline;text-underline-offset:5px}
+.flagship-hero.store-carousel[class]{max-width:1450px;width:calc(100% - 96px);margin-top:30px}
+.flagship-hero.store-carousel h1{max-width:1080px!important;font-weight:520!important;font-size:clamp(48px,5.3vw,84px)!important;line-height:1.01!important;letter-spacing:-.065em!important}
+.store-carousel .flagship-hero-content,.flagship-hero.store-carousel .flagship-hero-content{padding-bottom:30px!important}
+.store-carousel .flagship-hero-lead{max-width:700px;font-size:15px!important;color:#666c67!important}
+.store-carousel .flagship-hero-media{height:clamp(470px,45vw,700px)!important;min-height:0!important;background:#eeeeeb!important}
+.store-carousel .flagship-hero-photo{object-position:center center!important}
+.store-carousel .flagship-button-primary{color:#181c19!important;border-color:#181c19!important}
+.home-collections.container{padding-top:76px!important}
+.home-collection-grid{gap:14px!important;border:0!important}
+.home-collection{border:0!important;background:#f5f5f2}
+.home-collection:last-child{border:0!important}
+.home-collection-image{display:block!important;aspect-ratio:4/3;overflow:hidden;background:#f1f1ee}
+.home-collection-image img{width:100%;height:100%;object-fit:contain;transition:transform .3s ease}
+.home-collection:hover .home-collection-image img{transform:scale(1.04)}
+.home-collection-label{background:#f5f5f2;padding:18px 18px 22px!important;min-height:93px}
+.home-collection-label h3{font-size:19px!important;letter-spacing:-.025em}
+.home-collection-label span{color:#777!important}
+.home-page .merchandise-catalog{padding-top:92px!important}
+.merchandise-grid{gap:34px 18px}
+.product-card{min-width:0}
+.product-image-wrap{background:#f5f5f3!important;aspect-ratio:3/3.7}
+.product-image-link{padding:25px 14px}
+.product-card-name{font-size:14px;font-weight:530}
+.product-card-bottom strong{font-size:14px}
+.product-badge{border-radius:0;letter-spacing:.035em}
+.collection-tabs{border-bottom:1px solid #e7e7e4}
+.collection-tabs button{border-radius:0}
+.editorial-print{max-width:1450px!important;width:calc(100% - 96px)!important;background:#f2f2ef!important;margin-top:110px!important}
+.editorial-print-copy{padding:60px clamp(30px,5vw,90px)!important}
+.editorial-print h2{font-weight:520!important;letter-spacing:-.055em!important;font-size:clamp(36px,4.3vw,65px)!important}
+.home-retro{margin-top:95px!important}
+.home-service-links{border-top:1px solid #e7e7e4}
+@media(max-width:900px){
+.container,.flagship-hero.store-carousel[class],.editorial-print{width:calc(100% - 48px)!important}
+.store-carousel .flagship-hero-media{height:420px!important}
+.flagship-hero.store-carousel h1{font-size:clamp(40px,7vw,62px)!important}
+.home-collection-grid{gap:10px!important}
+}
+@media(max-width:640px){
+.container,.flagship-hero.store-carousel[class],.editorial-print{width:calc(100% - 32px)!important}
+.store-header{height:66px}
+.flagship-hero.store-carousel[class]{margin-top:20px}
+.flagship-hero.store-carousel h1{font-size:clamp(37px,10vw,50px)!important}
+.store-carousel .flagship-hero-media{height:315px!important}
+.home-collections.container{padding-top:52px!important}
+.home-collection-grid{gap:10px!important}
+.home-collection:nth-child(2){border:0!important}
+.home-collection:nth-child(-n+2){border:0!important}
+.home-collection-label{padding:13px!important;min-height:78px}
+.home-collection-label h3{font-size:16px!important}
+.home-collection-image{aspect-ratio:4/3}
+.home-page .merchandise-catalog{padding-top:62px!important}
+.merchandise-grid{gap:26px 12px}
+.editorial-print{margin-top:70px!important}
+.editorial-print-copy{padding:35px 23px!important}
+.editorial-print h2{font-size:36px!important}
+}
