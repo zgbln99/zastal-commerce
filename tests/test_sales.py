@@ -364,5 +364,114 @@ class SalesTests(unittest.TestCase):
             self.assertEqual((code, demo.get('demo'), demo.get('status')), (201, True, 'wydane'), demo)
 
 
+    # ------------------------------------------------------------ returns, complaints, cancellations
+    def shipped_order(self, **extra):
+        code, reply = self.order(**extra)
+        self.assertEqual(code, 201, reply)
+        self.assertEqual(self.admin.request('POST', f"/api/admin/orders/{reply['id']}/payment", {'action': 'confirm'})[0], 200)
+        with api.connect() as c:
+            c.execute("UPDATE orders SET status='spakowane' WHERE id=?", (reply['id'],))
+            c.commit()
+        self.assertEqual(self.admin.request('POST', f"/api/admin/orders/{reply['id']}/shipment", {'carrier': 'InPost', 'tracking_number': '620000012345'})[0], 200)
+        return reply
+
+    def test_customer_return_is_registered_accepted_and_settled_with_restock(self):
+        self.go_live()
+        reply = self.shipped_order()
+        with api.connect() as c:
+            self.assertEqual(c.execute("SELECT stock FROM product_variants WHERE sku='TS-L'").fetchone()[0], 2)
+        bad = self.public('POST', f"/api/orders/{reply['id']}/returns", {'tracking_token': 'wrong', 'items': [{'line_index': 0, 'qty': 1}], 'reason': 'rozmiar'})
+        self.assertEqual(bad[0], 404)
+        code, created = self.public('POST', f"/api/orders/{reply['id']}/returns", {'tracking_token': reply['tracking_token'], 'kind': 'zwrot', 'items': [{'line_index': 0, 'qty': 1}], 'reason': 'rozmiar'})
+        self.assertEqual((code, created['return']['status']), (201, 'zgloszony'), created)
+        self.assertEqual(self.public('POST', f"/api/orders/{reply['id']}/returns", {'tracking_token': reply['tracking_token'], 'items': [{'line_index': 0, 'qty': 1}], 'reason': 'rozmiar'})[1]['code'], 'return_open')
+        self.assertEqual(self.public('POST', f"/api/orders/{reply['id']}/returns", {'tracking_token': reply['tracking_token'], 'items': [{'line_index': 0, 'qty': 5}], 'reason': 'rozmiar'})[0], 400)
+        code, receipt = self.public('GET', f"/api/orders/{reply['id']}?token={reply['tracking_token']}")
+        self.assertFalse(receipt['can_return'])
+        self.assertEqual(receipt['returns'][0]['reason_label'], 'Zły rozmiar')
+        self.assertNotIn('actor_id', receipt['returns'][0])
+        code, listing = self.admin.request('GET', '/api/admin/returns')
+        self.assertEqual((code, len(listing['returns']), listing['returns'][0]['customer_email']), (200, 1, 'kibic@example.test'))
+        rid = listing['returns'][0]['id']
+        code, accepted = self.admin.request('PATCH', f'/api/admin/returns/{rid}', {'status': 'przyjety', 'note': 'Odeślij InPostem'})
+        self.assertEqual((code, accepted['status']), (200, 'przyjety'), accepted)
+        self.assertEqual(self.admin.request('PATCH', f'/api/admin/returns/{rid}', {'status': 'rozliczony', 'refund_amount': 9399, 'refund_method': 'none'})[1]['code'], 'refund_method_required')
+        code, settled = self.admin.request('PATCH', f'/api/admin/returns/{rid}', {'status': 'rozliczony', 'refund_amount': 9399, 'refund_method': 'transfer', 'restock': True})
+        self.assertEqual((code, settled['status']), (200, 'rozliczony'), settled)
+        with api.connect() as c:
+            self.assertEqual(c.execute("SELECT stock FROM product_variants WHERE sku='TS-L'").fetchone()[0], 3)
+            self.assertEqual(c.execute('SELECT status FROM orders WHERE id=?', (reply['id'],)).fetchone()[0], 'zwrot')
+            self.assertEqual(sales.details(c, reply['id'])['payment_status'], 'refunded')
+            kinds = [row[0] for row in c.execute("SELECT dedupe_key FROM email_outbox WHERE kind='return_update' ORDER BY id")]
+            self.assertEqual(kinds, [f"return_update:{reply['id']}:{rid}:zgloszony", f"return_update:{reply['id']}:{rid}:przyjety", f"return_update:{reply['id']}:{rid}:rozliczony"])
+            subject, body = sales.order_email(c, c.execute('SELECT * FROM orders WHERE id=?', (reply['id'],)).fetchone(), sales.details(c, reply['id']), 'return_update', 'https://store.example.test')
+            self.assertIn('rozliczone', body)
+            self.assertIn('93.99 PLN', body)
+        self.assertEqual(self.admin.request('PATCH', f'/api/admin/returns/{rid}', {'status': 'przyjety'})[1]['code'], 'return_closed')
+        self.assertEqual(self.admin.request('GET', '/api/admin/returns')[1]['returns'], [])
+        self.assertEqual(len(self.admin.request('GET', '/api/admin/returns?all=1')[1]['returns']), 1)
+
+    def test_staff_returns_refund_via_payu_or_open_cash_shift(self):
+        self.go_live()
+        code, reply = self.order(payment='payu')
+        ext = json.loads(next(call for call in self.fake.calls if call[1].endswith('/api/v2_1/orders'))[3])['extOrderId']
+        raw, header = signed({'order': {'orderId': 'PAYU-' + ext, 'extOrderId': ext, 'status': 'COMPLETED', 'totalAmount': '9399', 'currencyCode': 'PLN'}})
+        self.assertEqual(self.public('POST', '/api/payments/payu/notify', raw, {'OpenPayu-Signature': header})[1]['result'], 'completed')
+        with api.connect() as c:
+            c.execute("UPDATE orders SET status='wydane' WHERE id=?", (reply['id'],))
+            c.commit()
+        code, created = self.admin.request('POST', '/api/admin/returns', {'order_id': reply['id'], 'kind': 'reklamacja', 'items': [{'line_index': 0, 'qty': 1}], 'reason': 'wada', 'description': 'Rozchodzący się szew'})
+        self.assertEqual((code, created['source'], created['refund_amount']), (201, 'staff', 7900), created)
+        code, settled = self.admin.request('PATCH', f"/api/admin/returns/{created['id']}", {'status': 'rozliczony', 'refund_amount': 7900, 'refund_method': 'payu', 'restock': False})
+        self.assertEqual((code, settled['status']), (200, 'rozliczony'), settled)
+        self.assertTrue(any('/refunds' in call[1] for call in self.fake.calls))
+        with api.connect() as c:
+            self.assertEqual(c.execute("SELECT status,amount FROM payment_refunds").fetchone()[1], 7900)
+            self.assertEqual(c.execute("SELECT stock FROM product_variants WHERE sku='TS-L'").fetchone()[0], 2)
+            self.assertEqual(c.execute('SELECT status FROM orders WHERE id=?', (reply['id'],)).fetchone()[0], 'wydane')
+        # Cash refund for a counter sale needs an open shift and lowers the expected cash.
+        self.assertEqual(self.admin.request('POST', '/api/admin/shifts/open', {'opening_cash': 10000})[0], 201)
+        code, sale = self.admin.request('POST', '/api/admin/pos/sales', {'items': [{'id': 2, 'size': 'UNI', 'quantity': 1}], 'idempotency_key': 'return-pos-sale-key-000001', 'payment_method': 'cash', 'payment_confirmed': True, 'fiscal': {'kind': 'paragon', 'number': '2026/10/5'}, 'handover': True})
+        self.assertEqual(code, 201, sale)
+        code, counter = self.admin.request('POST', '/api/admin/returns', {'order_id': sale['id'], 'kind': 'zwrot', 'items': [{'line_index': 0, 'qty': 1}], 'reason': 'odstapienie'})
+        self.assertEqual(code, 201, counter)
+        self.assertEqual(self.admin.request('POST', '/api/admin/shifts/close', {'closing_cash': 15000})[0], 200)
+        self.assertEqual(self.admin.request('PATCH', f"/api/admin/returns/{counter['id']}", {'status': 'rozliczony', 'refund_amount': 5000, 'refund_method': 'cash'})[1]['code'], 'shift_required')
+        self.assertEqual(self.admin.request('POST', '/api/admin/shifts/open', {'opening_cash': 15000})[0], 201)
+        code, cash = self.admin.request('PATCH', f"/api/admin/returns/{counter['id']}", {'status': 'rozliczony', 'refund_amount': 5000, 'refund_method': 'cash'})
+        self.assertEqual((code, cash['status']), (200, 'rozliczony'), cash)
+        shift = self.admin.request('GET', '/api/admin/shifts')[1]['current']
+        self.assertEqual((shift['cash_refunds'], shift['expected_cash']), (5000, 10000))
+        with api.connect() as c:
+            self.assertEqual(c.execute("SELECT stock FROM product_variants WHERE sku='AC-UNI'").fetchone()[0], 10)
+            self.assertEqual(c.execute('SELECT status FROM orders WHERE id=?', (sale['id'],)).fetchone()[0], 'zwrot')
+
+    def test_cancellation_after_personalization_needs_manager_override_and_writes_off_printed_units(self):
+        self.go_live()
+        with api.connect() as c:
+            c.execute('INSERT INTO product_options(product_id,personalization_enabled,personalization_fee) VALUES(1,1,2500)')
+            c.commit()
+        code, reply = self.order(items=[{'id': 1, 'size': 'L', 'quantity': 1, 'personalization': {'mode': 'custom', 'name': 'Kibic', 'number': '7'}}, {'id': 2, 'size': 'UNI', 'quantity': 1}], shipping={'method': 'odbior'}, payment='pickup')
+        self.assertEqual(code, 201, reply)
+        with api.connect() as c:
+            c.execute("UPDATE orders SET status='nanoszenie_dtf' WHERE id=?", (reply['id'],))
+            c.execute('INSERT INTO fulfillment_lines(order_id,line_index,picked_qty,printed_qty) VALUES(?,0,1,1)', (reply['id'],))
+            c.commit()
+        self.assertEqual(self.admin.request('PATCH', f"/api/admin/orders/{reply['id']}", {'status': 'anulowane'})[0], 400)
+        self.assertEqual(self.admin.request('POST', '/api/admin/staff', {'identifier': 'kasa', 'name': 'Kasa', 'role': 'cashier', 'password': 'Staff member password 2026'})[0], 201)
+        cashier = Client(self.port)
+        cashier.login('kasa', 'Staff member password 2026')
+        self.assertEqual(cashier.request('POST', f"/api/admin/orders/{reply['id']}/cancel", {'reason': 'klient zrezygnował'})[0], 403)
+        self.assertEqual(self.admin.request('POST', f"/api/admin/orders/{reply['id']}/cancel", {'reason': ''})[0], 400)
+        code, cancelled = self.admin.request('POST', f"/api/admin/orders/{reply['id']}/cancel", {'reason': 'klient zrezygnował po nadruku'})
+        self.assertEqual((code, cancelled['status']), (200, 'anulowane'), cancelled)
+        with api.connect() as c:
+            self.assertEqual(c.execute("SELECT stock FROM product_variants WHERE sku='TS-L'").fetchone()[0], 2)
+            self.assertEqual(c.execute("SELECT stock FROM product_variants WHERE sku='AC-UNI'").fetchone()[0], 10)
+            self.assertTrue(c.execute("SELECT 1 FROM stock_events WHERE reason LIKE 'odpis 1 szt.%'").fetchone())
+            self.assertEqual(c.execute('SELECT status FROM orders WHERE id=?', (reply['id'],)).fetchone()[0], 'anulowane')
+        self.assertEqual(self.admin.request('POST', f"/api/admin/orders/{reply['id']}/cancel", {'reason': 'x'})[1]['code'], 'order_closed')
+
+
 if __name__ == '__main__':
     unittest.main()

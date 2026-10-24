@@ -163,14 +163,14 @@ def _consume_token(c, raw, kind):
     return user
 
 
-ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid')
+ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid', 'return_update')
 
 
-def enqueue_order(c, order_id, kind='order_created'):
+def enqueue_order(c, order_id, kind='order_created', suffix=''):
     if kind not in ORDER_KINDS:
         raise ValueError('Unsupported order email kind')
     row = c.execute('SELECT u.*,o.status AS order_status FROM order_receipts r JOIN users u ON u.id=r.customer_id JOIN orders o ON o.id=r.order_id WHERE r.order_id=?', (order_id,)).fetchone()
-    key = f'{kind}:{order_id}'
+    key = f'{kind}:{order_id}' + (f':{suffix}' if suffix else '')
     if kind == 'order_status_changed':
         status = c.execute('SELECT status FROM orders WHERE id=?', (order_id,)).fetchone()
         key += f':{status["status"] if status else ""}'

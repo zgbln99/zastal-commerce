@@ -19,6 +19,7 @@ import Fulfillment from "./Fulfillment";
 import EmailCenter from "./EmailCenter";
 import Staff from "./Staff";
 import SalesSettings from "./SalesSettings";
+import Returns from "./Returns";
 
 const views:{id:OperationsTab; label:string; title:string; description:string; icon:ReactNode; cap?:string}[] = [
   {id:"homepage",cap:"cms",label:"Edytor strony",title:"Edytor strony głównej",description:"Sekcje, multimedia, widok telefonu, wersje robocze i publikacja.",icon:<LayoutDashboard size={19}/>},
@@ -30,6 +31,7 @@ const views:{id:OperationsTab; label:string; title:string; description:string; i
   {id:"players",cap:"players",label:"Zawodnicy",title:"Zawodnicy",description:"Lista nazwisk i numerów do personalizacji koszulek.",icon:<Users size={19}/>},
   {id:"customers",cap:"customers",label:"Klienci",title:"Klienci",description:"Konta klientów i ich historia zamówień.",icon:<Users size={19}/>},
   {id:"orders", cap:"orders", label:"Zamówienia", title:"Zamówienia", description:"Szczegóły, kompletacja i historia realizacji.", icon:<ShoppingBag size={19}/>},
+  {id:"returns",cap:"returns",label:"Zwroty i reklamacje",title:"Zwroty i reklamacje",description:"Zgłoszenia klientów, decyzje, zwroty środków i przyjęcia na stan.",icon:<ShoppingBag size={19}/>},
   {id:"inventory", cap:"inventory", label:"Magazyn", title:"Magazyn wariantów", description:"Dostępność każdego rozmiaru i korekty z uzasadnieniem.", icon:<Warehouse size={19}/>},
   {id:"transfers", cap:"transfers", label:"Zakupy DTF", title:"Zakupy transferów DTF", description:"Gotowe transfery od dostawców i przyjęcia dostaw.", icon:<Package size={19}/>},
   {id:"production", cap:"production", label:"Nanoszenie DTF", title:"Nanoszenie i kontrola", description:"Przydzielanie transferów do zamówień oraz etapy pracy.", icon:<ClipboardCheck size={19}/>},
@@ -110,6 +112,7 @@ export default function Admin() {
       {activeTab==="email"&&<EmailCenter key={auth.user.id}/>}
       {activeTab==="staff"&&<Staff/>}
       {activeTab==="settings"&&<SalesSettings/>}
+      {activeTab==="returns"&&<Returns onOpenOrder={openOrder}/>}
       {activeTab==="products"&&<Products inventory={data.inventory} onRefresh={refresh}/>}
       {activeTab==="players"&&<Players/>}
       {activeTab==="customers"&&<Customers onOpenOrder={openOrder}/>}

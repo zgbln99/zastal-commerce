@@ -526,6 +526,21 @@ def order_email(c, order, detail, kind, origin):
         if detail['tracking_url']:
             lines.append(f'Śledzenie: {detail["tracking_url"]}')
         lines.append('')
+    elif kind == 'return_update':
+        subject = f'Zastal Store — zgłoszenie do zamówienia {number}'
+        latest = _safe(lambda: c.execute('SELECT kind,status,refund_amount,refund_method,note FROM returns WHERE order_id=? ORDER BY id DESC LIMIT 1', (order['id'],)).fetchone(), None)
+        labels = {'zgloszony': 'przyjęliśmy zgłoszenie i sprawdzamy je', 'przyjety': 'zgłoszenie zostało zaakceptowane; odeślij produkt na adres zwrotów lub przynieś do sklepu',
+                  'odrzucony': 'zgłoszenie zostało odrzucone', 'rozliczony': 'zgłoszenie zostało rozliczone'}
+        if latest:
+            lines += [f'{"Reklamacja" if latest["kind"] == "reklamacja" else "Zwrot"} do zamówienia {number}: {labels.get(latest["status"], latest["status"])}.']
+            if latest['status'] == 'rozliczony' and latest['refund_amount']:
+                lines.append(f'Zwrot środków: {latest["refund_amount"] / 100:.2f} PLN ({ {"payu": "PayU", "cash": "gotówka", "terminal": "terminal", "transfer": "przelew"}.get(latest["refund_method"], latest["refund_method"]) }).')
+            if latest['note']:
+                lines.append(f'Informacja od sklepu: {latest["note"]}')
+        seller_info = _safe(lambda: launch.values(c), {})
+        if seller_info.get('returns_address'):
+            lines.append(f'Adres do zwrotów: {seller_info["returns_address"]}')
+        lines.append('')
     elif order['status'] == 'anulowane':
         subject = f'Zastal Store — zamówienie {number} anulowane'
         lines += [f'Zamówienie {number} zostało anulowane.', 'Jeśli dokonano wpłaty, zwrot nastąpi tą samą metodą płatności.', '']

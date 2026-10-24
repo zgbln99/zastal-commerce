@@ -24,3 +24,4 @@ body.staff-fullscreen .admin-sidebar,body.staff-fullscreen .admin-topbar,body.st
 body.staff-fullscreen .admin-page{padding:14px 16px}body.staff-fullscreen .admin-main{max-width:none}
 @media (max-width:900px){.pos-field-row{grid-template-columns:1fr}.pos-shift-stats{margin-left:0}}
 .fulfillment-filter{margin:0 20px 10px;font-size:12px}
+.pos-basket .pos-total{grid-template-columns:1fr}.pos-basket .pos-total strong{font-size:15px}.pos-basket .pos-total-due strong{font-size:24px}

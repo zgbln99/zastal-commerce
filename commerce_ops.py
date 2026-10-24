@@ -274,7 +274,7 @@ def shift_summary(c, shift):
         by_method[row['payment_method']] = {'sales': row['sales'], 'total': row['total']}
         discounts += row['discounts']
     refunds = c.execute('''SELECT COALESCE(SUM(r.refund_amount),0) FROM returns r JOIN pos_sales s ON s.order_id=r.order_id
-        WHERE r.status='refunded' AND r.refund_method='cash' AND r.shift_id=?''', (shift['id'],)).fetchone()[0] if _table(c, 'returns') else 0
+        WHERE r.status='rozliczony' AND r.refund_method='cash' AND r.shift_id=?''', (shift['id'],)).fetchone()[0] if _table(c, 'returns') else 0
     expected = shift['opening_cash'] + by_method['cash']['total'] - refunds
     value = dict(shift)
     value.update({'by_method': by_method, 'discounts': discounts, 'cash_refunds': refunds, 'expected_cash': expected,

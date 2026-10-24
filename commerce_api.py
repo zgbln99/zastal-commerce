@@ -26,6 +26,7 @@ import commerce_ops as ops
 import commerce_email as mail
 import commerce_sales as sales
 import commerce_payments as payments
+import commerce_returns as returns
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
@@ -105,6 +106,7 @@ def init():
         ops.init_schema(c)
         sales.init_schema(c)
         payments.init_schema(c)
+        returns.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -165,6 +167,8 @@ def order_detail(c,receipt):
         o['transfer']=sales.transfer_instructions(c,o['id'],o['total'])
     if detail and detail['payment_method']=='payu':
         o['payment']=payments.public_payment(c,o['id'])
+    o['returns']=returns.public_for_order(c,o['id'])
+    o['can_return']=bool(detail and detail['mode']=='live' and o['status'] in ('wydane','wyslane') and not any(r['status'] in ('zgloszony','przyjety') for r in o['returns']))
     return o
 
 def checkout_reply(c,oid,total,token):
@@ -333,8 +337,12 @@ class Handler(BaseHTTPRequestHandler):
                     o['details']=detail
                     o['demo']=not detail or detail['mode']!='live'
                     o['payments']=payments.order_payments(c,oid)
+                    o['returns']=returns.for_order(c,oid)
+                    o['printed_lines']=[dict(x) for x in c.execute('SELECT line_index,printed_qty FROM fulfillment_lines WHERE order_id=? AND printed_qty>0',(oid,))]
                     if detail and detail['payment_method']=='transfer':o['transfer']=sales.transfer_instructions(c,oid,o['total'])
                     return self.respond(200,o)
+                if path=='/api/admin/returns':
+                    return self.respond(200,{'returns':returns.listing(c,open_only=parse_qs(urlparse(self.path).query).get('all',['0'])[0]!='1'),'reasons':returns.REASONS})
                 if path=="/api/admin/inventory":
                     q="""SELECT v.id,v.product_id,v.size,v.sku,v.ean,v.stock,
                      p.name,p.category,p.price FROM product_variants v
@@ -361,7 +369,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path=="/api/admin/activity":
                     return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 80")])
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (ValueError,TypeError):return self.respond(400,{"error":"Nieprawidłowy identyfikator"})
         except sqlite3.Error:return self.respond(500,{"error":"Błąd bazy danych"})
 
@@ -393,6 +401,19 @@ class Handler(BaseHTTPRequestHandler):
                 with connect() as c:live=readiness(c)['mode']=='live'
                 if not live and not launch.isolated_test_workflow(DATABASE):
                     return self.respond(503,{'error':'Sprzedaż online zostanie uruchomiona po skonfigurowaniu usług sklepu. Konto klienta możesz już założyć.','code':'store_prelaunch'})
+            return_route=re.fullmatch(r'/api/orders/([1-9][0-9]*)/returns',path)
+            if return_route:
+                data=self.body();token=data.get('tracking_token')
+                if not isinstance(token,str) or len(token)>128:raise Invalid('Nieprawidłowe zamówienie')
+                if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele prób. Spróbuj później."})
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    oid=int(return_route.group(1))
+                    receipt=c.execute('SELECT * FROM order_receipts WHERE order_id=?',(oid,)).fetchone()
+                    if not receipt or not secrets.compare_digest(receipt['tracking_token'],token):return self.respond(404,{'error':'Nie znaleziono zamówienia'})
+                    created=returns.register(c,oid,data,'customer')
+                    mail.enqueue_order(c,oid,'return_update',f"{created['id']}:{created['status']}")
+                return self.respond(201,{'ok':True,'return':{key_:created[key_] for key_ in ('id','kind','status','reason_label','created')}})
             retry_route=re.fullmatch(r'/api/orders/([1-9][0-9]*)/payment/retry',path)
             if retry_route:
                 data=self.body();token=data.get('tracking_token')
@@ -482,6 +503,16 @@ class Handler(BaseHTTPRequestHandler):
                                   (product_id,product_id))
                     audit(c,'stock-import','bulk',f"Zaktualizowano {len(changes)} wariantów, import: {reason.strip()[:120]}")
                 return self.respond(200,{'ok':True,'rows':len(rows),'changed':len(changes),'changes':changes})
+            account_return=re.fullmatch(r'/api/account/orders/([1-9][0-9]*)/returns',path)
+            if account_return:
+                user=auth.require_user(self,'customer')
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    oid=int(account_return.group(1))
+                    if not c.execute('SELECT 1 FROM order_receipts WHERE order_id=? AND customer_id=?',(oid,user['id'])).fetchone():return self.respond(404,{'error':'Nie znaleziono zamówienia'})
+                    created=returns.register(c,oid,data,'customer')
+                    mail.enqueue_order(c,oid,'return_update',f"{created['id']}:{created['status']}")
+                return self.respond(201,{'ok':True,'return':{key_:created[key_] for key_ in ('id','kind','status','reason_label','created')}})
             if path=='/api/account/orders/claim':
                 user=auth.require_user(self,'customer')
                 oid=data.get('id');token=data.get('tracking_token')
@@ -627,6 +658,23 @@ class Handler(BaseHTTPRequestHandler):
                     audit(c,'order',oid,f"Administrator {self.request_user['id']}: nadano przesyłkę {detail['carrier']} {detail['tracking_number']}")
                     mail.enqueue_order(c,oid,'order_status_changed')
                 return self.respond(200,{'ok':True,'details':detail,'status':'wyslane'})
+            if path=='/api/admin/returns':
+                oid=data.get('order_id')
+                if isinstance(oid,bool) or not isinstance(oid,int) or oid<1:raise Invalid('Podaj numer zamówienia')
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    created=returns.register(c,oid,data,'staff',self.request_user['id'])
+                    mail.enqueue_order(c,oid,'return_update',f"{created['id']}:{created['status']}")
+                return self.respond(201,created)
+            cancel_route=re.fullmatch(r'/api/admin/orders/([1-9][0-9]*)/cancel',path)
+            if cancel_route:
+                auth.require_staff(self,'returns')
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    oid=int(cancel_route.group(1))
+                    result=returns.cancel_after_personalization(c,oid,self.request_user['id'],data.get('reason'))
+                    mail.enqueue_order(c,oid,'order_status_changed')
+                return self.respond(200,result)
             if path=='/api/admin/orders/expire-unpaid':
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
@@ -686,7 +734,7 @@ class Handler(BaseHTTPRequestHandler):
                     audit(c,"production",cur.lastrowid,f"Rezerwacja {count} transferów, zlecenie {oid}, poz. {idx+1}")
                     return self.respond(201,{"id":cur.lastrowid})
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError,sqlite3.IntegrityError) as ex:
             return self.error(ex)
         except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
@@ -723,6 +771,13 @@ class Handler(BaseHTTPRequestHandler):
                     result=launch.snapshot(c,readiness=readiness(c))
                     c.commit()
                     return self.respond(200,result)
+            return_route=re.fullmatch(r'/api/admin/returns/([1-9][0-9]*)',path)
+            if return_route:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    result=returns.resolve(c,int(return_route.group(1)),data,self.request_user['id'],payments,lambda conn:ops.open_shift(conn,'Kasa 1'))
+                    mail.enqueue_order(c,result['order_id'],'return_update',f"{result['id']}:{result['status']}")
+                return self.respond(200,result)
             if path=='/api/admin/settings':
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
@@ -855,7 +910,7 @@ class Handler(BaseHTTPRequestHandler):
                         audit(c,"production",tid,"Etap: "+status)
                 return self.respond(200,{"ok":True})
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError) as ex:return self.error(ex)
         except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
 
