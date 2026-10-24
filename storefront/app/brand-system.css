@@ -47,6 +47,11 @@ button,input,select,textarea{font-family:inherit}
 .home-collection{border-radius:18px;overflow:hidden}
 .home-collection-image{border-radius:18px;overflow:hidden;background:#f2f5ed}
 .home-collection-label{font-size:17px;font-weight:700}
+.shop-category-tile{border-radius:15px!important;overflow:hidden;background:#f2f5ee!important;min-height:128px!important;border:1px solid #e4ebe2!important}
+.shop-category-tile:hover,.shop-category-tile.selected{border-color:#165114!important;background:#e9f2e7!important}
+.shop-category-label strong{font-family:"ZT Talk",Arial,sans-serif;font-size:15px!important;font-weight:700!important}
+.shop-category-label small{font-size:10px!important;color:#5f7062!important}
+.shop-category-arrow{color:#165114}
 .product-grid{gap:32px 18px}
 .product-card{min-width:0}
 .product-image-wrap{background:#f2f5ee!important;border-radius:16px!important;overflow:hidden}
@@ -71,6 +76,7 @@ button,input,select,textarea{font-family:inherit}
 .store-footer :is(p,small,a,.footer-small){color:#d7e7d5!important}
 .store-footer a:hover{color:#ffaf50!important}
 .store-footer .footer-logo{display:inline-flex;background:#fff;border-radius:10px;padding:10px 12px}
+.store-footer .footer-logo img{filter:none!important}
 .button,.button-dark,.button-outline,.button-white{border-radius:11px!important;font-weight:700!important;min-height:44px}
 .button-dark{background:#165114!important;border-color:#165114!important;color:#fff!important}
 .button-dark:hover{background:#0d3b0f!important}
@@ -78,6 +84,11 @@ button,input,select,textarea{font-family:inherit}
 .page-heading h1,.catalog-heading h1,.product-detail-info h1{font-family:"ZT Talk",Arial,sans-serif!important;font-weight:700!important;letter-spacing:-.035em!important}
 .catalog-page,.product-page,.checkout-page,.account-page{background:#fff}
 .catalog-sidebar{background:#f7f8f3;border-radius:16px;padding:22px}
+.catalog-search{border-radius:11px!important;background:#f5f8f2!important}
+.catalog-sidebar{padding:20px!important}
+.filter-help{border-radius:11px!important}
+.filter-sizes button,.price-filter-inputs label,.mobile-filter-toggle{border-radius:7px!important}
+.filter-sizes button.selected{background:#165114!important;color:#fff!important}
 .product-detail-layout{gap:clamp(28px,4vw,72px)}
 .product-detail-info{background:#fff}
 .product-price-row strong{font-weight:700;color:#165114}
