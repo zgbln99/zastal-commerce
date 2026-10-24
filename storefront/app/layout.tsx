@@ -8,6 +8,7 @@ import "./cms-sections.css";
 import "./product-media.css";
 import "./typography.css";
 import "./brand-system.css";
+import "./rebuild-v2.css";
 import CommerceRoot from "../components/CommerceRoot";
 import { storeStatus } from "../lib/store-status";
 export const dynamic = "force-dynamic";
