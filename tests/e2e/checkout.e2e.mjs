@@ -172,11 +172,37 @@ try {
   const navItems = await d.locator('.admin-navitem').allInnerTexts();
   step('admin: cashier navigation is limited by capabilities', navItems.includes('Kasa POS') && !navItems.includes('Edytor strony') && !navItems.includes('Pracownicy'), navItems.join(', '));
   await shot(d, '17-admin-cashier-1440');
-  // Tablet admin width
-  await d.setViewportSize({ width: 768, height: 1024 });
+  // Cashier: open a shift, record a live counter sale with a fiscal receipt number, close the shift with a report
+  await d.setViewportSize({ width: 1024, height: 768 });
+  d.on('dialog', dialog => dialog.accept());
   await d.locator('.admin-navitem', { hasText: 'Kasa POS' }).first().click();
-  await d.waitForSelector('.pos-layout');
-  await shot(d, '18-admin-pos-768');
+  await d.waitForSelector('.pos-shift.closed');
+  await d.fill('.pos-shift-open input', '200');
+  await d.getByRole('button', { name: 'Otwórz zmianę' }).click();
+  await d.waitForSelector('.pos-shift.open');
+  step('pos: cashier opened a shift with opening cash', (await d.locator('.pos-shift-stats').innerText()).includes('200,00'));
+  await d.locator('.pos-product', { hasText: 'Worek sportowy' }).click();
+  await d.locator('.pos-size-buttons button').first().click();
+  await d.getByRole('button', { name: 'Dodaj 1 sztukę' }).click();
+  await d.fill('input[placeholder="np. 2026/10/000123"]', '2026/10/000777');
+  await d.fill('.pos-payment input[inputmode="decimal"]', '100');
+  await d.locator('.pos-payment .pos-confirm input').last().check();
+  await shot(d, '18-admin-pos-1024');
+  await d.getByRole('button', { name: 'Zapisz sprzedaż', exact: true }).click();
+  await d.waitForSelector('.staff-sale-receipt');
+  const receiptDoc = await d.locator('.staff-sale-receipt').innerText();
+  step('pos: live sale recorded with fiscal receipt reference and change', receiptDoc.includes('potwierdzenie sprzedaży') && receiptDoc.includes('paragon nr 2026/10/000777') && receiptDoc.includes('reszta 50,00'), receiptDoc.split('\n')[1]);
+  await shot(d, '19-admin-pos-receipt-1024');
+  await d.getByRole('button', { name: 'Zamknij zmianę' }).click();
+  await d.fill('.pos-shift-close input[inputmode="decimal"]', '250');
+  await d.getByRole('button', { name: 'Zapisz zamknięcie i raport' }).click();
+  await d.waitForSelector('.pos-shift-report');
+  const report = await d.locator('.pos-shift-report').innerText();
+  step('pos: shift closed with expected-vs-counted report', report.includes('oczekiwana 250,00') && report.includes('różnica 0,00'));
+  await shot(d, '20-admin-pos-shift-report-1024');
+  await d.getByRole('button', { name: 'Pełny ekran' }).click();
+  step('pos: kiosk layout hides admin chrome', await d.evaluate(() => document.body.classList.contains('staff-fullscreen') && getComputedStyle(document.querySelector('.admin-sidebar')).display === 'none'));
+  await shot(d, '21-admin-pos-kiosk-1024');
   await desktop.close();
 } finally {
   await browser.close();

@@ -317,5 +317,52 @@ class SalesTests(unittest.TestCase):
         self.assertEqual(manager.request('PATCH', '/api/admin/settings', {'pickup_hours': 'pn–pt 10–18'})[0], 200)
 
 
+    def test_live_pos_requires_shift_and_fiscal_number_and_reports_the_shift(self):
+        self.go_live()
+        self.assertEqual(self.admin.request('POST', '/api/admin/staff', {'identifier': 'kasa', 'name': 'Kasa', 'role': 'cashier', 'password': 'Staff member password 2026'})[0], 201)
+        cashier = Client(self.port)
+        self.assertEqual(cashier.login('kasa', 'Staff member password 2026')[0], 200)
+        payload = {'items': [{'id': 1, 'size': 'L', 'quantity': 1}], 'idempotency_key': 'live-pos-sale-key-000001', 'payment_method': 'cash',
+                   'payment_confirmed': True, 'fiscal': {'kind': 'paragon', 'number': '2026/10/000123'}, 'cash_received': 10000, 'handover': True}
+        code, data = cashier.request('POST', '/api/admin/pos/sales', payload)
+        self.assertEqual((code, data['code']), (409, 'shift_required'))
+        code, shift = cashier.request('POST', '/api/admin/shifts/open', {'opening_cash': 20000})
+        self.assertEqual((code, shift['status'], shift['opening_cash']), (201, 'open', 20000), shift)
+        self.assertEqual(cashier.request('POST', '/api/admin/shifts/open', {'opening_cash': 1})[1]['code'], 'shift_open')
+        code, data = cashier.request('POST', '/api/admin/pos/sales', {**payload, 'fiscal': None})
+        self.assertEqual((code, data['code']), (400, 'fiscal_document_required'))
+        code, data = cashier.request('POST', '/api/admin/pos/sales', {**payload, 'discount': 500, 'discount_reason': 'pracownik klubu'})
+        self.assertEqual((code, data['code']), (403, 'discount_not_allowed'))
+        code, sale = cashier.request('POST', '/api/admin/pos/sales', payload)
+        self.assertEqual(code, 201, sale)
+        self.assertFalse(sale['demo'])
+        self.assertEqual((sale['status'], sale['total'], sale['change_due'], sale['fiscal']['number']), ('wydane', 7900, 2100, '2026/10/000123'))
+        self.assertEqual(cashier.request('POST', '/api/admin/pos/sales', payload)[0], 200)
+        code, discounted = self.admin.request('POST', '/api/admin/pos/sales', {**payload, 'idempotency_key': 'live-pos-sale-key-000002', 'payment_method': 'terminal',
+                                                                                 'discount': 900, 'discount_reason': 'pracownik klubu', 'cash_received': 0})
+        self.assertEqual((code, discounted['total'], discounted['discount']), (201, 7000, 900), discounted)
+        code, work = self.admin.request('POST', '/api/admin/pos/sales', {**payload, 'idempotency_key': 'live-pos-sale-key-000003', 'items': [{'id': 1, 'size': 'L', 'quantity': 1}], 'handover': False})
+        self.assertEqual((code, work['status']), (201, 'do_kompletacji'))
+        self.assertEqual([o['id'] for o in self.admin.request('GET', '/api/admin/fulfillment')[1]], [work['id']])
+        code, status = cashier.request('GET', '/api/admin/shifts')
+        self.assertEqual(status['mode'], 'live')
+        self.assertFalse(status['can_discount'])
+        current = status['current']
+        self.assertEqual((current['sales'], current['turnover'], current['by_method']['cash']['total'], current['expected_cash'], current['discounts']),
+                         (3, 22800, 15800, 35800, 900))
+        self.assertEqual(cashier.request('POST', '/api/admin/shifts/close', {'closing_cash': 35000, 'note': 'brak 8 zł'})[1]['difference'], -800)
+        self.assertIsNone(cashier.request('GET', '/api/admin/shifts')[1]['current'])
+        code, report = cashier.request('GET', '/api/admin/shifts/' + str(current['id']))
+        self.assertEqual((code, len(report['sales']), report['status']), (200, 3, 'closed'))
+        with api.connect() as c:
+            detail = sales.details(c, sale['id'])
+            self.assertEqual((detail['mode'], detail['payment_method'], detail['payment_status']), ('live', 'pos_cash', 'paid'))
+            self.assertIn('paragon 2026/10/000123', detail['payment_note'])
+        # Demo sales (prelaunch) still work without a shift and stay labelled as tests.
+        with patch.dict(os.environ, {'ZASTAL_SALES_MODE': 'prelaunch'}):
+            code, demo = self.admin.request('POST', '/api/admin/pos/sales', {**payload, 'idempotency_key': 'demo-pos-sale-key-00000001', 'fiscal': None, 'items': [{'id': 2, 'size': 'UNI', 'quantity': 1}]})
+            self.assertEqual((code, demo.get('demo'), demo.get('status')), (201, True, 'wydane'), demo)
+
+
 if __name__ == '__main__':
     unittest.main()

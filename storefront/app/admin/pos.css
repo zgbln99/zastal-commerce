@@ -6,3 +6,21 @@
 .pos-customer{border:0;border-top:1px solid #edf0e9;padding:18px 20px;margin:0;min-width:0;display:grid;gap:12px}.pos-customer legend{font-size:13px;font-weight:600;padding:4px 0}.pos-customer label{display:grid;gap:7px;font-size:12px;font-weight:600;min-width:0}.pos-customer input,.pos-customer select{padding:11px 10px;border:1px solid #d9e2d8;border-radius:7px;background:white;width:100%;min-width:0;font-size:12px}.pos-customer p{font-size:11px;color:#75806d;line-height:1.6;margin:0;overflow-wrap:anywhere;padding:0}@media(max-width:480px){.pos-customer{padding:16px}}
 
 .staff-method-tag{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;background:#eef4ed;color:#3c6447;font-size:11px;font-weight:600}.staff-print-layout{max-width:320px;margin:10px 0;display:grid;gap:6px}.staff-print-layout small{color:var(--muted);font-size:12px}
+
+/* Live POS: mode banner, shift bar, bigger touch targets, kiosk layout */
+.pos-mode{align-items:center;flex-wrap:wrap}.pos-mode.live{background:#e8f3e6;border-color:#cfe5cd;color:#2f6a3a}.pos-mode.test{background:#fbf4e6;border-color:#ecd9ad;color:#7a5c14}.pos-mode .staff-fullscreen-toggle{margin-left:auto}
+.pos-shift{padding:14px 18px;display:grid;gap:12px}.pos-shift.open{border-left:4px solid #2f7a4c}.pos-shift.closed{border-left:4px solid #b7963a}
+.pos-shift-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}.pos-shift-row>div:first-child{display:grid;gap:3px}.pos-shift-row small{color:#6d786b;font-size:12px}
+.pos-shift-stats{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#6d786b;margin-left:auto}.pos-shift-stats b{display:block;color:#18211e;font-size:14px}
+.pos-shift-open,.pos-shift-close{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}.pos-shift-open label,.pos-shift-close label{display:grid;gap:6px;font-size:12px;font-weight:600}.pos-shift-open input,.pos-shift-close input{padding:10px;border:1px solid #d9e2d8;border-radius:7px;min-width:160px;font-size:14px}
+.pos-shift-report{margin:0}.pos-shift-report .staff-panel-head{padding:0 0 10px}.pos-shift-report .staff-panel-head div{display:flex;gap:6px}
+.pos-size-buttons{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px}.pos-size-buttons button{min-width:64px;min-height:56px;border:1px solid #d9e2d8;border-radius:8px;background:#fff;display:grid;place-items:center;font-weight:700;font-size:15px;padding:6px 10px}.pos-size-buttons button small{font-weight:500;font-size:11px;color:#6d786b}.pos-size-buttons button.selected{border-color:#174c37;background:#eef4ed;color:#174c37}
+.pos-total{display:grid;gap:4px}.pos-total>div{display:flex;justify-content:space-between;font-size:13px}.pos-total-due{font-size:18px!important;padding-top:6px;border-top:1px solid #edf0ed}.pos-total-due strong{font-size:24px}
+.pos-field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pos-discount,.pos-payment{display:grid;gap:10px}.pos-discount legend small{font-weight:400;color:#6d786b}
+.pos-discount label,.pos-payment label:not(.pos-confirm){display:grid;gap:6px;font-size:12px;font-weight:600}.pos-discount input,.pos-payment input:not([type=checkbox]),.pos-payment select{padding:11px 10px;border:1px solid #d9e2d8;border-radius:7px;font-size:14px;width:100%}
+.pos-payment-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pos-payment-buttons button{min-height:54px;border:1px solid #d9e2d8;border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:14px}.pos-payment-buttons button.selected{border-color:#174c37;background:#174c37;color:#fff}
+.pos-submit{min-height:60px;font-size:16px}
+body.staff-fullscreen .admin-sidebar,body.staff-fullscreen .admin-topbar,body.staff-fullscreen .admin-page-heading,body.staff-fullscreen .admin-demo-notice,body.staff-fullscreen .admin-mobile-backdrop{display:none!important}
+body.staff-fullscreen .admin-page{padding:14px 16px}body.staff-fullscreen .admin-main{max-width:none}
+@media (max-width:900px){.pos-field-row{grid-template-columns:1fr}.pos-shift-stats{margin-left:0}}
+.fulfillment-filter{margin:0 20px 10px;font-size:12px}

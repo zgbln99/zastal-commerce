@@ -271,6 +271,13 @@ class Handler(BaseHTTPRequestHandler):
                         'payu':{'configured':config['configured'],'environment':config['environment'],'pos_id':config['pos_id'],'missing':config['missing']},
                         'email':mail.configuration()['configured']})
                 if path=='/api/admin/shipping':return self.respond(200,sales.shipping_methods(c))
+                if path=='/api/admin/shifts':
+                    return self.respond(200,{**ops.shifts(c),'mode':readiness(c)['mode'],'can_discount':'discounts' in auth.capabilities(self.request_user)})
+                shift_route=re.fullmatch(r'/api/admin/shifts/([1-9][0-9]*)',path)
+                if shift_route:
+                    row=c.execute('SELECT * FROM pos_shifts WHERE id=?',(int(shift_route.group(1)),)).fetchone()
+                    if not row:return self.respond(404,{'error':'Nie znaleziono zmiany'})
+                    return self.respond(200,{**ops.shift_summary(c,row),'sales':ops.shift_sales(c,row['id'])})
                 if path=='/api/store/home':return self.respond(200,cms.get(c))
                 if path=='/api/admin/home':return self.respond(200,cms.get(c,admin=True))
                 if path=='/api/admin/home/revisions':return self.respond(200,cms.history(c))
@@ -409,7 +416,7 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/admin/pos/sales':
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
-                    result=ops.create_sale(c,data,self.request_user['id'])
+                    result=ops.create_sale(c,data,self.request_user['id'],live=readiness(c)['mode']=='live',can_discount='discounts' in auth.capabilities(self.request_user))
                     if not result['replayed']:mail.enqueue_order(c,result['id'])
                 return self.respond(200 if result['replayed'] else 201,result)
             completion_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)/complete',path)
@@ -572,6 +579,12 @@ class Handler(BaseHTTPRequestHandler):
                     mail.enqueue_order(c,oid)
                     reply=checkout_reply(c,oid,total,tracking)
                 return self.respond(201,reply)
+            if path in ('/api/admin/shifts/open','/api/admin/shifts/close'):
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    helper=ops.start_shift if path.endswith('/open') else ops.close_shift
+                    result=helper(c,data,self.request_user['id'])
+                return self.respond(201 if path.endswith('/open') else 200,result)
             if path=='/api/admin/shipping':
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
