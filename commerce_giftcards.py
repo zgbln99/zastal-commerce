@@ -47,6 +47,9 @@ def init_schema(c):
             created TEXT NOT NULL, note TEXT NOT NULL DEFAULT '');
         CREATE INDEX IF NOT EXISTS gift_card_transactions_order ON gift_card_transactions(order_id);
     ''')
+    present = {row['name'] for row in c.execute('PRAGMA table_info(gift_cards)')}
+    if 'customer_id' not in present:
+        c.execute('ALTER TABLE gift_cards ADD COLUMN customer_id INTEGER')
     if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pos_sales'").fetchone():
         present = {row['name'] for row in c.execute('PRAGMA table_info(pos_sales)')}
         if 'gift_card_amount' not in present:
@@ -247,6 +250,29 @@ def order_cards(c, order_id):
     return [public_view(dict(row)) for row in c.execute('SELECT * FROM gift_cards WHERE order_id=? ORDER BY id', (order_id,))]
 
 
+# ------------------------------------------------------------------ customer account
+def attach(c, value, customer_id):
+    """Binds a card to the customer's account; a card belongs to one account only."""
+    row = lookup(c, value)
+    if row.get('customer_id') and row['customer_id'] != customer_id:
+        raise GiftError(409, 'Ta karta jest już przypisana do innego konta', 'gift_card_taken')
+    c.execute('UPDATE gift_cards SET customer_id=? WHERE id=?', (customer_id, row['id']))
+    return account_card(c, row['id'])
+
+
+def account_card(c, card_id):
+    row = c.execute('SELECT * FROM gift_cards WHERE id=?', (card_id,)).fetchone()
+    value = public_view(dict(row))
+    value['id'] = row['id']
+    value['transactions'] = [{'kind': t['kind'], 'amount': t['amount'], 'order_id': t['order_id'], 'created': t['created']}
+                             for t in c.execute('SELECT * FROM gift_card_transactions WHERE card_id=? ORDER BY id', (card_id,))]
+    return value
+
+
+def account_cards(c, customer_id):
+    return [account_card(c, row['id']) for row in c.execute('SELECT id FROM gift_cards WHERE customer_id=? ORDER BY id DESC', (customer_id,))]
+
+
 # ------------------------------------------------------------------ admin
 def admin_card(c, card_id):
     row = c.execute('SELECT * FROM gift_cards WHERE id=?', (card_id,)).fetchone()
@@ -259,7 +285,7 @@ def admin_card(c, card_id):
 
 
 def admin_list(c, limit=300):
-    rows = [dict(row) for row in c.execute('SELECT * FROM gift_cards ORDER BY id DESC LIMIT ?', (limit,))]
+    rows = [dict(row) for row in c.execute('''SELECT g.*,u.identifier AS customer FROM gift_cards g LEFT JOIN users u ON u.id=g.customer_id ORDER BY g.id DESC LIMIT ?''', (limit,))]
     for row in rows:
         row['state'] = state(row)
     return rows

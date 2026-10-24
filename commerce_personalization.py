@@ -19,11 +19,11 @@ LAYOUT_AREAS = ('name', 'number')
 DEFAULT_OPTIONS = {'image': '', 'subtitle': '', 'personalization_enabled': False,
                    'personalization_required': False, 'personalization_fee': 0,
                    'decoration_method': 'dtf', 'preorder': False, 'preorder_note': '', 'preorder_until': '',
-                   'size_guide': '', 'print_layout': None, 'description': '', 'badge': '', 'release_at': '', 'created_at': '', 'gift_card': False}
+                   'size_guide': '', 'print_layout': None, 'description': '', 'badge': '', 'release_at': '', 'created_at': '', 'gift_card': False, 'pos_quick': False}
 EXTENDED_COLUMNS = {'decoration_method': "TEXT NOT NULL DEFAULT 'dtf'", 'preorder': 'INTEGER NOT NULL DEFAULT 0',
                     'preorder_note': "TEXT NOT NULL DEFAULT ''", 'preorder_until': "TEXT NOT NULL DEFAULT ''",
                     'size_guide': "TEXT NOT NULL DEFAULT ''", 'print_layout': "TEXT NOT NULL DEFAULT ''",
-                    'description': "TEXT NOT NULL DEFAULT ''", 'badge': "TEXT NOT NULL DEFAULT ''", 'release_at': "TEXT NOT NULL DEFAULT ''", 'created_at': "TEXT NOT NULL DEFAULT ''", 'gift_card': 'INTEGER NOT NULL DEFAULT 0'}
+                    'description': "TEXT NOT NULL DEFAULT ''", 'badge': "TEXT NOT NULL DEFAULT ''", 'release_at': "TEXT NOT NULL DEFAULT ''", 'created_at': "TEXT NOT NULL DEFAULT ''", 'gift_card': 'INTEGER NOT NULL DEFAULT 0', 'pos_quick': 'INTEGER NOT NULL DEFAULT 0'}
 ROSTER = (
     ('Kuba Galewski', 'GALEWSKI', '1'), ('Andrzej Mazurczak', 'MAZURCZAK', '3'),
     ('Conley Garrison', 'GARRISON', '0'), ('Filip Matczak', 'MATCZAK', '8'),
@@ -106,7 +106,7 @@ def product_options(c, pid):
     if not row:
         return dict(DEFAULT_OPTIONS)
     value = {key: row[key] for key in DEFAULT_OPTIONS}
-    for key in ('personalization_enabled', 'personalization_required', 'preorder', 'gift_card'):
+    for key in ('personalization_enabled', 'personalization_required', 'preorder', 'gift_card', 'pos_quick'):
         value[key] = bool(value[key])
     try:
         value['print_layout'] = json.loads(row['print_layout']) if row['print_layout'] else None
@@ -204,6 +204,7 @@ def validate_product(data, existing=None):
     values['gift_card'] = flag(values['gift_card'], 'karta podarunkowa')
     if values['gift_card'] and values['personalization_enabled']:
         raise ValueError('Karta podarunkowa nie może mieć nadruku')
+    values['pos_quick'] = flag(values['pos_quick'], 'kafelek kasy')
     values['print_layout'] = layout_value(values['print_layout'])
     values.pop('decoration_method_label', None)
     return values
@@ -227,17 +228,17 @@ def description_value(value):
 def save_options(c, pid, value):
     layout = json.dumps(value['print_layout'], ensure_ascii=False, sort_keys=True) if value.get('print_layout') else ''
     c.execute('''INSERT INTO product_options(product_id,image,subtitle,personalization_enabled,personalization_required,personalization_fee,
-        decoration_method,preorder,preorder_note,preorder_until,size_guide,print_layout,description,badge,release_at,created_at,gift_card)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET
+        decoration_method,preorder,preorder_note,preorder_until,size_guide,print_layout,description,badge,release_at,created_at,gift_card,pos_quick)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET
         image=excluded.image,subtitle=excluded.subtitle,
         personalization_enabled=excluded.personalization_enabled,
         personalization_required=excluded.personalization_required,
         personalization_fee=excluded.personalization_fee,
         decoration_method=excluded.decoration_method,preorder=excluded.preorder,preorder_note=excluded.preorder_note,
-        preorder_until=excluded.preorder_until,size_guide=excluded.size_guide,print_layout=excluded.print_layout,description=excluded.description,badge=excluded.badge,release_at=excluded.release_at,gift_card=excluded.gift_card''',
+        preorder_until=excluded.preorder_until,size_guide=excluded.size_guide,print_layout=excluded.print_layout,description=excluded.description,badge=excluded.badge,release_at=excluded.release_at,gift_card=excluded.gift_card,pos_quick=excluded.pos_quick''',
         (pid, value['image'], value['subtitle'], value['personalization_enabled'], value['personalization_required'],
          value['personalization_fee'], value['decoration_method'], int(value['preorder']), value['preorder_note'],
-         value['preorder_until'], value['size_guide'], layout, value.get('description', ''), value.get('badge', ''), value.get('release_at', ''), value.get('created_at', ''), int(bool(value.get('gift_card')))))
+         value['preorder_until'], value['size_guide'], layout, value.get('description', ''), value.get('badge', ''), value.get('release_at', ''), value.get('created_at', ''), int(bool(value.get('gift_card'))), int(bool(value.get('pos_quick')))))
 
 
 def line_extras(c, product_id):

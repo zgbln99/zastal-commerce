@@ -27,3 +27,5 @@ body.staff-fullscreen .admin-page{padding:14px 16px}body.staff-fullscreen .admin
 .pos-basket .pos-total{grid-template-columns:1fr}.pos-basket .pos-total strong{font-size:15px}.pos-basket .pos-total-due strong{font-size:24px}
 
 .pos-gift{display:grid;grid-template-columns:1fr auto;gap:8px 10px;align-items:end;margin:10px 0}.pos-gift label{display:grid;gap:6px;font-size:12px;font-weight:600}.pos-gift input{min-height:42px;border:1px solid #d3dbd5;border-radius:4px;padding:6px 10px;font:inherit;text-transform:uppercase;letter-spacing:.04em}.pos-gift small{grid-column:1/-1;font-size:12px}.pos-gift-applied{color:#174c37;font-weight:600}.pos-error{color:#a63b2b}
+
+.staff-scan-camera{margin:0 20px 10px}.staff-panel-tools{display:flex;gap:8px;flex-wrap:wrap}

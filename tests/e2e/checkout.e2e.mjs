@@ -52,6 +52,7 @@ try {
   await shot(page, '02a-product-preorder-390');
   await page.goto(WEB + '/produkt/3', { waitUntil: 'networkidle' });
   const omnibus = await page.locator('.product-price-row .price-reduction').innerText().catch(() => '');
+  step('mobile: size availability legend lists sizes in stock', (await page.locator('.size-legend').innerText()).includes('Od ręki'));
   step('mobile: Omnibus notice shows previous and lowest 30-day price', omnibus.includes('79,00') && omnibus.includes('Najniższa cena z 30 dni') && omnibus.includes('65,00'), omnibus.replace(/\n/g, ' '));
   await page.getByRole('button', { name: 'M', exact: true }).click();
   await shot(page, '02-product-390');
@@ -161,6 +162,10 @@ try {
   await d.waitForSelector('.sales-settings .sales-checks');
   const checks = await d.locator('.sales-checks li.ok').count();
   step('admin: readiness shows live mode with all checks', (await d.locator('.sales-mode.live').count()) === 1 && checks === 10, `${checks}/10`);
+  await d.locator('.admin-navitem', { hasText: 'Raporty' }).first().click();
+  await d.waitForSelector('.reports-kpis');
+  const kpis = await d.locator('.reports-kpis').innerText();
+  step('admin: sales report renders totals and CSV links', kpis.includes('Sprzedaż') && (await d.locator('a[href*="/api/admin/reports/sales.csv"]').count()) === 3);
   await shot(d, '12-admin-sales-settings-1440');
   await d.locator('.admin-navitem', { hasText: 'Zamówienia' }).first().click();
   await d.waitForSelector('.ops-orders-table');
@@ -209,6 +214,11 @@ try {
   await d.getByRole('button', { name: 'Otwórz zmianę' }).click();
   await d.waitForSelector('.pos-shift.open');
   step('pos: cashier opened a shift with opening cash', (await d.locator('.pos-shift-stats').innerText()).includes('200,00'));
+  await d.locator('.pos-mode-toggle').click();
+  await d.waitForSelector('.pos-quick-grid');
+  step('pos: match-day mode shows big tiles', (await d.locator('.pos-quick-grid button').count()) >= 1);
+  await d.locator('.pos-mode-toggle').click();
+  await d.waitForSelector('.pos-products');
   await d.locator('.pos-product', { hasText: 'Worek sportowy' }).click();
   await d.locator('.pos-size-buttons button').first().click();
   await d.getByRole('button', { name: 'Dodaj 1 sztukę' }).click();

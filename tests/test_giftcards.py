@@ -132,6 +132,25 @@ class GiftCardTests(unittest.TestCase):
         code, use = self.order(items=[{'id': 2, 'size': 'UNI', 'quantity': 1}], gift_card=receipt['gift_cards'][0]['code'], idempotency_key='live-order-key-00000013')
         self.assertEqual((code, use['total'], use['status']), (201, 0, 'oplacone'), use)
 
+    def test_customer_attaches_a_card_to_the_account_and_sees_its_history(self):
+        card = self.admin.request('POST', '/api/admin/giftcards', {'value': 8000})[1]
+        customer = Client(self.port)
+        self.assertEqual(customer.register('kibic@example.test', 'Customer password 2026')[0], 201)
+        self.assertEqual(customer.request('GET', '/api/account/giftcards')[1], [])
+        self.assertEqual(customer.request('POST', '/api/account/giftcards', {'code': 'ZG-AAAA-AAAA-AAAA'})[0], 404)
+        code, attached = customer.request('POST', '/api/account/giftcards', {'code': card['code'].lower()})
+        self.assertEqual((code, attached['balance'], attached['transactions'][0]['kind']), (200, 8000, 'issue'), attached)
+        self.assertEqual(customer.request('POST', '/api/account/giftcards', {'code': card['code']})[0], 200)
+        other = Client(self.port)
+        self.assertEqual(other.register('inny@example.test', 'Customer password 2026')[0], 201)
+        self.assertEqual(other.request('POST', '/api/account/giftcards', {'code': card['code']})[1]['code'], 'gift_card_taken')
+        self.assertEqual(self.admin.request('GET', '/api/admin/giftcards')[1][0]['customer'], 'kibic@example.test')
+        self.go_live()
+        code, reply = self.order(items=[{'id': 2, 'size': 'UNI', 'quantity': 1}], gift_card=card['code'])
+        self.assertEqual((code, reply['total']), (201, 0), reply)
+        cards = customer.request('GET', '/api/account/giftcards')[1]
+        self.assertEqual((cards[0]['balance'], [t['kind'] for t in cards[0]['transactions']]), (8000 - 6499, ['issue', 'redeem']))
+
     def test_pos_redeems_cards_only_on_live_sales_and_the_shift_report_subtracts_them(self):
         card = self.admin.request('POST', '/api/admin/giftcards', {'value': 3000})[1]
         payload = {'items': [{'id': 2, 'size': 'UNI', 'quantity': 1}], 'idempotency_key': 'live-pos-sale-key-000101', 'payment_method': 'cash',

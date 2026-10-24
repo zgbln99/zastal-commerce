@@ -31,6 +31,7 @@ import commerce_pages as pages
 import commerce_pricing as pricing
 import commerce_merch as merch
 import commerce_giftcards as giftcards
+import commerce_reports as reports
 import commerce_dpd as dpd
 
 ROOT = Path(__file__).resolve().parent
@@ -315,6 +316,23 @@ class Handler(BaseHTTPRequestHandler):
                 if path=='/api/account/orders':
                     auth.require_user(self,'customer')
                     return self.respond(200,account_orders(c,self.request_user['id']))
+                if path=='/api/account/giftcards':
+                    auth.require_user(self,'customer')
+                    return self.respond(200,giftcards.account_cards(c,self.request_user['id']))
+                if path=='/api/admin/pos/quick':
+                    pinned=[row['product_id'] for row in c.execute('SELECT product_id FROM product_options WHERE pos_quick=1 ORDER BY product_id')]
+                    best=[pid for pid in merch.bestsellers(c,days=60,limit=12,minimum=1) if pid not in pinned]
+                    return self.respond(200,{'pinned':pinned,'ids':(pinned+best)[:12]})
+                if path in ('/api/admin/reports/sales','/api/admin/reports/sales.csv'):
+                    query=parse_qs(urlparse(self.path).query)
+                    scope='test' if query.get('scope',[''])[0]=='test' else 'live'
+                    try:report=reports.sales(c,query.get('from',[''])[0],query.get('to',[''])[0],scope)
+                    except reports.ReportError as ex:return self.respond(400,{'error':str(ex)})
+                    if path.endswith('.csv'):
+                        kind=query.get('by',['day'])[0]
+                        self.response_headers.append(('Content-Disposition',f'attachment; filename="zastal-sprzedaz-{report["from"]}-{report["to"]}-{kind}.csv"'))
+                        return self.respond(200,reports.csv_export(report,kind),'text/csv')
+                    return self.respond(200,report)
                 if path.startswith('/api/account/orders/'):
                     auth.require_user(self,'customer')
                     oid=int(path.rsplit('/',1)[1])
@@ -615,6 +633,14 @@ class Handler(BaseHTTPRequestHandler):
                     created=returns.register(c,oid,data,'customer')
                     mail.enqueue_order(c,oid,'return_update',f"{created['id']}:{created['status']}")
                 return self.respond(201,{'ok':True,'return':{key_:created[key_] for key_ in ('id','kind','status','reason_label','created')}})
+            if path=='/api/account/giftcards':
+                user=auth.require_user(self,'customer')
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        card=giftcards.attach(c,data.get('code'),user['id'])
+                except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,card)
             if path=='/api/account/orders/claim':
                 user=auth.require_user(self,'customer')
                 oid=data.get('id');token=data.get('tracking_token')

@@ -3,7 +3,7 @@ import {useCallback,useEffect,useState} from "react";
 import {Gift,Plus,RefreshCw} from "lucide-react";
 import {useAuth} from "../../components/AuthProvider";
 import {formatMoney} from "./Operations";
-type Card={id:number;code:string;initial_value:number;balance:number;status:"active"|"blocked";state:"active"|"blocked"|"expired"|"used";issued_at:string;expires_at:string;order_id:number|null;recipient_email:string;message:string;note:string;transactions?:{kind:string;amount:number;order_id:number|null;created:string;note:string}[]};
+type Card={id:number;code:string;initial_value:number;balance:number;status:"active"|"blocked";state:"active"|"blocked"|"expired"|"used";issued_at:string;expires_at:string;order_id:number|null;recipient_email:string;message:string;note:string;customer?:string|null;transactions?:{kind:string;amount:number;order_id:number|null;created:string;note:string}[]};
 const STATE:Record<Card["state"],string>={active:"aktywna",blocked:"zablokowana",expired:"po terminie",used:"wykorzystana"};
 const KIND:Record<string,string>={issue:"wydanie",redeem:"użycie",release:"zwrot po anulowaniu"};
 /** Issue cards sold at the stand, see balances and history, block a lost card. */
@@ -30,8 +30,8 @@ export default function GiftCards(){
     <label>Wiadomość dla obdarowanego<input value={text} maxLength={300} onChange={e=>setText(e.target.value)}/></label>
     <label className="admin-checkbox"><input type="checkbox" checked={send} onChange={e=>setSend(e.target.checked)}/>Wyślij kod e-mailem, jeśli podano adres</label></div>
     <div className="admin-form-footer"><button className="button button-dark" disabled={busy}><Plus size={16}/>Wydaj kartę</button><button type="button" className="admin-edit-button" disabled={busy} onClick={()=>void load()}><RefreshCw size={14}/>Odśwież</button></div></form>
-   <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Kod</th><th>Wartość</th><th>Saldo</th><th>Stan</th><th>Ważna do</th><th>Źródło</th><th></th></tr></thead><tbody>
-    {cards.map(card=><tr key={card.id}><td><button className="admin-edit-button" onClick={()=>void show(card)}>{card.code}</button>{card.recipient_email&&<small className="admin-muted"> {card.recipient_email}</small>}</td><td>{formatMoney(card.initial_value)}</td><td><strong>{formatMoney(card.balance)}</strong></td><td>{STATE[card.state]}</td><td>{card.expires_at}</td><td>{card.order_id?`zamówienie ZS-${String(card.order_id).padStart(5,"0")}`:card.note||"wydana ręcznie"}</td><td><button className="admin-edit-button" disabled={busy} onClick={()=>void toggle(card)}>{card.status==="blocked"?"Odblokuj":"Zablokuj"}</button></td></tr>)}
+   <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Kod</th><th>Wartość</th><th>Saldo</th><th>Stan</th><th>Ważna do</th><th>Źródło</th><th>Konto klienta</th><th></th></tr></thead><tbody>
+    {cards.map(card=><tr key={card.id}><td><button className="admin-edit-button" onClick={()=>void show(card)}>{card.code}</button>{card.recipient_email&&<small className="admin-muted"> {card.recipient_email}</small>}</td><td>{formatMoney(card.initial_value)}</td><td><strong>{formatMoney(card.balance)}</strong></td><td>{STATE[card.state]}</td><td>{card.expires_at}</td><td>{card.order_id?`zamówienie ZS-${String(card.order_id).padStart(5,"0")}`:card.note||"wydana ręcznie"}</td><td>{card.customer||""}</td><td><button className="admin-edit-button" disabled={busy} onClick={()=>void toggle(card)}>{card.status==="blocked"?"Odblokuj":"Zablokuj"}</button></td></tr>)}
    </tbody></table></div>{!cards.length&&<p className="admin-empty">Nie wydano jeszcze żadnej karty.</p>}
   </section>
   {open&&<section className="admin-panel"><div className="admin-list-actions"><p><strong>{open.code}</strong> · saldo {formatMoney(open.balance)} z {formatMoney(open.initial_value)} · {STATE[open.state]}</p><button className="admin-edit-button" onClick={()=>setOpen(null)}>Zamknij</button></div>

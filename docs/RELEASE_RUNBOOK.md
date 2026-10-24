@@ -78,6 +78,8 @@ Adres notyfikacji do wpisania w panelu PayU: `https://<domena>/api/payments/payu
 - Panel **Przegląd** → zamówienia w toku; **Zwroty i reklamacje** → otwarte zgłoszenia; **Sprzedaż i dostawy** → gotowość.
 - Timer utrzymania anuluje nieopłacone zamówienia po `unpaid_hours`, zwalnia rezerwacje i kolejkuje e-maile „produkt znów dostępny” (`restock_alerts` w wyniku).
 - Panel **Promocje i kody** → kody rabatowe (użycia, limity) i lista klientów czekających na rozmiar.
+- Panel **Raporty** → sprzedaż dziennie i CSV dla księgowości (`/api/admin/reports/sales.csv?from=&to=&by=day|product|orders`).
+- Skaner z aparatu działa tylko przez HTTPS (wymóg przeglądarek) i wymaga nagłówka `Permissions-Policy: camera=(self)`, który ustawia storefront; przy pierwszym użyciu przeglądarka pyta o zgodę na aparat.
 - Kopie: `/var/lib/sentinelx/backups/zastal` (30 ostatnich); raz w miesiącu `--verify` na losowej kopii.
 
 ## 6. Testy przed wydaniem (lokalnie lub na stagingu)
