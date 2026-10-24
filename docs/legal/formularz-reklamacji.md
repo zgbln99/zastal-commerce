@@ -36,4 +36,4 @@ Data i podpis (podpis tylko przy formularzu papierowym):
 
 ................................................................................
 
-Niepotrzebne warianty skreśl. Warunki poszczególnych żądań opisuje dokument [Zwroty i reklamacje](/informacje/zwroty). Uzgodnimy potrzebny odbiór produktu na nasz koszt. Odpowiadamy na reklamację konsumenta w ciągu 14 dni od jej otrzymania. Informacje o danych osobowych zawiera [Polityka prywatności](/informacje/polityka-prywatnosci).
+Niepotrzebne warianty skreśl. Warunki poszczególnych żądań opisuje dokument [Zwroty i reklamacje](/informacje/zwroty). Uzgodnimy potrzebny odbiór produktu na nasz koszt. Odpowiadamy na reklamację konsumenta w ciągu 14 dni od jej otrzymania. W sprawach danych osobowych napisz na office@basketzg.pl lub do inspektora: iod@bhpex.pl.

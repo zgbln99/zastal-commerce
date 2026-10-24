@@ -36,4 +36,4 @@ Podpis konsumenta/konsumentów, tylko przy formularzu papierowym:
 
 ................................................................................
 
-Niepotrzebne warianty skreśl. Numer rachunku nie jest potrzebny, jeżeli zwrot następuje pierwotną metodą płatności. Zasady odesłania produktu i zwrotu pieniędzy opisuje dokument [Zwroty i reklamacje](/informacje/zwroty). Informacje o danych osobowych zawiera [Polityka prywatności](/informacje/polityka-prywatnosci).
+Niepotrzebne warianty skreśl. Numer rachunku nie jest potrzebny, jeżeli zwrot następuje pierwotną metodą płatności. Zasady odesłania produktu i zwrotu pieniędzy opisuje dokument [Zwroty i reklamacje](/informacje/zwroty). W sprawach danych osobowych napisz na office@basketzg.pl lub do inspektora: iod@bhpex.pl.
