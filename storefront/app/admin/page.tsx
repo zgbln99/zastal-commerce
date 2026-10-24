@@ -20,9 +20,11 @@ import EmailCenter from "./EmailCenter";
 import Staff from "./Staff";
 import SalesSettings from "./SalesSettings";
 import Returns from "./Returns";
+import Pages from "./Pages";
 
 const views:{id:OperationsTab; label:string; title:string; description:string; icon:ReactNode; cap?:string}[] = [
   {id:"homepage",cap:"cms",label:"Edytor strony",title:"Edytor strony głównej",description:"Sekcje, multimedia, widok telefonu, wersje robocze i publikacja.",icon:<LayoutDashboard size={19}/>},
+  {id:"pages",cap:"pages",label:"Strony informacyjne",title:"Strony informacyjne",description:"Regulamin, polityka prywatności, zwroty, dostawa i kontakt — szkic i publikacja.",icon:<LayoutDashboard size={19}/>},
   {id:"dashboard", label:"Przegląd", title:"Przegląd sklepu", description:"Zamówienia i zadania wymagające uwagi.", icon:<LayoutDashboard size={19}/>},
   {id:"pos",cap:"pos",label:"Kasa POS",title:"Kasa sklepu",description:"Koszyk, warianty, nadruki i zapis sprzedaży testowej.",icon:<ShoppingBag size={19}/>},
   {id:"fulfillment",cap:"fulfillment",label:"Realizacja",title:"Realizacja zamówień",description:"Zapisana kompletacja, nadruki, kontrola i wydanie.",icon:<ClipboardCheck size={19}/>},
@@ -113,6 +115,7 @@ export default function Admin() {
       {activeTab==="staff"&&<Staff/>}
       {activeTab==="settings"&&<SalesSettings/>}
       {activeTab==="returns"&&<Returns onOpenOrder={openOrder}/>}
+      {activeTab==="pages"&&<Pages/>}
       {activeTab==="products"&&<Products inventory={data.inventory} onRefresh={refresh}/>}
       {activeTab==="players"&&<Players/>}
       {activeTab==="customers"&&<Customers onOpenOrder={openOrder}/>}

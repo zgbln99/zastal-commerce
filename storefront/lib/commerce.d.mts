@@ -16,7 +16,7 @@ export type OrderLineExtras = { decoration_method?: DecorationMethod; print_layo
 export type Filters = { category?: string; query?: string; minPrice?: number; maxPrice?: number; size?: string; available?: boolean; sort?: string };
 export type ShippingMethod = { code: string; name: string; kind: 'pickup' | 'locker' | 'courier'; price: number; free_from: number | null; requires_address: boolean; carrier: string; note: string };
 export type PaymentOption = { id: 'payu' | 'transfer' | 'pickup'; name: string; description: string; pickup_only: boolean };
-export type StoreStatus = { loaded: boolean; checkoutEnabled: boolean; phase: 'live' | 'prelaunch'; notice: string; shipping: ShippingMethod[]; payments: PaymentOption[]; pickupAddress: string; pickupHours: string; invoiceEnabled: boolean; orderNote: string; legal: { terms: string; privacy: string; returns: string; shipping: string }; seller: { name: string; email: string; phone: string } };
+export type StoreStatus = { loaded: boolean; checkoutEnabled: boolean; phase: 'live' | 'prelaunch'; notice: string; shipping: ShippingMethod[]; payments: PaymentOption[]; pickupAddress: string; pickupHours: string; invoiceEnabled: boolean; orderNote: string; legal: { terms: string; privacy: string; returns: string; shipping: string }; seller: { name: string; email: string; phone: string }; pages: { slug: string; title: string }[] };
 export const PRELAUNCH_STATUS: StoreStatus;
 export function normalizeStoreStatus(raw: unknown): StoreStatus;
 export function shippingCost(method: Pick<ShippingMethod, 'price' | 'free_from'>, subtotal: number): number;

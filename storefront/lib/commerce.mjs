@@ -24,9 +24,10 @@ export function normalizeStoreStatus(raw) {
     invoiceEnabled: config.invoice_enabled !== false, orderNote: text(config.order_note, 400),
     legal: { terms: https(legal.terms_url), privacy: https(legal.privacy_url), returns: https(legal.returns_url), shipping: https(legal.shipping_url) },
     seller: { name: text(seller.name, 160), email: text(seller.support_email, 254), phone: text(seller.support_phone, 40) },
+    pages: Array.isArray(config.pages) ? config.pages.filter(p => p && typeof p.slug === 'string' && /^[a-z0-9][a-z0-9-]{0,59}$/.test(p.slug)).map(p => ({ slug: p.slug, title: text(p.published_title || p.title, 120) || p.slug })) : [],
   };
 }
-export const PRELAUNCH_STATUS = Object.freeze({ loaded: false, checkoutEnabled: false, phase: 'prelaunch', notice: '', shipping: [], payments: [], pickupAddress: '', pickupHours: '', invoiceEnabled: true, orderNote: '', legal: { terms: '', privacy: '', returns: '', shipping: '' }, seller: { name: '', email: '', phone: '' } });
+export const PRELAUNCH_STATUS = Object.freeze({ loaded: false, checkoutEnabled: false, phase: 'prelaunch', notice: '', shipping: [], payments: [], pickupAddress: '', pickupHours: '', invoiceEnabled: true, orderNote: '', legal: { terms: '', privacy: '', returns: '', shipping: '' }, seller: { name: '', email: '', phone: '' }, pages: [] });
 export function normalizePersonalization(value) {
   if (value == null) return undefined;
   if (!value || typeof value !== 'object') return null;

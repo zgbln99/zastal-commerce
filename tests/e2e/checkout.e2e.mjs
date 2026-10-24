@@ -233,6 +233,22 @@ try {
   await d.waitForSelector('.ops-pill.ret-rozliczony');
   step('returns: return settled with transfer refund and visible in history', true);
   await shot(d, '23-admin-returns-1440');
+  // Information pages: edit the contact draft, publish after review confirmation, public route renders it
+  await d.locator('.admin-navitem', { hasText: 'Strony informacyjne' }).first().click();
+  await d.waitForSelector('.pages-item');
+  await d.locator('.pages-item', { hasText: 'Kontakt' }).click();
+  await d.waitForSelector('.pages-form textarea');
+  await d.fill('.pages-form textarea', '# Kontakt\n\nZastal Zielona Góra S.A., ul. Sulechowska 41.\n\n- e-mail: sklep@example.test\n- [Strona klubu](https://basketzg.pl/)');
+  await d.getByRole('button', { name: 'Opublikuj' }).click();
+  await d.waitForSelector('.admin-list-success');
+  await shot(d, '24-admin-pages-1440');
+  const info = await d.context().newPage();
+  await info.goto(WEB + '/informacje/kontakt', { waitUntil: 'networkidle' });
+  const infoText = await info.locator('.page-content').innerText();
+  step('pages: published page renders publicly with safe links', infoText.includes('Sulechowska 41') && (await info.locator('.page-content a[href="https://basketzg.pl/"]').count()) === 1);
+  await shot(info, '25-info-page-1440');
+  step('pages: unpublished drafts return 404', (await info.goto(WEB + '/informacje/regulamin')).status() === 404);
+  await info.close();
   await d.setViewportSize({ width: 1024, height: 768 });
   await d.locator('.admin-navitem', { hasText: 'Kasa POS' }).first().click();
   await d.waitForSelector('.pos-layout');

@@ -27,6 +27,7 @@ import commerce_email as mail
 import commerce_sales as sales
 import commerce_payments as payments
 import commerce_returns as returns
+import commerce_pages as pages
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
@@ -107,6 +108,7 @@ def init():
         sales.init_schema(c)
         payments.init_schema(c)
         returns.init_schema(c)
+        pages.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -267,7 +269,13 @@ class Handler(BaseHTTPRequestHandler):
                 if operation_route:return self.respond(200,ops.detail(c,int(operation_route.group(1))))
                 if path=='/api/store/status':
                     state=readiness(c)
-                    return self.respond(200,{**launch.snapshot(c,public=True,readiness=state),'config':sales.public_config(c,mail.configuration()['configured'],payments.ready(),state['mode'])})
+                    return self.respond(200,{**launch.snapshot(c,public=True,readiness=state),'config':{**sales.public_config(c,mail.configuration()['configured'],payments.ready(),state['mode']),'pages':pages.listing(c)}})
+                if path=='/api/store/pages':return self.respond(200,pages.listing(c))
+                page_route=re.fullmatch(r'/api/store/pages/([a-z0-9-]{1,60})',path)
+                if page_route:return self.respond(200,pages.public_page(c,page_route.group(1)))
+                if path=='/api/admin/pages':return self.respond(200,pages.listing(c,admin=True))
+                admin_page_route=re.fullmatch(r'/api/admin/pages/([a-z0-9-]{1,60})',path)
+                if admin_page_route:return self.respond(200,pages.admin_page(c,admin_page_route.group(1)))
                 if path=='/api/admin/settings':
                     state=readiness(c)
                     config=payments.configuration()
@@ -369,7 +377,7 @@ class Handler(BaseHTTPRequestHandler):
                 if path=="/api/admin/activity":
                     return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 80")])
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError,pages.PageError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (ValueError,TypeError):return self.respond(400,{"error":"Nieprawidłowy identyfikator"})
         except sqlite3.Error:return self.respond(500,{"error":"Błąd bazy danych"})
 
@@ -658,6 +666,14 @@ class Handler(BaseHTTPRequestHandler):
                     audit(c,'order',oid,f"Administrator {self.request_user['id']}: nadano przesyłkę {detail['carrier']} {detail['tracking_number']}")
                     mail.enqueue_order(c,oid,'order_status_changed')
                 return self.respond(200,{'ok':True,'details':detail,'status':'wyslane'})
+            page_action=re.fullmatch(r'/api/admin/pages/([a-z0-9-]{1,60})/(publish|unpublish)',path)
+            if page_action:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    slug,action=page_action.groups()
+                    result=pages.publish(c,slug,data) if action=='publish' else pages.unpublish(c,slug)
+                    audit(c,'pages',slug,f"Administrator {self.request_user['id']}: {'opublikowano' if action=='publish' else 'wycofano'} stronę {slug}")
+                return self.respond(200,result)
             if path=='/api/admin/returns':
                 oid=data.get('order_id')
                 if isinstance(oid,bool) or not isinstance(oid,int) or oid<1:raise Invalid('Podaj numer zamówienia')
@@ -734,7 +750,7 @@ class Handler(BaseHTTPRequestHandler):
                     audit(c,"production",cur.lastrowid,f"Rezerwacja {count} transferów, zlecenie {oid}, poz. {idx+1}")
                     return self.respond(201,{"id":cur.lastrowid})
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError,pages.PageError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError,sqlite3.IntegrityError) as ex:
             return self.error(ex)
         except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
@@ -771,6 +787,13 @@ class Handler(BaseHTTPRequestHandler):
                     result=launch.snapshot(c,readiness=readiness(c))
                     c.commit()
                     return self.respond(200,result)
+            page_route=re.fullmatch(r'/api/admin/pages/([a-z0-9-]{1,60})',path)
+            if page_route:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    result=pages.save_draft(c,page_route.group(1),data)
+                    audit(c,'pages',page_route.group(1),f"Administrator {self.request_user['id']}: zapisano szkic strony {page_route.group(1)}")
+                return self.respond(200,result)
             return_route=re.fullmatch(r'/api/admin/returns/([1-9][0-9]*)',path)
             if return_route:
                 with connect() as c:
@@ -910,7 +933,7 @@ class Handler(BaseHTTPRequestHandler):
                         audit(c,"production",tid,"Etap: "+status)
                 return self.respond(200,{"ok":True})
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError,pages.PageError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError) as ex:return self.error(ex)
         except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
 
