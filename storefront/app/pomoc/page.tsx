@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowRight, ArrowUpRight, ChevronRight } from "lucide-react";
 import { storeStatus } from "../../lib/store-status";
+import OrderLookup from "../../components/OrderLookup";
 import "./help.css";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ export default async function Help() {
             <p>Ceny są cenami brutto w złotych i zawierają VAT. Dostępne płatności: {(cfg.payment_methods || []).map(method => method.name).join(", ") || "według konfiguracji sklepu"}.</p>
             <details><summary>Co po złożeniu zamówienia?</summary><p>Zamówienie opłacone online lub potwierdzone trafia do kompletacji. Produkty z personalizacją wykonujemy po potwierdzeniu płatności, dlatego ich realizacja trwa dłużej. O wysyłce lub gotowości do odbioru poinformujemy e-mailem.</p></details>
             <details><summary>Zamówienie czeka na płatność — co zrobić?</summary><p>Przelew tradycyjny zaksięgujemy w ciągu 1–2 dni roboczych od wpłaty. Jeśli płatność online nie powiodła się, wróć do strony zamówienia i użyj przycisku „Zapłać ponownie”. Nieopłacone zamówienia są anulowane po upływie terminu podanego w potwierdzeniu.</p></details>
-            <details><summary>Czy mogę dostać fakturę?</summary><p>Tak. Zaznacz „Chcę otrzymać fakturę na firmę” w podsumowaniu zamówienia i podaj dane oraz NIP.</p></details>
+            <details><summary>Czy mogę dostać fakturę?</summary><p>Tak. Zaznacz „Chcę otrzymać fakturę na firmę” w podsumowaniu zamówienia i podaj dane oraz NIP.</p></details><OrderLookup/>
           </> : <>
             <p>Nowy sklep przygotowujemy do uruchomienia sprzedaży internetowej. Na razie możesz zapoznać się z ofertą, przeglądać warianty, zapisywać produkty na liście ulubionych i układać koszyk.</p>
             <div className="help-note"><strong>Nowe zamówienia są obecnie wstrzymane.</strong><p>Nie pobieramy płatności, nie przyjmujemy nowych zamówień i nie tworzymy rzeczywistych przesyłek. Włączenie sprzedaży nastąpi dopiero po zakończeniu integracji i formalności.</p></div>

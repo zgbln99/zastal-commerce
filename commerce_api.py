@@ -28,6 +28,7 @@ import commerce_sales as sales
 import commerce_payments as payments
 import commerce_returns as returns
 import commerce_pages as pages
+import commerce_pricing as pricing
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
@@ -109,6 +110,7 @@ def init():
         payments.init_schema(c)
         returns.init_schema(c)
         pages.init_schema(c)
+        pricing.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -140,6 +142,7 @@ def compatible_products(c):
     for product in products:
         product.update(personalization.product_options(c, product['id']))
         product.update(media.public_gallery(c, product))
+        product['price_reduction'] = pricing.reduction(c, product['id'])
         product['sizes'] = [v['size'] for v in c.execute('SELECT size FROM product_variants WHERE product_id=? ORDER BY id', (product['id'],))]
     return products
 
@@ -304,6 +307,8 @@ class Handler(BaseHTTPRequestHandler):
                     receipt=c.execute('SELECT * FROM order_receipts WHERE order_id=? AND customer_id=?',(oid,self.request_user['id'])).fetchone()
                     return self.respond(200,order_detail(c,receipt)) if receipt else self.respond(404,{'error':'Nie znaleziono zamówienia'})
                 if path=='/api/admin/products':return self.respond(200,catalog(c))
+                price_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/prices',path)
+                if price_route:return self.respond(200,{'history':pricing.history(c,int(price_route.group(1))),'reduction':pricing.reduction(c,int(price_route.group(1)))})
                 gallery_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/gallery',path)
                 if gallery_route:
                     try:return self.respond(200,media.get(c,int(gallery_route.group(1))))
@@ -409,6 +414,23 @@ class Handler(BaseHTTPRequestHandler):
                 with connect() as c:live=readiness(c)['mode']=='live'
                 if not live and not launch.isolated_test_workflow(DATABASE):
                     return self.respond(503,{'error':'Sprzedaż online zostanie uruchomiona po skonfigurowaniu usług sklepu. Konto klienta możesz już założyć.','code':'store_prelaunch'})
+            if path=='/api/orders/lookup':
+                data=self.body()
+                number=data.get('order');email=data.get('email')
+                if isinstance(number,str):number=number.strip().upper().removeprefix('ZS-').lstrip('0') or '0'
+                try:oid=int(number)
+                except (TypeError,ValueError):raise Invalid('Podaj numer zamówienia (np. ZS-00012)')
+                email=auth.identifier_value(email,email=True)
+                if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele prób. Spróbuj później."})
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    detail=sales.details(c,oid)
+                    owner=c.execute('SELECT u.identifier FROM order_receipts r JOIN users u ON u.id=r.customer_id WHERE r.order_id=?',(oid,)).fetchone()
+                    known={(detail['customer_email'] if detail else ''),(owner['identifier'] if owner else '')}-{''}
+                    if email in known:
+                        mail.enqueue_order(c,oid,'order_created',resend=True)
+                        audit(c,'order',oid,'Ponownie wysłano link do zamówienia na adres klienta')
+                return self.respond(200,{'ok':True,'message':'Jeśli zamówienie istnieje i adres się zgadza, wyślemy link do jego podglądu e-mailem.'})
             return_route=re.fullmatch(r'/api/orders/([1-9][0-9]*)/returns',path)
             if return_route:
                 data=self.body();token=data.get('tracking_token')
@@ -705,6 +727,7 @@ class Handler(BaseHTTPRequestHandler):
                                   tuple(product[key] for key in ('name','sku','category','price','stock')))
                     pid=cur.lastrowid
                     personalization.save_options(c,pid,product)
+                    pricing.record(c,pid,product['price'],self.request_user['id'])
                     sizes=sizes_for(product)
                     base,rem=divmod(product['stock'],len(sizes))
                     for index,size in enumerate(sizes):
@@ -835,6 +858,8 @@ class Handler(BaseHTTPRequestHandler):
                     product=personalization.validate_product(data,{**dict(row),**personalization.product_options(c,pid)})
                     c.execute('UPDATE products SET name=?,price=? WHERE id=?',(product['name'],product['price'],pid))
                     personalization.save_options(c,pid,product)
+                    if pricing.record(c,pid,product['price'],self.request_user['id']):
+                        audit(c,'product',pid,f"Zmieniono cenę z {row['price']/100:.2f} na {product['price']/100:.2f} PLN")
                     audit(c,'product',pid,'Zmieniono dane produktu i opcje nadruku')
                     result=next(p for p in catalog(c) if p['id']==pid)
                     c.commit()

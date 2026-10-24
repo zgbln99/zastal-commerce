@@ -6,6 +6,7 @@ import { Heart, Plus, ArrowUpRight } from "lucide-react";
 import { fmt } from "../lib/catalog";
 import { productDisplayPrice, type Product } from "../lib/commerce.mjs";
 import { useStore } from "./StoreProvider";
+import PriceReduction from "./PriceReduction";
 export function ProductImage({ product, media, className = "", eager = false, showLabel = true }: { product: ImageProduct; media?: ProductMedia; className?: string; eager?: boolean; showLabel?: boolean }) {
   const current = media || productImages(product)[0];
   const source = current?.url || "/assets/product-unavailable.svg";
@@ -33,6 +34,6 @@ export default function ProductCard({ product, eager = false }: { product: Produ
     <div className="product-card-category">{product.category}{product.sizes && <span>{product.sizes[0]}–{product.sizes[product.sizes.length - 1]}</span>}</div>
     <Link className="product-card-name" href={"/produkt/" + product.id}>{product.name}</Link>
     <p className="product-card-subtitle">{product.subtitle}</p>
-    <div className="product-card-bottom"><strong>{product.verified ? <>{fmt(productDisplayPrice(product))}{product.personalization_required && <small> z nadrukiem</small>}</> : <span className="price-pending">Sprawdzanie ceny…</span>}</strong><button className="card-mobile-add" aria-label={"Zobacz " + product.name} onClick={() => store.setQuickId(product.id)}><ArrowUpRight size={18}/></button></div>
+    <div className="product-card-bottom"><strong>{product.verified ? <>{fmt(productDisplayPrice(product))}{product.personalization_required && <small> z nadrukiem</small>}<PriceReduction product={product} compact/></> : <span className="price-pending">Sprawdzanie ceny…</span>}</strong><button className="card-mobile-add" aria-label={"Zobacz " + product.name} onClick={() => store.setQuickId(product.id)}><ArrowUpRight size={18}/></button></div>
   </article>;
 }

@@ -15,7 +15,8 @@ Data: 2026-10-24. Punkt wyjścia: `main` @ `60c4d42` (v0.10). Wszystkie zmiany s
 | `a67634f` | Zwroty i reklamacje: zgłoszenie przez klienta (strona zamówienia / konto) lub obsługę, decyzje, zwrot środków (PayU, gotówka na zmianie, przelew), przyjęcie na stan, anulowanie po personalizacji z odpisem (tylko menedżer), druk potwierdzenia |
 | `e914831` | Wdrożenie: `tools/backup_sqlite.py` (backup online + media + **test przywrócenia**), `tools/maintenance.py` + timer, jednostki systemd, Nginx (HSTS, osobna lokalizacja PayU), `deploy/release.sh`, nagłówki bezpieczeństwa (CSP, Permissions-Policy, X-Frame-Options), `robots.txt`/`sitemap.xml` zależne od trybu, `docs/RELEASE_RUNBOOK.md` |
 | `190264d` | Strony informacyjne (regulamin, polityka prywatności, zwroty, dostawa, kontakt): prywatne szkice z oznaczonymi polami `[UZUPEŁNIJ]`, publikacja po potwierdzeniu przeglądu, bezpieczne renderowanie `/informacje/<slug>` |
-| (ten commit) | Dynamiczna strona **Pomoc** (treści z konfiguracji live), README v0.11, dowody w `docs/evidence/`, ten raport |
+| `4488fb9` | Dynamiczna strona **Pomoc** (treści z konfiguracji live), README v0.11, dowody w `docs/evidence/`, ten raport |
+| (przegląd) | **Omnibus**: historia cen produktów (`product_prices`), komunikat „Najniższa cena z 30 dni przed obniżką” na karcie, w podglądzie i na stronie produktu; **odzyskanie linku do zamówienia** przez numer + e-mail (bez ujawniania istnienia zamówienia, limit prób); e-maile: „Zapłacono” dla zamówień już opłaconych, informacja o przedsprzedaży przy pozycji; panel: metryki tylko z opłaconych zamówień live, „Oczekują na płatność”, sprzedaż z dzisiaj, wyszukiwanie po kliencie/e-mailu/przesyłce, CSV z klientem i płatnością, statusy sterowane procesem zablokowane w ręcznej liście; tekst **Uruchomienia sklepu** zgodny z rzeczywistym przełącznikiem; `tools/healthcheck.sh` |
 
 Zachowano: istniejące API i dane, CMS strony głównej, galerie, konta, historię zamówień, POS testowy (nadal działa w trybie prelaunch), wygląd premium streetwear. Żadna migracja nie usuwa danych (tabela w runbooku).
 
@@ -23,11 +24,11 @@ Zachowano: istniejące API i dane, CMS strony głównej, galerie, konta, histori
 
 | Zestaw | Wynik |
 | --- | --- |
-| `ZASTAL_TEST_MODE=isolated-only python3 -m unittest discover -s tests` | **156 / 156 OK** (było 136; nowe: `test_staff`, `test_sales` z PayU/POS/zwrotami, `test_pages`, rozszerzony `test_personalization`) |
+| `ZASTAL_TEST_MODE=isolated-only python3 -m unittest discover -s tests` | **158 / 158 OK** (było 136; nowe: `test_staff`, `test_sales` z PayU/POS/zwrotami, `test_pages`, `test_pricing`, rozszerzony `test_personalization`) |
 | `node --test tests/*.test.mjs` | **84 / 84 OK** (było 81) |
 | `npx tsc --noEmit` | bez błędów |
 | `npm run build` (Next 16.4.3) | OK, bez ostrzeżenia bezpieczeństwa |
-| E2E Playwright (`tests/e2e/checkout.e2e.mjs` na izolowanym sklepie w trybie live z atrapą PayU) | **25 / 25 OK**: mobilny checkout 390 px z przelewem, walidacja formularza, PayU z podpisaną notyfikacją i potwierdzeniem opłacenia, panel (ustawienia, potwierdzenie wpłaty, kolejka realizacji, edytor układu nadruku, kasjer z ograniczoną nawigacją), POS (otwarcie zmiany, sprzedaż z numerem paragonu, raport zmiany, kiosk), zwroty, strony informacyjne, pomoc |
+| E2E Playwright (`tests/e2e/checkout.e2e.mjs` na izolowanym sklepie w trybie live z atrapą PayU) | **27 / 27 OK**: komunikat Omnibus, formularz odzyskania linku, mobilny checkout 390 px z przelewem, walidacja formularza, PayU z podpisaną notyfikacją i potwierdzeniem opłacenia, panel (ustawienia, potwierdzenie wpłaty, kolejka realizacji, edytor układu nadruku, kasjer z ograniczoną nawigacją), POS (otwarcie zmiany, sprzedaż z numerem paragonu, raport zmiany, kiosk), zwroty, strony informacyjne, pomoc |
 
 Zrzuty ekranu (320–1440 px) i log: `docs/evidence/`. Pełny zestaw powstaje lokalnie w `.qa/e2e/` po uruchomieniu scenariusza.
 

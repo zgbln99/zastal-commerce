@@ -504,8 +504,11 @@ def order_email(c, order, detail, kind, origin):
                   'To sprzedaż demonstracyjna. Dokument niefiskalny: nie jest paragonem ani fakturą i nie potwierdza rzeczywistej płatności.']
     elif kind == 'order_created':
         subject = f'Zastal Store — potwierdzenie zamówienia {number}'
-        lines += [f'Dziękujemy za zamówienie {number}.', f'Status: {status}', f'Do zapłaty: {amount}', '']
-        if detail['payment_method'] == 'transfer':
+        paid_now = detail['payment_status'] == 'paid'
+        lines += [f'Dziękujemy za zamówienie {number}.', f'Status: {status}', (f'Zapłacono: {amount}' if paid_now else f'Do zapłaty: {amount}'), '']
+        if paid_now:
+            pass
+        elif detail['payment_method'] == 'transfer':
             info = transfer_instructions(c, order['id'], order['total'])
             if info:
                 lines += ['Dane do przelewu:', f'  Odbiorca: {info["recipient"]}', f'  Numer rachunku: {info["account"]}',
@@ -554,6 +557,8 @@ def order_email(c, order, detail, kind, origin):
         print_label = ''
         if item.get('personalization'):
             print_label = f' · nadruk {item["personalization"].get("name", "")} {item["personalization"].get("number", "")}'
+        if isinstance(item.get('preorder'), dict) and item['preorder'].get('note'):
+            print_label += f' · przedsprzedaż: {item["preorder"]["note"]}'
         lines.append(f'  {item.get("qty", 1)} × {item.get("name", item.get("sku"))} / {item.get("size", "UNI")}{print_label} — {item.get("unit_price", 0) * item.get("qty", 1) / 100:.2f} PLN')
     if detail:
         lines += ['', f'Dostawa: {detail["shipping_name"] or detail["shipping_code"]}']

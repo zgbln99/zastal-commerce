@@ -10,6 +10,7 @@ import { ProductImage } from "./ProductCard";
 import PurchaseControls from "./PurchaseControls";
 import Modal from "./Modal";
 import {useAuth} from "./AuthProvider";
+import PriceReduction from "./PriceReduction";
 
 const CATEGORIES = ["Koszulki", "Bluzy", "Akcesoria", "Dzieci"];
 const categoryUrl = (c: string) => "/sklep?category=" + encodeURIComponent(c);
@@ -42,7 +43,7 @@ function QuickProduct() {
   const store = useStore(); const p = store.products.find(x => x.id === store.quickId);
   const [selectedPrice, setSelectedPrice] = useState<number | null>(null);
   if (!p) return null;
-  return <Modal title={p.name} onClose={() => store.setQuickId(null)} className="quick-modal"><button className="quick-close icon-btn" aria-label="Zamknij produkt" onClick={() => store.setQuickId(null)}><X size={22}/></button><div className="quick-image"><ProductImage product={p}/></div><div className="quick-content"><span className="eyebrow">{p.category}</span><h2>{p.name}</h2><p>{p.subtitle}</p><div className="quick-price">{p.verified ? fmt(selectedPrice ?? p.price + (p.personalization_required ? p.personalization_fee || 0 : 0)) : "Sprawdzanie ceny…"}</div><PurchaseControls product={p} onUnitPriceChange={setSelectedPrice}/><Link className="inline-link" href={"/produkt/" + p.id} onClick={() => store.setQuickId(null)}>Pełny opis produktu <ArrowUpRight size={16}/></Link>{!store.sales.checkoutEnabled && <p className="quiet-note">Sprzedaż i płatności zostaną uruchomione po zakończeniu przygotowań.</p>}</div></Modal>;
+  return <Modal title={p.name} onClose={() => store.setQuickId(null)} className="quick-modal"><button className="quick-close icon-btn" aria-label="Zamknij produkt" onClick={() => store.setQuickId(null)}><X size={22}/></button><div className="quick-image"><ProductImage product={p}/></div><div className="quick-content"><span className="eyebrow">{p.category}</span><h2>{p.name}</h2><p>{p.subtitle}</p><div className="quick-price">{p.verified ? fmt(selectedPrice ?? p.price + (p.personalization_required ? p.personalization_fee || 0 : 0)) : "Sprawdzanie ceny…"}<PriceReduction product={p}/></div><PurchaseControls product={p} onUnitPriceChange={setSelectedPrice}/><Link className="inline-link" href={"/produkt/" + p.id} onClick={() => store.setQuickId(null)}>Pełny opis produktu <ArrowUpRight size={16}/></Link>{!store.sales.checkoutEnabled && <p className="quiet-note">Sprzedaż i płatności zostaną uruchomione po zakończeniu przygotowań.</p>}</div></Modal>;
 }
 export default function StoreShell({ children }: { children: React.ReactNode }) {
   const store = useStore(); const pathname = usePathname();const auth=useAuth();const router=useRouter();const [headerQuery,setHeaderQuery]=useState("");

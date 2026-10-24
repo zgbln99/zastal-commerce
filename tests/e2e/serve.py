@@ -38,6 +38,11 @@ def seed(api, sales, auth):
         for pid in range(2, 13):
             c.execute('INSERT INTO product_options(product_id,image,subtitle) VALUES(?,?,?)', (pid, f'/assets/photos/product-{pid}.webp', 'Kolekcja klubowa'))
         c.execute("UPDATE product_options SET preorder=1,preorder_note='Wysyłka od 20 listopada',preorder_until='2026-11-20',size_guide='116: dł. 44 cm\n128: dł. 48 cm\n140: dł. 52 cm' WHERE product_id=9")
+        import datetime as dt
+        import commerce_pricing as pricing
+        c.execute('UPDATE product_prices SET changed_at=? WHERE product_id=3', (pricing.stamp(dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=40)),))
+        pricing.record(c, 3, 7900, moment=dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=12))
+        pricing.record(c, 3, 6500)
         for key, value in {'seller_name': 'Zastal Zielona Góra S.A.', 'tax_id': '5260250995', 'business_address': 'ul. Sulechowska 41, 65-119 Zielona Góra',
                            'support_email': 'sklep@example.test', 'support_phone': '68 000 00 00', 'returns_address': 'ul. Sulechowska 41, 65-119 Zielona Góra',
                            'terms_url': 'https://store.example.test/regulamin', 'privacy_url': 'https://store.example.test/prywatnosc',

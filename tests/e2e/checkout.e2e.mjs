@@ -41,11 +41,18 @@ try {
   await page.goto(WEB + '/pomoc', { waitUntil: 'networkidle' });
   const helpText = await page.locator('.help-content').innerText();
   step('mobile: help page describes live delivery and payment options', helpText.includes('Kurier') && helpText.includes('Zwroty i reklamacje') && !helpText.includes('wstrzymane'));
+  await page.fill('.order-lookup input[placeholder="ZS-00012"]', 'ZS-00001');
+  await page.fill('.order-lookup input[type="email"]', 'kibic@example.test');
+  await page.locator('.order-lookup button').click();
+  await page.waitForSelector('.order-lookup .account-success');
+  step('mobile: order lookup form answers without leaking', true);
   await shot(page, '00-help-390');
   await page.goto(WEB + '/produkt/9', { waitUntil: 'networkidle' });
   step('mobile: preorder product shows note and size guide', (await page.locator('.product-preorder-note').count()) === 1 && (await page.locator('.product-size-guide').count()) === 1);
   await shot(page, '02a-product-preorder-390');
   await page.goto(WEB + '/produkt/3', { waitUntil: 'networkidle' });
+  const omnibus = await page.locator('.product-price-row .price-reduction').innerText().catch(() => '');
+  step('mobile: Omnibus notice shows previous and lowest 30-day price', omnibus.includes('79,00') && omnibus.includes('Najniższa cena z 30 dni') && omnibus.includes('65,00'), omnibus.replace(/\n/g, ' '));
   await page.getByRole('button', { name: 'M', exact: true }).click();
   await shot(page, '02-product-390');
   await page.getByRole('button', { name: 'Dodaj do koszyka' }).click();

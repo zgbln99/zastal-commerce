@@ -110,14 +110,14 @@ def _credential(user):
     return auth.digest(user['password_hash'])
 
 
-def _queue(c, user, kind, order_id=None, dedupe=None, recipient=None):
+def _queue(c, user, kind, order_id=None, dedupe=None, recipient=None, resend=False):
     now = int(time.time())
     credential = _credential(user) if kind in AUTH_KINDS else None
     key = dedupe or f'{kind}:{user["id"]}:{credential}'
     cursor = c.execute('''INSERT OR IGNORE INTO email_outbox
         (kind,user_id,order_id,recipient,credential_digest,dedupe_key,created,updated,next_attempt)
         VALUES(?,?,?,?,?,?,?,?,?)''', (kind, user['id'] if user else None, order_id, recipient, credential, key, now, now, now))
-    if not cursor.rowcount and kind in AUTH_KINDS:
+    if not cursor.rowcount and (kind in AUTH_KINDS or resend):
         # Explicit resends can revive completed requests, but never steal a live lease.
         c.execute("""UPDATE email_outbox SET status='pending',attempts=0,updated=?,next_attempt=?,
             last_error=NULL,lease_token=NULL,lease_until=NULL,sent=NULL
@@ -166,7 +166,7 @@ def _consume_token(c, raw, kind):
 ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid', 'return_update')
 
 
-def enqueue_order(c, order_id, kind='order_created', suffix=''):
+def enqueue_order(c, order_id, kind='order_created', suffix='', resend=False):
     if kind not in ORDER_KINDS:
         raise ValueError('Unsupported order email kind')
     row = c.execute('SELECT u.*,o.status AS order_status FROM order_receipts r JOIN users u ON u.id=r.customer_id JOIN orders o ON o.id=r.order_id WHERE r.order_id=?', (order_id,)).fetchone()
@@ -175,13 +175,13 @@ def enqueue_order(c, order_id, kind='order_created', suffix=''):
         status = c.execute('SELECT status FROM orders WHERE id=?', (order_id,)).fetchone()
         key += f':{status["status"] if status else ""}'
     if row and row['role'] == 'customer' and row['active']:
-        return _queue(c, row, kind, order_id, key)
+        return _queue(c, row, kind, order_id, key, resend=resend)
     try:
         guest = c.execute('SELECT customer_email FROM order_details WHERE order_id=?', (order_id,)).fetchone()
     except sqlite3.OperationalError:
         guest = None
     if guest and guest['customer_email']:
-        return _queue(c, None, kind, order_id, key, recipient=guest['customer_email'])
+        return _queue(c, None, kind, order_id, key, recipient=guest['customer_email'], resend=resend)
     return None
 
 
