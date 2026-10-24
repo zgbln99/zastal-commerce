@@ -78,6 +78,21 @@ class EmailTests(unittest.TestCase):
         self.assertIn('niefiskalny',body)
         self.assertIn('nie potwierdza rzeczywistej płatności',body)
 
+    def test_staff_test_message_is_queued_and_smtp_status_is_recorded(self):
+        self.c.execute("UPDATE users SET role='admin' WHERE id=?", (self.user['id'],))
+        self.c.commit()
+        self.h.request_user = self.c.execute('SELECT * FROM users').fetchone()
+        result = self.request('/api/admin/email/test', {'recipient': 'check@example.test'})
+        self.assertEqual(result[0], 200)
+        self.assertEqual(self.c.execute('SELECT status FROM email_outbox').fetchone()[0], 'pending')
+        with patch.dict(os.environ, SMTP_ENV), patch('commerce_email.smtplib.SMTP', SMTP):
+            self.assertEqual(self.email.process_outbox(self.connect)['sent'], 1)
+        self.assertEqual(SMTP.messages[0]['To'], 'check@example.test')
+        self.assertIn('test poczty', str(SMTP.messages[0]['Subject']))
+        self.assertEqual(self.email.admin_status(self.c)['messages'][0]['status'], 'sent')
+        self.h.headers.pop('X-CSRF-Token')
+        self.assertEqual(self.request('/api/admin/email/test', {'recipient': 'check@example.test'})[0], 403)
+
     def setUp(self):
         self.assertIsNotNone(importlib.util.find_spec('commerce_email'), 'email subsystem must exist')
         self.email = importlib.import_module('commerce_email')

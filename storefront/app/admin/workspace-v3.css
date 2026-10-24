@@ -1,0 +1,26 @@
+/* Quiet, functional dashboard: figures and work queues take priority. */
+.admin-shell{--admin-surface:#f7f8f5}
+.admin-sidebar{background:#183a20;border-right:0}
+.admin-main{background:#f7f8f5}
+.admin-command-bar{display:block;background:#fff;color:#1b2b1e;min-height:0;padding:23px 26px 17px;border:1px solid #dce3da;margin-bottom:18px}
+.admin-command-bar:after{display:none}
+.admin-command-copy{display:block}
+.admin-command-copy>span{color:#52725b;font-size:11px;letter-spacing:0}
+.admin-command-copy>span:before{display:none}
+.admin-command-copy h2{font-size:24px;letter-spacing:-.025em;line-height:1.2;color:#1b2b1e;margin:7px 0 3px}
+.admin-command-copy p{color:#5f6d61;font-size:13px;max-width:none}
+.admin-command-actions{display:flex;flex-wrap:wrap;gap:0;border-top:1px solid #e2e8e0;margin-top:22px}
+.admin-command-actions button{min-height:0;min-width:180px;flex:1;display:flex;flex-direction:row;align-items:center;gap:14px;padding:17px 22px 5px 0;background:transparent;color:#1c3521;border:0;border-radius:0}
+.admin-command-actions button:hover{transform:none;background:transparent;color:#165114;text-decoration:underline;text-underline-offset:3px}
+.admin-command-actions button span{font-size:13px;max-width:none;line-height:1.35;font-weight:600}
+.admin-command-actions button strong{order:-1;font-size:25px;line-height:1.2;letter-spacing:-.04em}
+.admin-command-actions button svg{position:static;color:#165114;margin-left:auto;width:16px;height:16px}
+.admin-metrics{background:transparent;border:0;gap:12px}
+.admin-metric,.admin-metric:first-child{border:1px solid #dce3da;background:#fff;padding:17px 20px}
+.admin-metric>strong{font-size:25px}
+.admin-panel-head{border-bottom:1px solid #dce3da}
+.admin-panel-head h2{font-size:19px}
+.admin-navitem.active{box-shadow:inset 3px 0 #ef7d00}
+@media(max-width:760px){.admin-command-bar{padding:20px}.admin-command-actions{display:block}.admin-command-actions button{width:100%;padding:14px 0;border-bottom:1px solid #e6ece4}.admin-command-actions button:last-child{border-bottom:0}.admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.staff-mail-test{display:flex;gap:10px;max-width:620px}.staff-mail-test input{flex:1;min-width:0;border:1px solid #cbd9ca;padding:10px 12px;font-size:14px}.staff-mail-test button{white-space:nowrap}@media(max-width:560px){.staff-mail-test{flex-direction:column}}

@@ -1,0 +1,53 @@
+/* Storefront cover: club photograph and merchandise, without campaign graphics. */
+.flagship-hero.store-carousel[class]{width:calc(100% - 80px);max-width:1440px;background:#fff;margin:36px auto 0;border:0}
+.store-carousel .flagship-slide{display:flex;flex-direction:column;min-height:0;height:auto}
+.store-carousel .flagship-hero-content,.flagship-hero.store-carousel .flagship-hero-content{display:flex;flex-direction:column;justify-content:flex-start;width:100%!important;min-height:0;height:auto;padding:0 0 24px!important;background:#fff}
+.store-carousel .flagship-overline{display:none!important}
+.flagship-hero.store-carousel h1{max-width:900px;margin:0 0 10px!important;font-size:clamp(36px,4.1vw,58px)!important;line-height:1.08!important;letter-spacing:-.045em!important}
+.store-carousel .flagship-hero-lead{max-width:650px;font-size:15px!important;margin:0 0 18px!important;color:#56645a!important}
+.store-carousel .flagship-hero-actions{gap:23px!important}
+.store-carousel .flagship-button-primary{padding:0!important;min-height:0!important;background:transparent!important;color:#165114!important;border-bottom:1px solid #165114;font-size:14px!important;font-weight:700!important}
+.store-carousel .flagship-button-primary:hover{background:transparent!important;color:#0b3610!important}
+.store-carousel .flagship-button-quiet{border:0!important;color:#506556!important;font-size:13px!important}
+.store-carousel .flagship-hero-media{position:relative!important;width:100%;height:440px!important;min-height:440px!important;background:#f1f2ee}
+.store-carousel .flagship-hero-photo{object-fit:cover!important;object-position:center 42%!important}
+.store-carousel .media-packshot .flagship-hero-photo,.store-carousel .media-detail .flagship-hero-photo{object-fit:contain!important;padding:28px!important}
+.store-carousel .flagship-hero-footer{height:38px!important;min-height:38px!important;padding:0!important;background:#fff!important;border:0!important}
+.store-carousel .flagship-slide-selector button{min-height:36px!important}
+.home-collections.container{padding-top:46px!important}
+.home-collection-grid{gap:0!important;border-top:1px solid #dce3da;border-bottom:1px solid #dce3da}
+.home-collection{min-width:0;border-right:1px solid #dce3da!important}
+.home-collection:last-child{border-right:0!important}
+.home-collection-image{display:none!important}
+.home-collection-label{min-height:105px;display:flex;align-items:center!important;padding:20px!important;border:0!important}
+.home-collection-label h3{font-size:21px!important;margin-bottom:7px!important}
+.home-collection-label span{font-size:12px!important}
+.home-page .merchandise-catalog{padding-top:66px!important}
+.editorial-print{width:calc(100% - 80px)!important;max-width:1440px!important;min-height:330px!important;grid-template-columns:58% 42%!important;background:#f0f2ed!important;margin-top:76px!important}
+.editorial-print-copy{padding:38px clamp(35px,5vw,72px)!important}
+.editorial-print h2{font-size:clamp(32px,3.1vw,46px)!important}
+.editorial-print-visual{min-height:330px!important;height:330px!important}
+.editorial-print-visual>img{max-height:290px!important}
+.home-retro{margin-top:75px!important}
+@media(max-width:900px){
+ .flagship-hero.store-carousel[class]{width:calc(100% - 40px);margin-top:24px}
+ .store-carousel .flagship-hero-media{height:350px!important;min-height:350px!important;aspect-ratio:auto}
+ .store-carousel .flagship-hero-content,.flagship-hero.store-carousel .flagship-hero-content{padding:0 0 23px!important}
+ .store-carousel .flagship-hero-media{order:0}
+ .home-collection-label{padding:16px!important;min-height:95px}
+ .home-collection-label h3{font-size:17px!important}
+}
+@media(max-width:640px){
+ .flagship-hero.store-carousel[class]{width:calc(100% - 32px);margin:24px auto 0}
+ .flagship-hero.store-carousel h1{font-size:36px!important}
+ .store-carousel .flagship-hero-lead{font-size:14px!important;margin-bottom:14px!important}
+ .store-carousel .flagship-hero-media{height:260px!important;min-height:260px!important}
+ .home-collection-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ .home-collection:nth-child(2){border-right:0!important}
+ .home-collection:nth-child(-n+2){border-bottom:1px solid #dce3da!important}
+ .home-collection-label{min-height:90px}
+ .home-collection-label span{font-size:11px!important}
+ .editorial-print{width:calc(100% - 32px)!important;grid-template-columns:1fr!important;margin-top:60px!important}
+ .editorial-print-copy{padding:32px 23px!important}
+ .editorial-print-visual{height:260px!important;min-height:260px!important}
+}

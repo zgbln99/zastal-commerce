@@ -11,8 +11,8 @@ import {type HomeConfig,type HomeSection,categories,text,num,bool,titleLines,kic
 import {PenLine,UserRound as Roster} from "lucide-react";
 
 const categoryDescriptions:Record<string,string>={
- Koszulki:"Modele klubowe",Bluzy:"Klasyczne i z kapturem",
- Dzieci:"Małe rozmiary, duże emocje",Akcesoria:"Dodatki na co dzień"
+ Koszulki:"Koszulki Zastalu",Bluzy:"Bluzy z kapturem",
+ Dzieci:"Rozmiary dziecięce",Akcesoria:"Torby i drobne akcesoria"
 };
 const categoryCovers:Record<string,number>={Koszulki:10,Bluzy:1,Dzieci:9,Akcesoria:8};
 const categoryClasses:Record<string,string>={Koszulki:"shirts",Bluzy:"hoodies",Dzieci:"kids",Akcesoria:"accessories"};

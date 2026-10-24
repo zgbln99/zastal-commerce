@@ -1,0 +1,36 @@
+/* Dashboard as a working surface, not a row of generic KPI tiles. */
+.admin-shell{--admin-surface:#f1f4ee}
+.admin-sidebar{background:#102e18;border-right:4px solid #ef7d00}
+.admin-main{background:#f1f4ee}
+.admin-page{max-width:1700px}
+.admin-command-bar{display:grid;grid-template-columns:minmax(250px,.85fr) minmax(0,1.45fr);gap:35px;align-items:stretch;background:#165114;color:#fff;min-height:230px;padding:28px 32px;margin-bottom:20px;position:relative;overflow:hidden}
+.admin-command-bar:after{content:"1946";position:absolute;right:12px;bottom:-60px;font-size:230px;line-height:1;font-weight:900;letter-spacing:-.09em;color:#ffffff0c;pointer-events:none}
+.admin-command-copy{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:center}
+.admin-command-copy>span{display:flex;align-items:center;gap:10px;color:#ffc989;font-size:11px;font-weight:700;letter-spacing:.12em}
+.admin-command-copy>span:before{content:"";display:block;background:#ef7d00;width:27px;height:4px}
+.admin-command-copy h2{font-size:clamp(30px,3vw,47px);font-weight:700;letter-spacing:-.05em;line-height:1.03;margin:18px 0 12px;color:#fff}
+.admin-command-copy p{font-size:13px;line-height:1.45;color:#d9ead8;margin:0;max-width:270px}
+.admin-command-actions{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:stretch}
+.admin-command-actions button{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;min-height:170px;text-align:left;padding:19px;background:#fff;color:#193820;border:0;border-top:5px solid #ef7d00;transition:transform .15s,background .15s}
+.admin-command-actions button:hover{transform:translateY(-3px);background:#fff6e9}
+.admin-command-actions button span{font-size:12px;font-weight:700;max-width:130px;line-height:1.25}
+.admin-command-actions button strong{font-size:clamp(30px,3vw,50px);line-height:1;font-weight:700;letter-spacing:-.06em}
+.admin-command-actions button svg{position:absolute;bottom:18px;right:16px;color:#ef7d00}
+.admin-metrics{grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:#cbd8ca;border:1px solid #cbd8ca;margin-bottom:20px}
+.admin-metric,.admin-metric:first-child{border:0;border-radius:0;box-shadow:none;background:#fff;color:#193820;padding:18px 22px}
+.admin-metric:first-child :is(span,small,svg,strong){color:inherit}
+.admin-metric:hover{transform:none;box-shadow:none;background:#f8fbf5}
+.admin-metric>strong{font-size:28px;margin:10px 0 2px}
+.admin-panel{border-radius:0;box-shadow:none;border-color:#d8e2d6}
+.admin-panel-head{border-bottom:3px solid #165114}
+.admin-panel-head h2{font-size:21px}
+.admin-table th{background:#edf3ea}
+.admin-demo-notice{border-radius:0}
+.admin-page-heading h1{font-size:clamp(36px,3.7vw,54px);line-height:1}
+.admin-refresh{border-radius:0}
+.admin-navitem{border-radius:0}
+.admin-navitem.active{box-shadow:inset 5px 0 #ef7d00}
+@media(max-width:1160px){.admin-command-bar{grid-template-columns:1fr;gap:20px}.admin-command-copy p{max-width:none}}
+@media(max-width:760px){.admin-command-bar{padding:23px 18px;min-height:0}.admin-command-actions{grid-template-columns:repeat(3,minmax(0,1fr))}.admin-command-actions button{padding:12px;min-height:135px}.admin-command-actions button span{font-size:11px}.admin-command-actions button strong{font-size:32px}.admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:430px){.admin-command-actions{grid-template-columns:1fr}.admin-command-actions button{min-height:70px;flex-direction:row;align-items:center}.admin-command-actions button strong{margin-right:26px}.admin-command-actions button svg{right:10px;bottom:24px}}
+@media(prefers-reduced-motion:reduce){.admin-command-actions button:hover{transform:none}}
