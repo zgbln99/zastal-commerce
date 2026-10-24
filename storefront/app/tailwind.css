@@ -1,0 +1,111 @@
+/* Tailwind v4 for shadcn/ui components. Preflight is NOT imported on purpose: the storefront keeps its own base
+   styles, so adding the component kit does not reset the existing look. Tokens map the kit to the club palette. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.1875rem;
+  --background: #ffffff;
+  --foreground: #18211e;
+  --card: #ffffff;
+  --card-foreground: #18211e;
+  --popover: #ffffff;
+  --popover-foreground: #18211e;
+  --primary: #174c37;
+  --primary-foreground: #ffffff;
+  --secondary: #f6f7f3;
+  --secondary-foreground: #18211e;
+  --muted: #f6f7f3;
+  --muted-foreground: #68736d;
+  --accent: #e6bf45;
+  --accent-foreground: #18211e;
+  --destructive: #a63b2b;
+  --border: #e4e7e2;
+  --input: #cdd3cf;
+  --ring: #174c37;
+  --chart-1: #174c37;
+  --chart-2: #e6bf45;
+  --chart-3: #68736d;
+  --chart-4: #a63b2b;
+  --chart-5: #0b4b37;
+  --sidebar: #f6f7f3;
+  --sidebar-foreground: #18211e;
+  --sidebar-primary: #174c37;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e4e7e2;
+  --sidebar-accent-foreground: #18211e;
+  --sidebar-border: #e4e7e2;
+  --sidebar-ring: #174c37;
+}
+
+.dark {
+  --background: #0f1a14;
+  --foreground: #e6ede8;
+  --card: #15231b;
+  --card-foreground: #e6ede8;
+  --popover: #15231b;
+  --popover-foreground: #e6ede8;
+  --primary: #9dd3b4;
+  --primary-foreground: #0f1a14;
+  --secondary: #1c2d23;
+  --secondary-foreground: #e6ede8;
+  --muted: #1c2d23;
+  --muted-foreground: #9db3a4;
+  --accent: #e6bf45;
+  --accent-foreground: #0f1a14;
+  --destructive: #e07b6a;
+  --border: #27382e;
+  --input: #27382e;
+  --ring: #9dd3b4;
+  --sidebar: #15231b;
+  --sidebar-foreground: #e6ede8;
+  --sidebar-primary: #9dd3b4;
+  --sidebar-primary-foreground: #0f1a14;
+  --sidebar-accent: #1c2d23;
+  --sidebar-accent-foreground: #e6ede8;
+  --sidebar-border: #27382e;
+  --sidebar-ring: #9dd3b4;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --font-display: "Barlow Semi Condensed", Inter, Arial, sans-serif;
+}
