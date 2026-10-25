@@ -60,7 +60,7 @@ test('homepage editor can render inside the administrator route', () => {
 });
 test('private homepage preview receives the same catalogue context', () => {
   const html = render('/admin/podglad', h(HomeCanvas, {config: DEFAULT_HOME}));
-  assert.match(html, /Sklep Zastalu Zielona Góra/);
+  assert.match(html, /Sklep Zastalu/);
   assert.match(html, /Kolekcje/);
   assert.doesNotMatch(html, /Otwórz koszyk/);
 });

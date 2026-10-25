@@ -11,6 +11,7 @@ import "./brand-system.css";
 import "./rebuild-v2.css";
 import "./storefront-v3.css";
 import "./storefront-v4.css";
+import "./minimal-store.css";
 import CommerceRoot from "../components/CommerceRoot";
 import { storeStatus } from "../lib/store-status";
 export const dynamic = "force-dynamic";
@@ -27,3 +28,5 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="pl"><body><CommerceRoot>{children}</CommerceRoot></body></html>;
 }
+
+import "./minimal-store.css";

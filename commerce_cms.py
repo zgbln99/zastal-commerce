@@ -64,17 +64,17 @@ for _slide in (2, 3):
 
 DEFAULT = {"version": 1, "sections": [
  {"id": "hero-main", "type": "hero", "enabled": True, "settings": {
-    "eyebrow": "KLUBOWA KOLEKCJA", "title": "Sklep Zastalu Zielona Góra",
-    "description": "Koszulki, bluzy i akcesoria z klubowej kolekcji.",
+    "eyebrow": "KLUBOWA KOLEKCJA", "title": "Sklep Zastalu",
+    "description": "Koszulki, bluzy i akcesoria dla kibiców.",
     "image": "/assets/photos/fans.webp", "cta_text": "Zobacz produkty",
-    "cta_url": "/sklep", "secondary_text": "Zobacz koszulki",
+    "cta_url": "/sklep", "secondary_text": "",
     "secondary_url": "/sklep?category=Koszulki", "height": 620,
     "overlay": 72, "alignment": "left"}},
- {"id": "shop-categories", "type": "categories", "enabled": True, "settings": {
+ {"id": "shop-categories", "type": "categories", "enabled": False, "settings": {
     "eyebrow": "01 / KATEGORIE", "title": "Kolekcje", "cta_text": "Cały sklep",
     "categories": "Koszulki,Bluzy,Dzieci,Akcesoria", "columns": 4}},
  {"id": "merch-grid", "type": "products", "enabled": True, "settings": {
-    "eyebrow": "03 / PRODUKTY", "title": "W klubowym sklepie",
+    "eyebrow": "03 / PRODUKTY", "title": "Produkty",
     "category": "Wszystko", "count": 8, "columns": 4, "show_filters": True,
     "cta_text": "Wszystkie produkty", "product_ids": ""}},
  {"id": "print-studio", "type": "personalization", "enabled": True, "settings": {
@@ -82,13 +82,13 @@ DEFAULT = {"version": 1, "sections": [
     "description": "Wybierz zawodnika z listy lub wpisz własne nazwisko i numer.",
     "button_text": "Personalizuj ten produkt", "product_id": 1}},
  {"id": "retro-feature", "type": "retro", "enabled": True, "settings": {
-    "eyebrow": "04 / ZASTAL RETRO", "title": "Klasyczny znak. Klubowa bluza.",
+    "eyebrow": "04 / ZASTAL RETRO", "title": "Bluza z retro logo",
     "description": "Retro logo Zastalu na zielonej bluzie.",
     "button_text": "Zobacz kolekcję", "product_id": 2, "image": ""}},
- {"id": "accessories-edit", "type": "accessories", "enabled": True, "settings": {
-    "eyebrow": "05 / DODATKI", "title": "Małe rzeczy. Te same barwy.",
+ {"id": "accessories-edit", "type": "accessories", "enabled": False, "settings": {
+    "eyebrow": "05 / DODATKI", "title": "Akcesoria",
     "description": "Akcesoria, które możesz zabrać ze sobą nie tylko na mecz.", "count": 3}},
- {"id": "shop-services", "type": "services", "enabled": True, "settings": {
+ {"id": "shop-services", "type": "services", "enabled": False, "settings": {
     "title": "Informacje o sklepie", "first_title": "Dostawa i odbiór",
     "first_text": "Warunki po uruchomieniu sprzedaży",
     "second_title": "Twoje konto", "second_text": "Zamówienia i ustawienia w jednym miejscu",
