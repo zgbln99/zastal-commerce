@@ -89,7 +89,7 @@ def configuration():
     if not re.fullmatch(r'[^\s@<>]{1,64}@[^\s@<>]+\.[^\s@<>]+', sender):
         missing.append('ZASTAL_SMTP_FROM')
         sender = ''
-    if tls not in ('starttls', 'ssl'):
+    if tls not in ('starttls', 'ssl') and not (tls == 'none' and host in ('127.0.0.1', 'localhost')):
         missing.append('ZASTAL_SMTP_TLS')
     username, password = os.environ.get('ZASTAL_SMTP_USERNAME', ''), os.environ.get('ZASTAL_SMTP_PASSWORD', '')
     if bool(username) != bool(password):
@@ -102,7 +102,7 @@ def configuration():
         parsed.port
     except ValueError:
         missing.append('ZASTAL_SITE_ORIGIN')
-    return {'configured': not missing, 'host': host, 'port': port,
+    return {'configured': not missing, 'capture': tls == 'none' and host in ('127.0.0.1', 'localhost'), 'host': host, 'port': port,
             'from_address': sender, 'tls': tls, 'missing': missing}
 
 
@@ -374,6 +374,8 @@ def _message(c, row, config):
 
 
 def _deliver(message, config):
+    if config['capture'] and not str(message['To']).lower().endswith('@zastal.test'):
+        raise smtplib.SMTPRecipientsRefused({str(message['To']): (550, 'test mailbox only')})
     context = ssl.create_default_context()
     factory = smtplib.SMTP_SSL if config['tls'] == 'ssl' else smtplib.SMTP
     kwargs = {'host': config['host'], 'port': config['port'], 'timeout': 20}

@@ -65,6 +65,19 @@ class SMTP:
 
 
 class EmailTests(unittest.TestCase):
+    def test_plain_smtp_is_only_allowed_on_loopback(self):
+        with patch.dict(os.environ, {**SMTP_ENV, "ZASTAL_SMTP_TLS": "none", "ZASTAL_SMTP_HOST": "127.0.0.1"}):
+            self.assertTrue(self.email.configuration()["configured"])
+        with patch.dict(os.environ, {**SMTP_ENV, "ZASTAL_SMTP_TLS": "none"}):
+            self.assertFalse(self.email.configuration()["configured"])
+
+    def test_capture_rejects_real_recipients(self):
+        from email.message import EmailMessage
+        message = EmailMessage();message["To"] = "real@example.com"
+        with patch.dict(os.environ, {**SMTP_ENV, "ZASTAL_SMTP_TLS": "none", "ZASTAL_SMTP_HOST": "127.0.0.1"}), patch("commerce_email.smtplib.SMTP", SMTP):
+            with self.assertRaises(self.email.smtplib.SMTPRecipientsRefused):
+                self.email._deliver(message, self.email.configuration())
+
     def test_order_delivery_discloses_demo_and_nonfiscal_payment_status(self):
         self.c.executescript('CREATE TABLE orders(id INTEGER PRIMARY KEY,status TEXT,total INTEGER); CREATE TABLE order_receipts(order_id INTEGER PRIMARY KEY,customer_id INTEGER);')
         self.c.execute("INSERT INTO orders VALUES(10,'nowe',7900)")

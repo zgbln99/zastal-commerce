@@ -529,7 +529,7 @@ def order_email(c, order, detail, kind, origin):
     link = f'{origin}/zamowienie?id={order["id"]}'
     lines = []
     if not live:
-        subject = f'Zastal Store, zamówienie testowe #{order["id"]}'
+        subject = f'Zastal Store, zamówienie testowe #{order["id"]} — {status}'
         lines += [f'Zamówienie testowe #{order["id"]}', f'Status: {status}', f'Kwota testowa: {amount}', '',
                   'To sprzedaż demonstracyjna. Dokument niefiskalny: nie jest paragonem ani fakturą i nie potwierdza rzeczywistej płatności.']
     elif kind == 'order_created':
