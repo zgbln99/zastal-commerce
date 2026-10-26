@@ -220,6 +220,10 @@ class EmailTests(unittest.TestCase):
         self.assertEqual(self.request('/api/auth/email/verify', {'token': token}), (200, {'ok': True}))
         self.assertEqual(self.c.execute('SELECT email_verified FROM users').fetchone()[0], 1)
         self.assertEqual(self.c.execute("SELECT COUNT(*) FROM email_outbox WHERE kind='welcome'").fetchone()[0], 1)
+        with patch.dict(os.environ, SMTP_ENV), patch('commerce_email.smtplib.SMTP', SMTP):
+            self.assertEqual(self.email.process_outbox(self.connect)['sent'], 1)
+        self.assertIn('konto jest gotowe', str(SMTP.messages[-1]['Subject']))
+        self.assertIn('Przejdź do konta', SMTP.messages[-1].get_body(preferencelist=('html',)).get_content())
         self.assertEqual(self.request('/api/auth/email/verify', {'token': token})[0], 400)
 
     def test_missing_smtp_keeps_queue_pending_and_metadata_has_no_payload(self):
