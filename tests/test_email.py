@@ -86,6 +86,7 @@ class EmailTests(unittest.TestCase):
             'Potwierdź adres e-mail swojego konta Zastal Store:\n\n' + origin + '/konto/email?action=verify#token=abc\n\nLink jest jednorazowy i ważny przez 24 godziny.',
             origin, kind='email_verification')
         self.assertIn('Potwierdź adres e-mail</a>', verify)
+        self.assertIn('src="https://store.example.test/assets/zastal-logo-email.png"', verify)
         self.assertIn('24 godziny', verify)
         self.assertNotIn('Otwórz w sklepie', verify)
 
@@ -95,6 +96,8 @@ class EmailTests(unittest.TestCase):
         self.assertIn('ZS-00042', order)
         self.assertIn('Sprawdź zamówienie</a>', order)
         self.assertIn('Kurier DPD', order)
+        shipped = self.email.render_html('Zastal Store, zamówienie ZS-00042 wysłane', 'Zamówienie ZS-00042 zostało nadane.\n\nSzczegóły zamówienia: ' + origin + '/zamowienie?id=42', origin, kind='order_status_changed')
+        self.assertIn('Sprawdź dostawę</a>', shipped)
         self.assertIn('&lt;Junior&gt;', order)
         self.assertIn('Koszulka &lt;Junior&gt;</strong>', order)
         self.assertIn('border-radius:24px', order)
@@ -216,6 +219,7 @@ class EmailTests(unittest.TestCase):
         self.assertNotIn(token, json.dumps(row))
         self.assertEqual(self.request('/api/auth/email/verify', {'token': token}), (200, {'ok': True}))
         self.assertEqual(self.c.execute('SELECT email_verified FROM users').fetchone()[0], 1)
+        self.assertEqual(self.c.execute("SELECT COUNT(*) FROM email_outbox WHERE kind='welcome'").fetchone()[0], 1)
         self.assertEqual(self.request('/api/auth/email/verify', {'token': token})[0], 400)
 
     def test_missing_smtp_keeps_queue_pending_and_metadata_has_no_payload(self):

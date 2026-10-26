@@ -271,6 +271,7 @@ def dispatch(handler, path, c):
         c.execute("UPDATE users SET email_verified=1,updated=datetime('now') WHERE id=?", (user['id'],))
         c.execute("UPDATE email_tokens SET consumed=? WHERE user_id=? AND kind='email_verification' AND consumed IS NULL", (int(time.time()), user['id']))
         c.execute("UPDATE email_outbox SET status='cancelled',updated=? WHERE user_id=? AND kind='email_verification' AND status IN ('pending','retry','sending','failed')", (int(time.time()), user['id']))
+        _queue(c, user, 'welcome', dedupe=f'welcome:{user["id"]}')
     elif path == '/api/account/email/verification':
         user = auth.require_user(handler, 'customer')
         auth.rate(handler, 'email_verify_request', str(user['id']), count=5, window=3600)
@@ -339,6 +340,11 @@ def _message(c, row, config):
         else:
             subject = 'Zastal Store, zmiana hasła'
             body = f'Ustaw nowe hasło do konta Zastal Store:\n\n{link}\n\nLink jest jednorazowy i ważny przez godzinę.\nJeżeli nie proszono o zmianę hasła, zignoruj tę wiadomość.'
+    elif row['kind'] == 'welcome':
+        subject = 'Zastal Store, konto jest gotowe'
+        body = ('Adres e-mail został potwierdzony. Możesz już korzystać z konta w Zastal Store.\n\n'
+                + os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/') + '/konto\n\n'
+                'W koncie sprawdzisz zamówienia i status dostawy.')
     elif row['kind'] == 'test_email':
         subject = 'Zastal Store, test poczty'
         body = 'To wiadomość testowa ze sklepu Zastal.\n\nJej status w panelu Poczta sklepu pokaże, czy serwer SMTP przyjął wiadomość.'
@@ -391,7 +397,7 @@ def render_html(subject, body, origin, kind=None):
         content.pop()
 
     is_order = kind in ORDER_KINDS or 'Pozycje:' in content
-    is_auth = kind in AUTH_KINDS
+    is_auth = kind in AUTH_KINDS or kind == 'welcome'
     number = re.search(r'\bZS-\d+\b|#\d+', subject)
     reference = number.group(0) if number else ''
     heading = subject.split(', ', 1)[-1]
@@ -400,11 +406,15 @@ def render_html(subject, body, origin, kind=None):
         heading = 'Potwierdź adres e-mail'
     elif kind == 'password_reset':
         heading = 'Ustaw nowe hasło'
+    elif kind == 'welcome':
+        heading = 'Konto jest gotowe'
     elif kind == 'order_created' and 'testowe' not in subject:
         heading = 'Zamówienie przyjęte'
     label = 'TWOJE KONTO' if is_auth else 'ZAMÓWIENIE' if is_order else 'ZASTAL STORE'
     action_label = ('Potwierdź adres e-mail' if kind == 'email_verification' else
                     'Ustaw nowe hasło' if kind == 'password_reset' else
+                    'Przejdź do konta' if kind == 'welcome' else
+                    'Sprawdź dostawę' if is_order and 'wysłane' in subject.lower() else
                     'Sprawdź zamówienie' if is_order else 'Otwórz wiadomość')
 
     def escaped(value):
@@ -497,8 +507,8 @@ def render_html(subject, body, origin, kind=None):
             '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#ffffff"><tr><td align="center" style="padding:0 20px">'
             '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff">'
             '<tr><td style="padding:27px 0 25px;border-bottom:1px solid #e8eae7">'
-            '<span style="font-size:21px;line-height:1;font-weight:800;letter-spacing:.015em;color:#174e38">ZASTAL</span>'
-            '<span style="display:inline-block;margin:0 12px;color:#d7ded8;font-size:19px;font-weight:300">│</span>'
+            '<img src="' + escaped(clean_origin + '/assets/zastal-logo-email.png') + '" width="115" height="34" alt="Zastal Zielona Góra" style="display:inline-block;width:115px;height:34px;vertical-align:middle;object-fit:contain">'
+            '<span style="display:inline-block;margin:0 12px;color:#d7ded8;font-size:19px;font-weight:300;vertical-align:middle">│</span>'
             '<span style="font-size:12px;letter-spacing:.12em;font-weight:700;color:#17231c">STORE</span></td></tr>'
             '<tr><td style="padding:42px 0 35px"><p style="margin:0 0 12px;font-size:12px;font-weight:500;color:#68716a">'
             + escaped(label.capitalize()) + (' · ' + escaped(reference) if reference else '') + '</p>'
