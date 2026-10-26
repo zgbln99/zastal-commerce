@@ -70,13 +70,13 @@ export const EDIT_FIELDS:Record<SectionKind,Field[]>={
    {key:"third_title",label:"Kafelek 3 · tytuł",type:"short"},{key:"third_text",label:"Kafelek 3 · opis",type:"short"}]
 };
 export const DEFAULT_HOME:HomeConfig={version:1,sections:[
-{id:"hero-main",type:"hero",enabled:true,settings:{eyebrow:"Klubowa kolekcja",title:"Sklep Zastalu Zielona Góra",description:"Koszulki, bluzy i akcesoria z klubowej kolekcji.",image:"/assets/photos/fans.webp",cta_text:"Zobacz produkty",cta_url:"/sklep",secondary_text:"Zobacz koszulki",secondary_url:"/sklep?category=Koszulki",height:620,overlay:72,alignment:"left"}},
-{id:"shop-categories",type:"categories",enabled:true,settings:{eyebrow:"",title:"Kolekcje",cta_text:"Cały sklep",categories:"Koszulki,Bluzy,Dzieci,Akcesoria",columns:4}},
-{id:"merch-grid",type:"products",enabled:true,settings:{eyebrow:"",title:"W klubowym sklepie",category:"Wszystko",count:8,columns:4,show_filters:true,cta_text:"Wszystkie produkty",product_ids:""}},
+{id:"hero-main",type:"hero",enabled:true,settings:{eyebrow:"Klubowa kolekcja",title:"Sklep Zastalu",description:"Koszulki, bluzy i akcesoria dla kibiców.",image:"/assets/photos/fans.webp",cta_text:"Zobacz produkty",cta_url:"/sklep",secondary_text:"",secondary_url:"/sklep?category=Koszulki",height:620,overlay:72,alignment:"left"}},
+{id:"shop-categories",type:"categories",enabled:false,settings:{eyebrow:"",title:"Kolekcje",cta_text:"Cały sklep",categories:"Koszulki,Bluzy,Dzieci,Akcesoria",columns:4}},
+{id:"merch-grid",type:"products",enabled:true,settings:{eyebrow:"",title:"Produkty",category:"Wszystko",count:8,columns:4,show_filters:true,cta_text:"Wszystkie produkty",product_ids:""}},
 {id:"print-studio",type:"personalization",enabled:true,settings:{eyebrow:"",title:"Twoje nazwisko. Twój numer.",description:"Wybierz zawodnika z listy lub wpisz własne nazwisko i numer.",button_text:"Personalizuj ten produkt",product_id:1}},
-{id:"retro-feature",type:"retro",enabled:true,settings:{eyebrow:"Zastal Retro",title:"Klasyczny znak. Klubowa bluza.",description:"Retro logo Zastalu na zielonej bluzie.",button_text:"Zobacz kolekcję",product_id:2,image:""}},
-{id:"accessories-edit",type:"accessories",enabled:true,settings:{eyebrow:"",title:"Małe rzeczy. Te same barwy.",description:"Akcesoria, które możesz zabrać ze sobą nie tylko na mecz.",count:3}},
-{id:"shop-services",type:"services",enabled:true,settings:{title:"Informacje o sklepie",first_title:"Dostawa i odbiór",first_text:"Warunki po uruchomieniu sprzedaży",second_title:"Twoje konto",second_text:"Zamówienia i ustawienia w jednym miejscu",third_title:"Dobierz rozmiar",third_text:"Informacje przed zakupem"}}
+{id:"retro-feature",type:"retro",enabled:true,settings:{eyebrow:"Zastal Retro",title:"Bluza z retro logo",description:"Retro logo Zastalu na zielonej bluzie.",button_text:"Zobacz kolekcję",product_id:2,image:""}},
+{id:"accessories-edit",type:"accessories",enabled:false,settings:{eyebrow:"",title:"Akcesoria",description:"Akcesoria, które możesz zabrać ze sobą nie tylko na mecz.",count:3}},
+{id:"shop-services",type:"services",enabled:false,settings:{title:"Informacje o sklepie",first_title:"Dostawa i odbiór",first_text:"Warunki po uruchomieniu sprzedaży",second_title:"Twoje konto",second_text:"Zamówienia i ustawienia w jednym miejscu",third_title:"Dobierz rozmiar",third_text:"Informacje przed zakupem"}}
 ]};
 export const titleLines=(value:string)=>value.split("|").map(s=>s.trim()).filter(Boolean);
 export const text=(s:SectionSettings,key:string)=>String(s[key]??"");

@@ -4,7 +4,7 @@ import Link from "next/link";
 import {ArrowRight,ArrowUpRight,PackageCheck,Ruler,UserRound} from "lucide-react";
 import ProductCard,{ProductImage} from "./ProductCard";
 import CampaignSection from "./CampaignSection";
-import StoreHero from "./StoreHero";
+import YnsHero from "./YnsHero";
 import {useStore} from "./StoreProvider";
 
 import {type HomeConfig,type HomeSection,categories,text,num,bool,titleLines,kicker} from "../lib/home-layout";
@@ -29,7 +29,7 @@ function Block({section}:{section:HomeSection}){
  const links=(x:string)=>"/sklep?category="+encodeURIComponent(x);
  const chosen=products.find(p=>p.id===num(s,"product_id"));
  if(kind==="campaign")return <CampaignSection section={section}/>;
- if(kind==="hero")return <StoreHero settings={s}/>;
+ if(kind==="hero")return <YnsHero settings={s}/>;
  if(kind==="categories"){
   const cats=text(s,"categories").split(",").map(x=>x.trim()).filter(Boolean);
   return <section className="container home-collections" aria-labelledby={section.id}>
@@ -55,12 +55,12 @@ function Block({section}:{section:HomeSection}){
   return <section className="container merchandise-catalog" aria-labelledby={section.id}>
    <div className="home-section-heading"><div><h2 id={section.id}>{title}</h2></div>
    <Link className="home-text-link" href="/sklep">{text(s,"cta_text")} <ArrowRight size={17}/></Link></div>
-   {bool(s,"show_filters")&&<div className="collection-tabs" aria-label="Filtruj produkty">{categories.map(x=><button key={x} className={x===active?"active":""} aria-pressed={x===active} onClick={()=>setFilter(x)}>{categoryLabels[x]||x}<span>{x==="Wszystko"?products.length:products.filter(p=>p.category===x).length}</span></button>)}</div>}
+   {bool(s,"show_filters")&&<div className="collection-tabs" aria-label="Filtruj produkty">{categories.map(x=><button key={x} className={x===active?"active":""} aria-pressed={x===active} onClick={()=>setFilter(x)}>{categoryLabels[x]||x}</button>)}</div>}
    <div className={"product-grid merchandise-grid cms-cols-"+num(s,"columns",4)}>
     {sorted.slice(0,num(s,"count",8)).map((p,i)=><ProductCard key={p.id} product={p} eager={i<4}/>)}
    </div>
    {!sorted.length&&<p className="account-empty">Brak produktów w wybranej kategorii.</p>}
-   <div className="home-catalog-link"><Link href={active==="Wszystko"?"/sklep":links(active)}>Zobacz wszystkie produkty <ArrowUpRight size={17}/></Link></div>
+
   </section>;
  }
  if(kind==="personalization"){
