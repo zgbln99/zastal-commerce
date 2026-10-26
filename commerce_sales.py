@@ -552,7 +552,8 @@ def order_email(c, order, detail, kind, origin, event_id=None, event_amount=None
         subject = f'Zastal Store, płatność za {number} nie powiodła się'
         lines += [f'Płatność za zamówienie {number} nie została ukończona.',
                   f'Do zapłaty: {amount}', '',
-                  'Możesz ponowić płatność na stronie zamówienia. Jeśli środki zostały pobrane, nie płać ponownie i skontaktuj się ze sklepem.', '']
+                  'Zamówienie czeka na opłacenie. Otwórz jego szczegóły, tam możesz ponowić płatność. Nie musisz składać nowego zamówienia.', 
+                  'Jeśli pieniądze zeszły już z konta, nie płać drugi raz. Napisz do nas i podaj numer zamówienia.', '']
     elif kind in ('refund_requested', 'refund_completed', 'refund_canceled'):
         refund = c.execute('SELECT amount,status FROM payment_refunds WHERE id=?', (event_id,)).fetchone() if event_id else None
         refunded = f'{(refund["amount"] if refund else event_amount) / 100:.2f} PLN' if refund or event_amount else amount
@@ -620,6 +621,15 @@ def order_email(c, order, detail, kind, origin, event_id=None, event_amount=None
         lines += ['Status przesyłki możesz sprawdzić na stronie zamówienia.', '']
     elif live and order['status'] == 'oczekuje_platnosci' and kind not in ('payment_failed', 'refund_requested', 'refund_completed', 'refund_canceled'):
         lines += ['Po zaksięgowaniu płatności dostaniesz osobne potwierdzenie.', '']
+    if live:
+        created = order['created'] if 'created' in order.keys() else ''
+        if isinstance(created, str) and re.match(r'^\d{4}-\d{2}-\d{2}', created):
+            lines.append(f'Data zamówienia: {created[8:10]}.{created[5:7]}.{created[:4]}')
+        payment_label = {'payu': 'PayU', 'transfer': 'Przelew bankowy', 'pickup': 'Przy odbiorze',
+                         'giftcard': 'Karta podarunkowa'}.get(detail['payment_method'], '')
+        if payment_label:
+            lines.append(f'Płatność: {payment_label}')
+        lines.append('')
     raw_items = order['items'] if 'items' in order.keys() else '[]'
     items = json.loads(raw_items) if isinstance(raw_items, str) else raw_items or []
     lines.append('Pozycje:')
@@ -632,11 +642,23 @@ def order_email(c, order, detail, kind, origin, event_id=None, event_amount=None
         lines.append(f'  {item.get("qty", 1)} × {item.get("name", item.get("sku"))} / {item.get("size", "UNI")}{print_label}, {item.get("unit_price", 0) * item.get("qty", 1) / 100:.2f} PLN')
     if detail:
         lines += ['', f'Dostawa: {detail["shipping_name"] or detail["shipping_code"]}']
+        address = detail.get('address') or {}
+        if isinstance(address, dict) and address.get('line1'):
+            recipient = detail.get('customer_name') or ''
+            street = ' '.join(part for part in (address.get('line1'), address.get('line2')) if part)
+            locality = ' '.join(part for part in (address.get('postal_code'), address.get('city')) if part)
+            lines.append(f'Adres dostawy: {", ".join(part for part in (recipient, street, locality) if part)}')
+        elif detail.get('locker_code'):
+            lines.append(f'Punkt odbioru: {detail["locker_code"]}')
         if detail.get('discount'):
             lines.append(f'Rabat ({detail.get("promo_code") or "kod"}): -{detail["discount"] / 100:.2f} PLN')
         if detail.get('gift_card_amount'):
             lines.append(f'Karta podarunkowa: -{detail["gift_card_amount"] / 100:.2f} PLN')
-    lines.append(f'Razem do zapłaty: {(order["total"] if "total" in order.keys() else 0) / 100:.2f} PLN')
+    if kind.startswith('refund_'):
+        lines.append(f'{"Planowana kwota zwrotu" if kind == "refund_canceled" else "Kwota zwrotu"}: {refunded}')
+        lines.append(f'Wartość zamówienia: {order["total"] / 100:.2f} PLN')
+    else:
+        lines.append(f'Razem do zapłaty: {(order["total"] if "total" in order.keys() else 0) / 100:.2f} PLN')
     lines += ['', f'Szczegóły zamówienia: {link}']
     seller = _safe(lambda: launch.values(c), {'seller_name': ''})
     if live and seller['seller_name']:

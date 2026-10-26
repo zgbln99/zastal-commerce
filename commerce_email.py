@@ -521,7 +521,7 @@ def render_html(subject, body, origin, kind=None):
         for line in intro:
             if not line or line == lead:
                 continue
-            if ': ' in line and line.split(': ', 1)[0] in ('Status', 'Zapłacono', 'Do zapłaty', 'Kwota testowa'):
+            if ': ' in line and line.split(': ', 1)[0] in ('Status', 'Zapłacono', 'Do zapłaty', 'Kwota testowa', 'Data zamówienia', 'Płatność'):
                 meta.append(tuple(line.split(': ', 1)))
             else:
                 notes.append(line)
@@ -559,12 +559,12 @@ def render_html(subject, body, origin, kind=None):
         summary = []
         extra = []
         for line in rest:
-            if ': ' in line and (line.split(': ', 1)[0] in ('Dostawa', 'Rabat', 'Karta podarunkowa', 'Razem do zapłaty') or line.startswith('Rabat (')):
+            if ': ' in line and (line.split(': ', 1)[0] in ('Dostawa', 'Adres dostawy', 'Punkt odbioru', 'Rabat', 'Karta podarunkowa', 'Razem do zapłaty', 'Kwota zwrotu', 'Planowana kwota zwrotu', 'Wartość zamówienia') or line.startswith('Rabat (')):
                 summary.append(tuple(line.split(': ', 1)))
             else:
                 extra.append(line)
         if summary:
-            body_markup += '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:12px 0 25px">' + ''.join(row(label_text, value, label_text == 'Razem do zapłaty') for label_text, value in summary) + '</table>'
+            body_markup += '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:12px 0 25px">' + ''.join(row(label_text, value, label_text in ('Razem do zapłaty', 'Kwota zwrotu')) for label_text, value in summary) + '</table>'
         body_markup += ''.join(paragraph(line, muted=True) for line in extra)
     else:
         body_markup = prose(content)

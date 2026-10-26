@@ -41,6 +41,27 @@ class PaymentEmailTests(unittest.TestCase):
         self.assertIn('49.00 PLN', body)
         self.assertNotIn('129.00 PLN za zamówienie', body)
 
+    def test_payment_mail_contains_order_date_method_delivery_and_products(self):
+        self.order['created'] = '2026-10-26T10:15:00+00:00'
+        self.order['items'] = '[{"name":"Koszulka Home","size":"L","qty":2,"unit_price":5000}]'
+        self.detail.update(address={'line1':'Sportowa 1','postal_code':'65-001','city':'Zielona Góra'},
+                           customer_name='Jan Nowak', shipping_kind='courier')
+        subject, body = sales.order_email(self.c, self.order, self.detail, 'payment_failed', 'https://store.example.test')
+        for value in ('26.10.2026', 'PayU', 'Jan Nowak', 'Sportowa 1', '65-001 Zielona Góra',
+                      '2 × Koszulka Home / L', '100.00 PLN', '129.00 PLN'):
+            self.assertIn(value, body)
+        page = mail.render_html(subject, body, 'https://store.example.test', 'payment_failed')
+        self.assertIn('Adres dostawy', page)
+        self.assertIn('Koszulka Home', page)
+
+    def test_refund_mail_shows_refund_separately_from_original_total(self):
+        self.detail['payment_status'] = 'partially_refunded'
+        _, body = sales.order_email(self.c, self.order, self.detail, 'refund_completed',
+                                   'https://store.example.test', event_amount=4900)
+        self.assertIn('Kwota zwrotu: 49.00 PLN', body)
+        self.assertIn('Wartość zamówienia: 129.00 PLN', body)
+        self.assertNotIn('Razem do zapłaty:', body)
+
     def test_event_lookup_resolves_order_and_refund(self):
         self.c.execute("INSERT INTO payment_refunds VALUES(7,1,'refund-7',4900,'finalized')")
         with patch('commerce_payments.sales.details', return_value=self.detail):
