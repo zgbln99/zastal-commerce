@@ -50,7 +50,7 @@ function Block({ section }: { section: HomeSection }) {
           return <Link key={category} href={links(category)} className={cn("group relative overflow-hidden rounded-2xl bg-muted", lead ? "col-span-2 aspect-[4/3] md:row-span-2 md:aspect-auto" : "aspect-square")}>
             {cover && <ProductImage product={cover} eager={lead} sizes={lead ? "(min-width: 768px) 50vw, 100vw" : "(min-width: 768px) 25vw, 50vw"} className="absolute inset-0 size-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"/>}
             <div className="absolute inset-0 bg-linear-to-t from-black/70 via-black/10 to-transparent" aria-hidden="true"/>
-            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 text-white sm:p-5"><div><h3 className={cn("font-medium tracking-tight", lead ? "text-2xl sm:text-3xl" : "text-lg")}>{categoryLabels[category] || category}</h3><p className="text-xs text-white/80 sm:text-sm">{plural(count)}{lead ? " · " + (categoryDescriptions[category] || "Zobacz kolekcję") : ""}</p></div><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm transition-colors group-hover:bg-white group-hover:text-foreground"><ArrowUpRight size={18}/></span></div>
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 text-white sm:p-5"><div><h3 className={cn("font-medium tracking-tight text-white", lead ? "text-2xl sm:text-3xl" : "text-lg")}>{categoryLabels[category] || category}</h3><p className="text-xs text-white/80 sm:text-sm">{plural(count)}{lead ? " · " + (categoryDescriptions[category] || "Zobacz kolekcję") : ""}</p></div><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm transition-colors group-hover:bg-white group-hover:text-foreground"><ArrowUpRight size={18}/></span></div>
           </Link>;
         })}
       </div>
@@ -76,7 +76,7 @@ function Block({ section }: { section: HomeSection }) {
       <div className="grid overflow-hidden rounded-2xl bg-primary text-primary-foreground md:grid-cols-2">
         <div className="flex flex-col justify-center gap-5 p-8 sm:p-12">
           {kicker(text(s, "eyebrow")) && <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary-foreground/70">{kicker(text(s, "eyebrow"))}</p>}
-          <h2 id={section.id} className="text-3xl font-medium leading-[1.08] tracking-tight sm:text-4xl lg:text-5xl">{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2>
+          <h2 id={section.id} className="text-3xl font-medium leading-[1.08] tracking-tight text-primary-foreground sm:text-4xl lg:text-5xl">{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2>
           <p className="max-w-md text-base text-primary-foreground/85">{text(s, "description")}</p>
           {players.length > 0 && <div className="text-sm">
             <p className="mb-2 flex items-center gap-2 text-primary-foreground/70"><User size={16}/> Kadra w tym sezonie</p>
@@ -123,7 +123,7 @@ function Block({ section }: { section: HomeSection }) {
         {image && <div className="absolute inset-0 bg-linear-to-t from-foreground/90 via-foreground/55 to-foreground/15" aria-hidden="true"/>}
         <div className={cn("relative z-10 max-w-xl", image && "text-white")}>
           {kicker(text(s, "eyebrow")) && <p className="mb-3 text-xs font-medium uppercase tracking-[0.2em] opacity-80">{kicker(text(s, "eyebrow"))}</p>}
-          <h2 id={section.id} className="text-3xl font-medium leading-[1.08] tracking-tight sm:text-4xl lg:text-5xl">{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2>
+          <h2 id={section.id} className={cn("text-3xl font-medium leading-[1.08] tracking-tight sm:text-4xl lg:text-5xl", image ? "text-white" : "text-foreground")}>{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2>
           {text(s, "description") && <p className="mt-4 text-base opacity-90">{text(s, "description")}</p>}
           {text(s, "cta_text") && <div className="mt-6"><TextureButton variant={image ? "inverse" : "primary"} size="lg" render={<Link href={text(s, "cta_url") || "/sklep"}/>}>{text(s, "cta_text")} <ArrowRight size={18}/></TextureButton></div>}
         </div>

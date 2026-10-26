@@ -48,8 +48,8 @@ export default function ProductCard({ product, eager = false }: { product: Produ
       {!soldOut && <button className="absolute inset-x-3 bottom-3 inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-background/95 text-sm font-medium text-foreground shadow-md backdrop-blur-sm transition-all hover:bg-primary hover:text-primary-foreground disabled:opacity-60 md:translate-y-2 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 md:group-focus-within:translate-y-0 md:group-focus-within:opacity-100" onClick={() => needsSelection ? store.setQuickId(product.id) : store.add(product.id, "UNI")} disabled={store.status !== "ready" || !product.verified || !available}><Plus size={16}/> {product.personalization_enabled ? "Wybierz nadruk" : product.sizes ? "Wybierz rozmiar" : "Dodaj do koszyka"}</button>}
     </div>
     <div className="mt-3 min-w-0">
-      <Link className="block truncate text-sm font-medium text-foreground hover:text-primary" href={productPath(product)}>{product.name}</Link>
-      <p className="mt-0.5 truncate text-xs text-muted-foreground">{product.subtitle || product.category} · {sizeRange}</p>
+      <Link className="block min-h-10 text-sm font-medium leading-5 text-foreground [overflow-wrap:anywhere] hover:text-primary" href={productPath(product)}>{product.name}</Link>
+      <p className="mt-0.5 min-h-8 text-xs leading-4 text-muted-foreground [overflow-wrap:anywhere]">{product.subtitle || product.category} · {sizeRange}</p>
       <div className="mt-1.5 text-sm font-medium">{product.verified ? <>{fmt(productDisplayPrice(product))}{product.personalization_required && <span className="ml-1 text-[11px] font-normal text-muted-foreground">z nadrukiem</span>}<PriceReduction product={product} compact/></> : <span className="text-muted-foreground">…</span>}</div>
     </div>
   </article>;

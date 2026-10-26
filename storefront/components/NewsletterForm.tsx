@@ -21,10 +21,10 @@ export default function NewsletterForm({ source = "footer", className = "", inve
   if (done) return <p className={cn("newsletter-done flex items-start gap-2 text-sm", className)} role="status"><Check size={16} className="mt-0.5 shrink-0 text-primary"/>{done}</p>;
   return <form onSubmit={submit} className={cn("newsletter-form space-y-3", className)}>
     <div className={cn("flex items-center gap-2 rounded-full border border-border py-1 pl-4 pr-1", inverse ? "bg-background" : "bg-background")}>
-      <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" placeholder="Twój e-mail" aria-label="Adres e-mail do newslettera" className="h-9 min-w-0 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground" style={{ border: 0, boxShadow: "none", background: "transparent" }}/>
+      <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" placeholder="Twój e-mail" aria-label="Adres e-mail do newslettera" className="h-9 min-w-0 flex-1 bg-transparent px-1 text-base outline-none sm:text-sm placeholder:text-muted-foreground" style={{ border: 0, boxShadow: "none", background: "transparent" }}/>
       <TextureButton size="sm" type="submit" disabled={busy} aria-label="Zapisz się do newslettera">{busy ? "…" : <>Zapisz <ArrowRight size={14}/></>}</TextureButton>
     </div>
-    <label className="flex items-start gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} className="mt-0.5 size-4 shrink-0"/><span>Chcę otrzymywać e-maile o nowościach, premierach i promocjach sklepu Zastalu. Zgodę można cofnąć linkiem w każdej wiadomości.</span></label>
+    <label className="flex items-start gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} className="m-0 mt-0.5 size-4 shrink-0"/><span>Chcę otrzymywać e-maile o nowościach, premierach i promocjach sklepu Zastalu. Zgodę można cofnąć linkiem w każdej wiadomości.</span></label>
     <label className="hidden" aria-hidden="true">Strona www<input tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)}/></label>
     {error && <p className="field-error" role="alert">{error}</p>}
   </form>;
