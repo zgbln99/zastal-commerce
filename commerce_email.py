@@ -410,7 +410,7 @@ def render_html(subject, body, origin, kind=None):
         heading = 'Konto jest gotowe'
     elif kind == 'order_created' and 'testowe' not in subject:
         heading = 'Zamówienie przyjęte'
-    label = 'TWOJE KONTO' if is_auth else 'ZAMÓWIENIE' if is_order else 'ZASTAL STORE'
+    label = 'Twoje konto' if is_auth else 'Zamówienie' if is_order else 'Zastal Store'
     action_label = ('Potwierdź adres e-mail' if kind == 'email_verification' else
                     'Ustaw nowe hasło' if kind == 'password_reset' else
                     'Przejdź do konta' if kind == 'welcome' else
@@ -464,7 +464,19 @@ def render_html(subject, body, origin, kind=None):
         body_markup = paragraph(lead) if lead else ''
         if meta:
             body_markup += '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:18px 0 26px;border-top:1px solid #e7ebe7">' + ''.join(row(*pair) for pair in meta) + '</table>'
-        body_markup += ''.join(paragraph(line, muted=True) for line in notes)
+        for line in notes:
+            if line.startswith('Śledzenie: https://'):
+                tracking_url = line.removeprefix('Śledzenie: ').strip()
+                try:
+                    parts = urlsplit(tracking_url)
+                except ValueError:
+                    parts = None
+                if parts and parts.scheme == 'https' and parts.hostname and not parts.username and not parts.password:
+                    body_markup += ('<p style="margin:0 0 16px;font-size:14px;line-height:1.6">'
+                                    '<a href="' + escaped(tracking_url) + '" style="color:#174e38;text-decoration:underline">'
+                                    'Śledź przesyłkę</a></p>')
+                    continue
+            body_markup += paragraph(line, muted=True)
         if items:
             body_markup += '<h2 style="margin:32px 0 12px;color:#17231c;font-size:17px;font-weight:600;letter-spacing:-.02em">Zamówione produkty</h2>'
             body_markup += '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #e7ebe7">'
@@ -483,7 +495,7 @@ def render_html(subject, body, origin, kind=None):
         summary = []
         extra = []
         for line in rest:
-            if ': ' in line and line.split(': ', 1)[0] in ('Dostawa', 'Rabat', 'Karta podarunkowa', 'Razem do zapłaty'):
+            if ': ' in line and (line.split(': ', 1)[0] in ('Dostawa', 'Rabat', 'Karta podarunkowa', 'Razem do zapłaty') or line.startswith('Rabat (')):
                 summary.append(tuple(line.split(': ', 1)))
             else:
                 extra.append(line)
@@ -511,7 +523,7 @@ def render_html(subject, body, origin, kind=None):
             '<span style="display:inline-block;margin:0 12px;color:#d7ded8;font-size:19px;font-weight:300;vertical-align:middle">│</span>'
             '<span style="font-size:12px;letter-spacing:.12em;font-weight:700;color:#17231c">STORE</span></td></tr>'
             '<tr><td style="padding:42px 0 35px"><p style="margin:0 0 12px;font-size:12px;font-weight:500;color:#68716a">'
-            + escaped(label.capitalize()) + (' · ' + escaped(reference) if reference else '') + '</p>'
+            + escaped(label) + (' · ' + escaped(reference) if reference else '') + '</p>'
             '<h1 style="margin:0 0 24px;color:#17231c;font-size:32px;line-height:1.13;font-weight:600;letter-spacing:-.045em">'
             + escaped(heading) + '</h1>' + body_markup + '</td></tr>'
             '<tr><td style="padding:23px 0 38px;border-top:1px solid #e8eae7;color:#68716a;font-size:12px;line-height:1.8">'
