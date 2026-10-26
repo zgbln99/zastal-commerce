@@ -371,32 +371,133 @@ def _message(c, row, config):
     message['From'], message['To'], message['Subject'] = config['from_address'], recipient, subject
     message['Message-ID'] = make_msgid(idstring=f'zastal-{row["id"]}', domain=config['from_address'].split('@', 1)[1])
     message.set_content(body)
-    message.add_alternative(render_html(subject, body, os.environ['ZASTAL_SITE_ORIGIN']), subtype='html')
+    message.add_alternative(render_html(subject, body, os.environ['ZASTAL_SITE_ORIGIN'], kind=row['kind']), subtype='html')
     return message
 
 
-def render_html(subject, body, origin):
-    """Self-contained email markup; body and subject remain the canonical plain-text version."""
-    heading = subject.split(', ', 1)[-1]
+def render_html(subject, body, origin, kind=None):
+    """A restrained, email-client-safe layout for account and order messages."""
     clean_origin = origin.rstrip('/')
-    blocks = []
-    for paragraph in body.strip().split('\n\n'):
-        lines = paragraph.splitlines()
-        if len(lines) == 1 and len(lines[0]) < 2048 and (lines[0].startswith(clean_origin + '/') or lines[0].startswith('Szczegóły zamówienia: ' + clean_origin + '/')):
-            url = html.escape(lines[0].removeprefix('Szczegóły zamówienia: '), quote=True)
-            blocks.append('<p style="margin:24px 0"><a href="' + url + '" style="display:inline-block;background:#184a33;color:#fff;text-decoration:none;padding:14px 22px;font-weight:700">Otwórz w sklepie</a></p>')
+    lines = body.strip().splitlines()
+    action_url = None
+    content = []
+    for line in lines:
+        value = line.strip().removeprefix('Szczegóły zamówienia: ')
+        if value.startswith(clean_origin + '/') and len(value) < 2048:
+            action_url = value
         else:
-            blocks.append('<p style="margin:0 0 18px;line-height:1.65;white-space:pre-line">' + '<br>'.join(html.escape(line) for line in lines) + '</p>')
+            content.append(line.strip())
+    while content and not content[-1]:
+        content.pop()
+
+    is_order = kind in ORDER_KINDS or 'Pozycje:' in content
+    is_auth = kind in AUTH_KINDS
+    number = re.search(r'\bZS-\d+\b|#\d+', subject)
+    reference = number.group(0) if number else ''
+    heading = subject.split(', ', 1)[-1]
+    heading = heading[:1].upper() + heading[1:]
+    if kind == 'email_verification':
+        heading = 'Potwierdź adres e-mail'
+    elif kind == 'password_reset':
+        heading = 'Ustaw nowe hasło'
+    elif kind == 'order_created' and 'testowe' not in subject:
+        heading = 'Zamówienie przyjęte'
+    label = 'TWOJE KONTO' if is_auth else 'ZAMÓWIENIE' if is_order else 'ZASTAL STORE'
+    action_label = ('Potwierdź adres e-mail' if kind == 'email_verification' else
+                    'Ustaw nowe hasło' if kind == 'password_reset' else
+                    'Sprawdź zamówienie' if is_order else 'Otwórz wiadomość')
+
+    def escaped(value):
+        return html.escape(str(value), quote=True)
+
+    def paragraph(value, muted=False):
+        return ('<p style="margin:0 0 15px;color:' + ('#606b63' if muted else '#27352c') +
+                ';font-size:15px;line-height:1.65">' + escaped(value) + '</p>')
+
+    def row(label_text, value, strong=False):
+        return ('<tr><td style="padding:11px 0;border-bottom:1px solid #e7ebe7;color:#657168;'
+                'font-size:13px;vertical-align:top">' + escaped(label_text) +
+                '</td><td align="right" style="padding:11px 0;border-bottom:1px solid #e7ebe7;'
+                'color:#1a2e21;font-size:' + ('17' if strong else '14') +
+                'px;font-weight:' + ('700' if strong else '500') + ';vertical-align:top">' +
+                escaped(value) + '</td></tr>')
+
+    def prose(items):
+        result = []
+        group = []
+        for line in items + ['']:
+            if line:
+                group.append(line)
+            elif group:
+                result.append('<p style="margin:0 0 16px;color:#27352c;font-size:15px;line-height:1.65">' +
+                              '<br>'.join(escaped(part) for part in group) + '</p>')
+                group = []
+        return ''.join(result)
+
+    if is_order and 'Pozycje:' in content:
+        split = content.index('Pozycje:')
+        intro, rest = content[:split], content[split + 1:]
+        items = []
+        while rest and rest[0]:
+            items.append(rest.pop(0))
+        rest = [part for part in rest if part]
+        lead = next((line for line in intro if line), '')
+        meta = []
+        notes = []
+        for line in intro:
+            if not line or line == lead:
+                continue
+            if ': ' in line and line.split(': ', 1)[0] in ('Status', 'Zapłacono', 'Do zapłaty', 'Kwota testowa'):
+                meta.append(tuple(line.split(': ', 1)))
+            else:
+                notes.append(line)
+        body_markup = paragraph(lead) if lead else ''
+        if meta:
+            body_markup += '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:18px 0 26px;border-top:1px solid #e7ebe7">' + ''.join(row(*pair) for pair in meta) + '</table>'
+        body_markup += ''.join(paragraph(line, muted=True) for line in notes)
+        if items:
+            body_markup += '<h2 style="margin:25px 0 12px;color:#183e2a;font-size:12px;font-weight:700;letter-spacing:.09em">PRODUKTY</h2>'
+            body_markup += '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #e7ebe7">'
+            for item in items:
+                body_markup += '<tr><td style="padding:14px 0;border-bottom:1px solid #e7ebe7;font-size:14px;color:#27352c;line-height:1.5">' + escaped(item) + '</td></tr>'
+            body_markup += '</table>'
+        summary = []
+        extra = []
+        for line in rest:
+            if ': ' in line and line.split(': ', 1)[0] in ('Dostawa', 'Rabat', 'Karta podarunkowa', 'Razem do zapłaty'):
+                summary.append(tuple(line.split(': ', 1)))
+            else:
+                extra.append(line)
+        if summary:
+            body_markup += '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:12px 0 25px">' + ''.join(row(label_text, value, label_text == 'Razem do zapłaty') for label_text, value in summary) + '</table>'
+        body_markup += ''.join(paragraph(line, muted=True) for line in extra)
+    else:
+        body_markup = prose(content)
+
+    if action_url:
+        body_markup += ('<table role="presentation" cellspacing="0" cellpadding="0" style="margin:27px 0 14px"><tr><td bgcolor="#174832">'
+                        '<a href="' + escaped(action_url) + '" style="display:inline-block;padding:15px 22px;'
+                        'background:#174832;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none">'
+                        + escaped(action_label) + '</a></td></tr></table>')
+        if is_auth:
+            body_markup += paragraph('Jeśli przycisk nie działa, skopiuj adres do przeglądarki:', muted=True)
+            body_markup += '<p style="margin:0 0 20px;color:#345742;font-size:12px;line-height:1.5;word-break:break-all">' + escaped(action_url) + '</p>'
+
     return ('<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
-            '<body style="margin:0;background:#f4f5f1;color:#17251d;font-family:Arial,Helvetica,sans-serif">'
-            '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f4f5f1"><tr><td align="center" style="padding:32px 16px">'
-            '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background:#fff">'
-            '<tr><td style="background:#17412f;padding:23px 32px;color:#fff;font-size:18px;font-weight:700;letter-spacing:.02em">ZASTAL <span style="font-weight:400">STORE</span></td></tr>'
-            '<tr><td style="padding:35px 32px 22px"><h1 style="font-size:26px;line-height:1.2;letter-spacing:-.03em;margin:0 0 25px;color:#17251d">' + html.escape(heading) + '</h1>'
-            '<div style="font-size:15px;color:#344139">' + ''.join(blocks) + '</div></td></tr>'
-            '<tr><td style="padding:23px 32px;border-top:1px solid #e7ebe6;color:#637067;font-size:12px;line-height:1.6">Zastal Store · Zielona Góra<br>'
-            'Pytania o zamówienie: <a style="color:#17412f" href="mailto:office@basketzg.pl">office@basketzg.pl</a></td></tr>'
-            '</table></td></tr></table></body></html>')
+            '<body style="margin:0;padding:0;background:#eef1ec;color:#1b2e21;font-family:Arial,Helvetica,sans-serif">'
+            '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#eef1ec"><tr><td align="center" style="padding:30px 14px">'
+            '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:580px;background:#ffffff">'
+            '<tr><td style="padding:26px 34px 23px;border-top:4px solid #174832;border-bottom:1px solid #e7ebe7">'
+            '<span style="font-size:20px;line-height:1;font-weight:800;letter-spacing:.04em;color:#174832">ZASTAL</span>'
+            '<span style="margin-left:10px;font-size:11px;letter-spacing:.14em;color:#607066">STORE</span></td></tr>'
+            '<tr><td style="padding:35px 34px 29px"><p style="margin:0 0 13px;font-size:11px;letter-spacing:.12em;font-weight:700;color:#56745d">'
+            + escaped(label) + (' &nbsp;·&nbsp; ' + escaped(reference) if reference else '') + '</p>'
+            '<h1 style="margin:0 0 22px;color:#1a3022;font-size:28px;line-height:1.18;font-weight:700;letter-spacing:-.02em">'
+            + escaped(heading) + '</h1>' + body_markup + '</td></tr>'
+            '<tr><td style="padding:22px 34px 29px;border-top:1px solid #e7ebe7;color:#657168;font-size:12px;line-height:1.7">'
+            'Zastal Store · Zielona Góra<br>Masz pytanie? Napisz na '
+            '<a href="mailto:office@basketzg.pl" style="color:#174832;text-decoration:underline">office@basketzg.pl</a>'
+            '</td></tr></table></td></tr></table></body></html>')
 
 
 def _deliver(message, config):

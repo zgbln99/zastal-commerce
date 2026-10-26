@@ -76,9 +76,27 @@ class EmailTests(unittest.TestCase):
         self.assertIn('&lt;script&gt;', markup)
         self.assertNotIn('<script>', markup)
         self.assertIn('href="https://store.example.test/konto/email?action=verify#token=abc"', markup)
-        self.assertIn('zamówienie &lt;5&gt;', markup)
+        self.assertIn('Zamówienie &lt;5&gt;', markup)
         order_markup = self.email.render_html('Zastal Store, status', 'Szczegóły zamówienia: https://store.example.test/zamowienie?id=5', 'https://store.example.test')
         self.assertIn('href="https://store.example.test/zamowienie?id=5"', order_markup)
+
+    def test_email_layout_prioritizes_action_and_order_summary(self):
+        origin = 'https://store.example.test'
+        verify = self.email.render_html('Zastal Store, potwierdź adres e-mail',
+            'Potwierdź adres e-mail swojego konta Zastal Store:\n\n' + origin + '/konto/email?action=verify#token=abc\n\nLink jest jednorazowy i ważny przez 24 godziny.',
+            origin, kind='email_verification')
+        self.assertIn('Potwierdź adres e-mail</a>', verify)
+        self.assertIn('24 godziny', verify)
+        self.assertNotIn('Otwórz w sklepie', verify)
+
+        order = self.email.render_html('Zastal Store, potwierdzenie zamówienia ZS-00042',
+            'Dziękujemy za zamówienie ZS-00042.\nStatus: Potwierdzone\nDo zapłaty: 79.00 PLN\n\nPozycje:\n  1 × Koszulka <Junior> / M, 64.00 PLN\n\nDostawa: Kurier DPD\nRazem do zapłaty: 79.00 PLN\n\nSzczegóły zamówienia: ' + origin + '/zamowienie?id=42',
+            origin, kind='order_created')
+        self.assertIn('ZS-00042', order)
+        self.assertIn('Sprawdź zamówienie</a>', order)
+        self.assertIn('Kurier DPD', order)
+        self.assertIn('&lt;Junior&gt;', order)
+        self.assertNotIn('<Junior>', order)
 
     def test_capture_rejects_real_recipients(self):
         from email.message import EmailMessage
