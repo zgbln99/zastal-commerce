@@ -4,6 +4,7 @@ HTTP only queues references. The independent worker generates one-use links at
 send time, persists their SHA-256 digests, and sends over verified SMTP TLS.
 """
 import os
+import html
 import re
 import secrets
 import smtplib
@@ -370,7 +371,32 @@ def _message(c, row, config):
     message['From'], message['To'], message['Subject'] = config['from_address'], recipient, subject
     message['Message-ID'] = make_msgid(idstring=f'zastal-{row["id"]}', domain=config['from_address'].split('@', 1)[1])
     message.set_content(body)
+    message.add_alternative(render_html(subject, body, os.environ['ZASTAL_SITE_ORIGIN']), subtype='html')
     return message
+
+
+def render_html(subject, body, origin):
+    """Self-contained email markup; body and subject remain the canonical plain-text version."""
+    heading = subject.split(', ', 1)[-1]
+    clean_origin = origin.rstrip('/')
+    blocks = []
+    for paragraph in body.strip().split('\n\n'):
+        lines = paragraph.splitlines()
+        if len(lines) == 1 and lines[0].startswith(clean_origin + '/') and len(lines[0]) < 2048:
+            url = html.escape(lines[0], quote=True)
+            blocks.append('<p style="margin:24px 0"><a href="' + url + '" style="display:inline-block;background:#184a33;color:#fff;text-decoration:none;padding:14px 22px;font-weight:700">Otwórz w sklepie</a></p>')
+        else:
+            blocks.append('<p style="margin:0 0 18px;line-height:1.65;white-space:pre-line">' + '<br>'.join(html.escape(line) for line in lines) + '</p>')
+    return ('<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+            '<body style="margin:0;background:#f4f5f1;color:#17251d;font-family:Arial,Helvetica,sans-serif">'
+            '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f4f5f1"><tr><td align="center" style="padding:32px 16px">'
+            '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:600px;background:#fff">'
+            '<tr><td style="background:#17412f;padding:23px 32px;color:#fff;font-size:18px;font-weight:700;letter-spacing:.02em">ZASTAL <span style="font-weight:400">STORE</span></td></tr>'
+            '<tr><td style="padding:35px 32px 22px"><h1 style="font-size:26px;line-height:1.2;letter-spacing:-.03em;margin:0 0 25px;color:#17251d">' + html.escape(heading) + '</h1>'
+            '<div style="font-size:15px;color:#344139">' + ''.join(blocks) + '</div></td></tr>'
+            '<tr><td style="padding:23px 32px;border-top:1px solid #e7ebe6;color:#637067;font-size:12px;line-height:1.6">Zastal Store · Zielona Góra<br>'
+            'Pytania o zamówienie: <a style="color:#17412f" href="mailto:office@basketzg.pl">office@basketzg.pl</a></td></tr>'
+            '</table></td></tr></table></body></html>')
 
 
 def _deliver(message, config):
