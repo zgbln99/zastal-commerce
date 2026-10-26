@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 import commerce_auth as auth
+import commerce_urls as urls
 import commerce_personalization as personalization
 import commerce_launch as launch
 import commerce_cms as cms
@@ -139,6 +140,7 @@ def init():
                 ("Zastal 1946 – retro","Dostawca demonstracyjny","DTF-DEMO-002",30,25,25,950,stamp()),
                 ("Zielona Góra – game day","Dostawca demonstracyjny","DTF-DEMO-003",50,20,20,850,stamp()),
             ])
+        urls.init_schema(c)
 
 def asdict(r): return dict(r) if r is not None else None
 
@@ -147,7 +149,9 @@ def audit(c,kind,obj,note):
 
 def compatible_products(c):
     products = [dict(x) for x in c.execute("SELECT * FROM products ORDER BY id")]
+    url_slugs = urls.slugs(c)
     for product in products:
+        product['slug'] = url_slugs.get(product['id'], '')
         product.update(personalization.product_options(c, product['id']))
         product.update(media.public_gallery(c, product))
         product['price_reduction'] = pricing.reduction(c, product['id'])
@@ -879,6 +883,7 @@ class Handler(BaseHTTPRequestHandler):
                     cur=c.execute('INSERT INTO products(name,sku,category,price,stock) VALUES(?,?,?,?,?)',
                                   tuple(product[key] for key in ('name','sku','category','price','stock')))
                     pid=cur.lastrowid
+                    urls.assign(c,pid,product['name'])
                     product['created_at']=stamp()
                     personalization.save_options(c,pid,product)
                     pricing.record(c,pid,product['price'],self.request_user['id'])

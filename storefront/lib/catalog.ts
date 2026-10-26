@@ -1,6 +1,6 @@
 import type { ProductMedia } from './product-media.mjs';
 export type CatalogItem = {
-  id: number; name: string; sku: string; price: number; stock: number; category: string;
+  id: number; slug?: string; name: string; sku: string; price: number; stock: number; category: string;
   image: string; images?: ProductMedia[]; gallery_revision?: number; tag?: string; subtitle: string; color?: string; sizes?: string[];
 };
 export const catalog: CatalogItem[] = [

@@ -1,4 +1,5 @@
 "use client";
+import {storeUrl} from "../lib/urls.mjs";
 import Link from "next/link";
 import {ArrowUpRight} from "lucide-react";
 import {useStore} from "./StoreProvider";
@@ -12,6 +13,6 @@ export default function CampaignSection({section}:{section:HomeSection}){
  const associated=ids.map(id=>products.find(p=>p.id===id)).filter((p):p is typeof products[number]=>!!p);
  return <section className={"container product-campaign align-"+text(s,"alignment")} aria-labelledby={section.id}>
   <figure className="product-campaign-visual"><img src={text(s,"image")} alt={text(s,"image_alt")} loading="lazy" onError={e=>{e.currentTarget.onerror=null;e.currentTarget.src="/assets/product-unavailable.svg";e.currentTarget.alt="Zdjęcie kampanii niedostępne";}}/></figure>
-  <div className="product-campaign-copy">{kicker(text(s,"eyebrow"))&&<span className="home-kicker">{kicker(text(s,"eyebrow"))}</span>}<h2 id={section.id}>{text(s,"title")}</h2><p>{text(s,"description")}</p>{text(s,"cta_text")&&<Link className="home-text-link" href={text(s,"cta_url")||"/sklep"}>{text(s,"cta_text")} <ArrowUpRight size={18}/></Link>}<div className="product-campaign-products">{associated.map(p=><ProductCard key={p.id} product={p}/>)}</div></div>
+  <div className="product-campaign-copy">{kicker(text(s,"eyebrow"))&&<span className="home-kicker">{kicker(text(s,"eyebrow"))}</span>}<h2 id={section.id}>{text(s,"title")}</h2><p>{text(s,"description")}</p>{text(s,"cta_text")&&<Link className="home-text-link" href={storeUrl(text(s,"cta_url")||"/sklep",products)}>{text(s,"cta_text")} <ArrowUpRight size={18}/></Link>}<div className="product-campaign-products">{associated.map(p=><ProductCard key={p.id} product={p}/>)}</div></div>
  </section>;
 }

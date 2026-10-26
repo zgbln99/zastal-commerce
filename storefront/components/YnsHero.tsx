@@ -1,5 +1,6 @@
 "use client";
 
+import {storeUrl} from "../lib/urls.mjs";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
@@ -41,7 +42,7 @@ export default function YnsHero({ settings }: { settings?: SectionSettings }) {
       <div className="yns-hero-content" key={slide.id}>
         <h1>{titleLines(slide.title).map((line, lineIndex) => <span key={lineIndex}>{line}</span>)}</h1>
         <p className="yns-hero-description">{slide.description}</p>
-        {slide.cta_text && <Link className="yns-button-primary" href={slide.cta_url || "/sklep"}>{slide.cta_text}<ArrowRight size={17}/></Link>}
+        {slide.cta_text && <Link className="yns-button-primary" href={storeUrl(slide.cta_url || "/sklep",products)}>{slide.cta_text}<ArrowRight size={17}/></Link>}
       </div>
       {slides.length > 1 && <div className="yns-hero-controls" aria-label="Przełącz slajd">
         <span className="yns-hero-position">{String(index + 1).padStart(2, "0")} <span>/</span> {String(slides.length).padStart(2, "0")}</span>

@@ -70,7 +70,7 @@ export const EDIT_FIELDS:Record<SectionKind,Field[]>={
    {key:"third_title",label:"Kafelek 3 · tytuł",type:"short"},{key:"third_text",label:"Kafelek 3 · opis",type:"short"}]
 };
 export const DEFAULT_HOME:HomeConfig={version:1,sections:[
-{id:"hero-main",type:"hero",enabled:true,settings:{eyebrow:"Klubowa kolekcja",title:"Sklep Zastalu",description:"Koszulki, bluzy i akcesoria dla kibiców.",image:"/assets/photos/fans.webp",cta_text:"Zobacz produkty",cta_url:"/sklep",secondary_text:"",secondary_url:"/sklep?category=Koszulki",height:620,overlay:72,alignment:"left"}},
+{id:"hero-main",type:"hero",enabled:true,settings:{eyebrow:"Klubowa kolekcja",title:"Sklep Zastalu",description:"Koszulki, bluzy i akcesoria dla kibiców.",image:"/assets/photos/fans.webp",cta_text:"Zobacz produkty",cta_url:"/sklep",secondary_text:"",secondary_url:"/sklep/koszulki",height:620,overlay:72,alignment:"left"}},
 {id:"shop-categories",type:"categories",enabled:false,settings:{eyebrow:"",title:"Kolekcje",cta_text:"Cały sklep",categories:"Koszulki,Bluzy,Dzieci,Akcesoria",columns:4}},
 {id:"merch-grid",type:"products",enabled:true,settings:{eyebrow:"",title:"Produkty",category:"Wszystko",count:8,columns:4,show_filters:true,cta_text:"Wszystkie produkty",product_ids:""}},
 {id:"print-studio",type:"personalization",enabled:true,settings:{eyebrow:"",title:"Twoje nazwisko. Twój numer.",description:"Wybierz zawodnika z listy lub wpisz własne nazwisko i numer.",button_text:"Personalizuj ten produkt",product_id:1}},

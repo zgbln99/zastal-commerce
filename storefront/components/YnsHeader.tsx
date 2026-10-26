@@ -28,17 +28,17 @@ export default function YnsHeader({
   const currentQuery = searchParams?.get("q") ?? null;
   const links = [
     { href: "/sklep", label: "Wszystkie produkty" },
-    { href: "/sklep?category=Koszulki", label: "Koszulki" },
-    { href: "/sklep?category=Bluzy", label: "Bluzy" },
-    { href: "/sklep?category=Akcesoria", label: "Akcesoria" },
-    { href: "/sklep?category=Dzieci", label: "Dla dzieci" },
+    { href: "/sklep/koszulki", label: "Koszulki" },
+    { href: "/sklep/bluzy", label: "Bluzy" },
+    { href: "/sklep/akcesoria", label: "Akcesoria" },
+    { href: "/sklep/dla-dzieci", label: "Dla dzieci" },
     { href: "/sklep?q=retro", label: "Retro" },
     { href: "/zawodnicy", label: "Zawodnicy" }
   ];
   const isCurrent = (href: string) => {
     const [path, query] = href.split("?");
     if (pathname !== path) return false;
-    if (!query) return !currentCategory && !currentQuery;
+    if (!query) return path !== "/sklep" || (!currentCategory && !currentQuery);
     const params = new URLSearchParams(query);
     return params.get("category") === currentCategory && params.get("q") === currentQuery;
   };

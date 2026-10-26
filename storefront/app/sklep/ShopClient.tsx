@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, ChevronRight, Search, SlidersHorizontal, X } from "lucide-react";
 import { filterProducts } from "../../lib/commerce.mjs";
 import { useStore } from "../../components/StoreProvider";
@@ -10,11 +10,14 @@ import ShopCategoryRail from "../../components/ShopCategoryRail";
 import Modal from "../../components/Modal";
 import "./shop.css";
 
+import { categoryFromPath, shopUrl } from "../../lib/urls.mjs";
+
 const CATEGORIES = ["Koszulki", "Bluzy", "Akcesoria", "Dzieci"];
 const SIZES = ["S", "M", "L", "XL", "XXL", "116", "128", "140", "152", "164"];
 export default function ShopClient() {
   const store = useStore(); const params = useSearchParams(); const router = useRouter();
-  const category = CATEGORIES.includes(params.get("category") || "") ? params.get("category") || "" : "";
+  const pathCategory=categoryFromPath(usePathname());
+  const category = pathCategory || (CATEGORIES.includes(params.get("category") || "") ? params.get("category") || "" : "");
   const size = SIZES.includes(params.get("size") || "") ? params.get("size") || "" : "";
   const sort = params.get("sort") || "recommended";
   const available = params.get("available") === "1";
@@ -28,7 +31,7 @@ export default function ShopClient() {
   function update(values: Record<string, string>) {
     const next = new URLSearchParams(params.toString());
     for (const [key, value] of Object.entries(values)) { if (value) next.set(key, value); else next.delete(key); }
-    router.replace("/sklep" + (next.toString() ? "?" + next.toString() : ""), { scroll: false });
+    router.replace(shopUrl(Object.hasOwn(values,"category")?values.category:category,next), { scroll: false });
   }
   useEffect(() => {
     if (query === urlQuery) return;

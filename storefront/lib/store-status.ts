@@ -10,11 +10,11 @@ export async function storeStatus(): Promise<{ live: boolean }> {
   } catch { return { live: false }; }
 }
 
-export async function publicCatalog(): Promise<{ id: number; name: string }[]> {
+export async function publicCatalog(): Promise<{ id: number; name: string; slug?: string }[]> {
   try {
     const response = await fetch(backend() + "/api/catalog", { cache: "no-store", signal: AbortSignal.timeout(2500) });
     if (!response.ok) return [];
     const rows = await response.json();
-    return Array.isArray(rows) ? rows.filter(row => Number.isSafeInteger(row?.id)).map(row => ({ id: row.id, name: String(row.name || "") })) : [];
+    return Array.isArray(rows) ? rows.filter(row => Number.isSafeInteger(row?.id)).map(row => ({ id: row.id, name: String(row.name || ""), slug: String(row.slug || "") })) : [];
   } catch { return []; }
 }

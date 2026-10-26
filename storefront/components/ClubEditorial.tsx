@@ -1,4 +1,5 @@
 "use client";
+import { productUrl } from "../lib/urls.mjs";
 import Link from "next/link";
 import { ArrowUpRight, ChevronRight, PenLine, UserRound } from "lucide-react";
 import { fmt } from "../lib/catalog";
@@ -20,12 +21,12 @@ export function PersonalizationEditorial({ product }: { product: Product | undef
           <span><UserRound size={17} strokeWidth={1.8}/> Zawodnik z listy</span>
           <span><PenLine size={17} strokeWidth={1.8}/> Własny napis i numer</span>
         </div>
-        <Link className="editorial-print-action" href={"/produkt/" + product.id}>
+        <Link className="editorial-print-action" href={productUrl(product)}>
           Dodaj swój nadruk <ArrowUpRight size={18}/>
         </Link>
       </div>
     </div>
-    <Link href={"/produkt/" + product.id} className="editorial-print-visual" aria-label={"Zobacz produkt do personalizacji: " + product.name}>
+    <Link href={productUrl(product)} className="editorial-print-visual" aria-label={"Zobacz produkt do personalizacji: " + product.name}>
       <ProductImage product={product}/>
       <div className="editorial-print-product-label"><div><span>Produkt z nadrukiem</span><strong>{product.name}</strong></div><div><span>Cena od</span><strong>{product.verified ? fmt(product.price) : "…"}</strong></div></div>
     </Link>
@@ -37,10 +38,10 @@ export function AccessoriesEditorial({ products }: { products: Product[] }) {
   return <section className="container editorial-accessories" aria-labelledby="accessories-title">
     <div className="editorial-accessories-heading">
       <div><h2 id="accessories-title">Akcesoria Zastalu</h2></div>
-      <div className="editorial-accessories-intro"><p>Klubowe dodatki na mecz i na co dzień.</p><Link href="/sklep?category=Akcesoria">Zobacz akcesoria <ArrowUpRight size={17}/></Link></div>
+      <div className="editorial-accessories-intro"><p>Klubowe dodatki na mecz i na co dzień.</p><Link href="/sklep/akcesoria">Zobacz akcesoria <ArrowUpRight size={17}/></Link></div>
     </div>
     <div className="editorial-accessories-grid">
-      {products.slice(0, 3).map((product, index) => <Link key={product.id} href={"/produkt/" + product.id} className={"editorial-accessory accessory-" + index}>
+      {products.slice(0, 3).map((product, index) => <Link key={product.id} href={productUrl(product)} className={"editorial-accessory accessory-" + index}>
         <div className="editorial-accessory-image"><ProductImage product={product}/></div>
         <div className="editorial-accessory-info"><div><span>Akcesoria</span><h3>{product.name}</h3></div><span className="editorial-accessory-price">{product.verified ? fmt(product.price) : "…"}</span><ChevronRight size={18}/></div>
       </Link>)}

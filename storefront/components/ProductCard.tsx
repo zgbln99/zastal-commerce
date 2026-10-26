@@ -1,4 +1,5 @@
 "use client";
+import { productUrl } from "../lib/urls.mjs";
 import Link from "next/link";
 import { useState } from "react";
 import { productImages, secondaryImage, type ImageProduct, type ProductMedia } from "../lib/product-media.mjs";
@@ -25,13 +26,13 @@ export default function ProductCard({ product, eager = false }: { product: Produ
   const needsSelection = !!product.sizes || !!product.personalization_enabled;
   return <article className="product-card" onMouseEnter={() => setAlternate(window.matchMedia("(hover: hover) and (pointer: fine)").matches)} onMouseLeave={() => setAlternate(false)} onFocusCapture={() => setAlternate(true)} onBlurCapture={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setAlternate(false); }}>
     <div className="product-image-wrap">
-      <Link href={"/produkt/" + product.id} className="product-image-link" aria-label={product.name}><ProductImage product={product} media={current} eager={eager}/></Link>
+      <Link href={productUrl(product)} className="product-image-link" aria-label={product.name}><ProductImage product={product} media={current} eager={eager}/></Link>
       {product.verified && !available ? <span className="product-badge">Wyprzedane</span> : product.preorder ? <span className="product-badge preorder">Przedsprzedaż</span> : product.badge_info ? <span className={"product-badge badge-" + product.badge_info.code}>{product.badge_info.label}</span> : lastPieces ? <span className="product-badge">Ostatnie sztuki</span> : null}
       <button className={"favorite-button " + (liked ? "is-favorite" : "")} onClick={() => store.favorite(product.id)} aria-label={(liked ? "Usuń z ulubionych: " : "Dodaj do ulubionych: ") + product.name} aria-pressed={liked} disabled={!store.hydrated}><Heart size={18} fill={liked ? "currentColor" : "none"}/></button>
       <button className="card-quick" onClick={() => needsSelection ? store.setQuickId(product.id) : store.add(product.id, "UNI")} disabled={store.status !== "ready" || !product.verified || !available}><Plus size={16}/> {product.personalization_enabled ? "Wybierz nadruk" : product.sizes ? "Wybierz rozmiar" : "Dodaj do koszyka"}</button>
     </div>
     <div className="product-card-category">{product.category}{product.sizes && <span>{product.sizes[0]}–{product.sizes[product.sizes.length - 1]}</span>}</div>
-    <Link className="product-card-name" href={"/produkt/" + product.id}>{product.name}</Link>
+    <Link className="product-card-name" href={productUrl(product)}>{product.name}</Link>
     <p className="product-card-subtitle">{product.subtitle}</p>
     <div className="product-card-bottom"><strong>{product.verified ? <>{fmt(productDisplayPrice(product))}{product.personalization_required && <small> z nadrukiem</small>}<PriceReduction product={product} compact/></> : <span className="price-pending">Cena wkrótce</span>}</strong><button className="card-mobile-add" aria-label={"Zobacz " + product.name} onClick={() => store.setQuickId(product.id)}><ArrowUpRight size={18}/></button></div>
   </article>;

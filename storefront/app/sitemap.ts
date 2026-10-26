@@ -1,3 +1,4 @@
+import {productUrl, categoryUrl, CATEGORY_PATHS} from "../lib/urls.mjs";
 import type { MetadataRoute } from "next";
 import { storeStatus, publicCatalog } from "../lib/store-status";
 
@@ -13,6 +14,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: origin + "/zawodnicy", changeFrequency: "weekly", priority: 0.5 },
     { url: origin + "/karta-podarunkowa", changeFrequency: "monthly", priority: 0.5 },
     { url: origin + "/pomoc", changeFrequency: "monthly", priority: 0.3 },
-    ...products.map(product => ({ url: `${origin}/produkt/${product.id}`, changeFrequency: "weekly" as const, priority: 0.7 })),
+    ...Object.keys(CATEGORY_PATHS).map(name=>({url:origin+categoryUrl(name),changeFrequency:"weekly" as const,priority:0.8})),
+    ...products.map(product => ({ url: origin + productUrl(product), changeFrequency: "weekly" as const, priority: 0.7 })),
   ];
 }

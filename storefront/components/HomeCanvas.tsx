@@ -1,4 +1,6 @@
 "use client";
+import {storeUrl} from "../lib/urls.mjs";
+import { productUrl, categoryUrl } from "../lib/urls.mjs";
 import {useState} from "react";
 import Link from "next/link";
 import {ArrowRight,ArrowUpRight,PackageCheck,Ruler,UserRound} from "lucide-react";
@@ -26,7 +28,7 @@ function Block({section}:{section:HomeSection}){
  const title=text(s,"title");
  const sectionTitle=titleLines(title);
  const active=filter??(text(s,"category")||"Wszystko");
- const links=(x:string)=>"/sklep?category="+encodeURIComponent(x);
+ const links=(x:string)=>categoryUrl(x);
  const chosen=products.find(p=>p.id===num(s,"product_id"));
  if(kind==="campaign")return <CampaignSection section={section}/>;
  if(kind==="hero")return <YnsHero settings={s}/>;
@@ -70,10 +72,10 @@ function Block({section}:{section:HomeSection}){
     <div className="editorial-print-body">
      <h2 id={section.id}>{sectionTitle.map((line,i)=><span key={i}>{line}{i<sectionTitle.length-1&&<br/>}</span>)}</h2>
      <p>{text(s,"description")}</p><div className="editorial-print-choices"><span><Roster size={17} strokeWidth={1.8}/> Zawodnik z listy</span><span><PenLine size={17} strokeWidth={1.8}/> Własny napis i numer</span></div>
-     <Link className="editorial-print-action" href={"/produkt/"+chosen.id}>{text(s,"button_text")} <ArrowUpRight size={18}/></Link>
+     <Link className="editorial-print-action" href={productUrl(chosen)}>{text(s,"button_text")} <ArrowUpRight size={18}/></Link>
     </div>
    </div>
-   <Link href={"/produkt/"+chosen.id} className="editorial-print-visual"><ProductImage product={chosen}/><div className="editorial-print-product-label"><div><span>Produkt z nadrukiem</span><strong>{chosen.name}</strong></div></div></Link>
+   <Link href={productUrl(chosen)} className="editorial-print-visual"><ProductImage product={chosen}/><div className="editorial-print-product-label"><div><span>Produkt z nadrukiem</span><strong>{chosen.name}</strong></div></div></Link>
   </section>;
  }
  if(kind==="retro"){
@@ -82,7 +84,7 @@ function Block({section}:{section:HomeSection}){
   return <section className="container home-retro" aria-labelledby={section.id}>
    <div className="home-retro-photo">{image?<img src={image} alt={chosen.name}/>:<ProductImage product={chosen}/>}</div>
    <div className="home-retro-copy">{kicker(text(s,"eyebrow"))&&<span className="home-kicker">{kicker(text(s,"eyebrow"))}</span>}<h2 id={section.id}>{sectionTitle.map((line,i)=><span key={i}>{line}{i<sectionTitle.length-1&&<br/>}</span>)}</h2><p>{text(s,"description")}</p>
-   <Link href={"/produkt/"+chosen.id} className="button button-dark">{text(s,"button_text")} <ArrowUpRight size={18}/></Link></div>
+   <Link href={productUrl(chosen)} className="button button-dark">{text(s,"button_text")} <ArrowUpRight size={18}/></Link></div>
   </section>;
  }
  if(kind==="accessories"){
@@ -91,13 +93,13 @@ function Block({section}:{section:HomeSection}){
   return <section className="container editorial-accessories" aria-labelledby={section.id}>
    <div className="editorial-accessories-heading"><div><h2 id={section.id}>{sectionTitle.map((line,i)=><span key={i}>{line}{i<sectionTitle.length-1&&<br/>}</span>)}</h2></div>
     <div className="editorial-accessories-intro"><p>{text(s,"description")}</p><Link href={links("Akcesoria")}>Zobacz akcesoria <ArrowUpRight size={17}/></Link></div></div>
-   <div className="editorial-accessories-grid">{chosenItems.map((p,i)=><Link key={p.id} href={"/produkt/"+p.id} className={"editorial-accessory accessory-"+i}><div className="editorial-accessory-image"><ProductImage product={p}/></div><div className="editorial-accessory-info"><div><span>Akcesoria</span><h3>{p.name}</h3></div><ChevronRightIcon/></div></Link>)}</div>
+   <div className="editorial-accessories-grid">{chosenItems.map((p,i)=><Link key={p.id} href={productUrl(p)} className={"editorial-accessory accessory-"+i}><div className="editorial-accessory-image"><ProductImage product={p}/></div><div className="editorial-accessory-info"><div><span>Akcesoria</span><h3>{p.name}</h3></div><ChevronRightIcon/></div></Link>)}</div>
   </section>;
  }
  if(kind==="banner")return <section className={"container cms-campaign align-"+text(s,"alignment")} style={{backgroundColor:text(s,"background"),color:text(s,"text_color")}} aria-labelledby={section.id}>
   {text(s,"image")&&<img src={text(s,"image")} alt="" className="cms-campaign-image"/>}<div className="cms-campaign-shade"/>
   <div className="cms-campaign-content">{kicker(text(s,"eyebrow"))&&<span className="home-kicker">{kicker(text(s,"eyebrow"))}</span>}<h2 id={section.id}>{sectionTitle.map((line,i)=><span key={i}>{line}{i<sectionTitle.length-1&&<br/>}</span>)}</h2><p>{text(s,"description")}</p>
-  {text(s,"cta_text")&&<Link href={text(s,"cta_url")||"/sklep"}>{text(s,"cta_text")} <ArrowUpRight size={18}/></Link>}</div></section>;
+  {text(s,"cta_text")&&<Link href={storeUrl(text(s,"cta_url")||"/sklep",products)}>{text(s,"cta_text")} <ArrowUpRight size={18}/></Link>}</div></section>;
  if(kind==="text")return <section className={"container cms-editorial-text align-"+text(s,"alignment")} style={{backgroundColor:text(s,"background"),color:text(s,"text_color")}} aria-labelledby={section.id}>{kicker(text(s,"eyebrow"))&&<span className="home-kicker">{kicker(text(s,"eyebrow"))}</span>}<h2 id={section.id}>{sectionTitle.map((line,i)=><span key={i}>{line}{i<sectionTitle.length-1&&<br/>}</span>)}</h2><p>{text(s,"description")}</p></section>;
  if(kind==="services"){
   const blocks=[
