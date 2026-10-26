@@ -594,6 +594,12 @@ def order_email(c, order, detail, kind, origin):
     else:
         subject = f'Zastal Store, zamówienie {number}: {status}'
         lines += [f'Status zamówienia {number}: {status}', '']
+    if live and kind == 'order_created':
+        lines += ['Szczegóły płatności i dostawy oraz kolejne zmiany statusu znajdziesz na stronie zamówienia.', '']
+    elif live and order['status'] == 'wyslane':
+        lines += ['Status przesyłki możesz sprawdzić na stronie zamówienia.', '']
+    elif live and order['status'] == 'oczekuje_platnosci':
+        lines += ['Po zaksięgowaniu płatności dostaniesz osobne potwierdzenie.', '']
     raw_items = order['items'] if 'items' in order.keys() else '[]'
     items = json.loads(raw_items) if isinstance(raw_items, str) else raw_items or []
     lines.append('Pozycje:')

@@ -103,6 +103,25 @@ class EmailTests(unittest.TestCase):
         self.assertIn('border-radius:24px', order)
         self.assertNotIn('<Junior>', order)
 
+    def test_staff_can_queue_active_promo_with_real_terms(self):
+        self.c.execute("UPDATE users SET role='admin' WHERE id=?", (self.user['id'],))
+        self.c.execute("""CREATE TABLE promo_codes(id INTEGER PRIMARY KEY,code TEXT,kind TEXT,value INTEGER,
+            min_subtotal INTEGER,starts TEXT,ends TEXT,max_uses INTEGER,uses INTEGER,active INTEGER)""")
+        self.c.execute("INSERT INTO promo_codes VALUES(1,'KIBIC10','percent',10,10000,'','2026-12-31',20,0,1)")
+        self.c.commit()
+        self.h.request_user = self.c.execute('SELECT * FROM users').fetchone()
+        status, result = self.request('/api/admin/email/promo', {'promo_id': 1, 'recipient': 'check@example.test'})
+        self.assertEqual(status, 200)
+        self.assertEqual(result['ok'], True)
+        with patch.dict(os.environ, SMTP_ENV), patch('commerce_email.smtplib.SMTP', SMTP):
+            self.assertEqual(self.email.process_outbox(self.connect)['sent'], 1)
+        plain = SMTP.messages[-1].get_body(preferencelist=('plain',)).get_content()
+        self.assertIn('KIBIC10', plain)
+        self.assertIn('100.00 PLN', plain)
+        self.assertIn('2026-12-31', plain)
+        self.assertIn('Zobacz produkty', SMTP.messages[-1].get_body(preferencelist=('html',)).get_content())
+        self.assertEqual(self.request('/api/admin/email/promo', {'promo_id': 99, 'recipient': 'check@example.test'})[0], 404)
+
     def test_capture_rejects_real_recipients(self):
         from email.message import EmailMessage
         message = EmailMessage();message["To"] = "real@example.com"

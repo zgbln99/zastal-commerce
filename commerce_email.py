@@ -165,7 +165,7 @@ def _consume_token(c, raw, kind):
 
 
 ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid', 'return_update')
-GUEST_KINDS = ('stock_alert', 'gift_card_issued', 'staff_digest', 'test_email')
+GUEST_KINDS = ('stock_alert', 'gift_card_issued', 'staff_digest', 'test_email', 'promo_code')
 # Intermediate workflow steps are not customer events; packing is news only for pickup orders.
 QUIET_STATUSES = ('potwierdzone', 'do_kompletacji', 'nanoszenie_dtf', 'kontrola_jakosci')
 
@@ -231,7 +231,7 @@ def dispatch(handler, path, c):
         '/api/auth/email/status': 'GET', '/api/admin/email': 'GET',
         '/api/auth/password-reset/request': 'POST', '/api/auth/password-reset/confirm': 'POST',
         '/api/auth/email/verify': 'POST', '/api/account/email/verification': 'POST',
-        '/api/admin/email/retry': 'POST', '/api/admin/email/test': 'POST'}
+        '/api/admin/email/retry': 'POST', '/api/admin/email/test': 'POST', '/api/admin/email/promo': 'POST'}
     if path not in paths:
         return False
     if path.startswith('/api/admin/'):
@@ -277,6 +277,27 @@ def dispatch(handler, path, c):
         auth.rate(handler, 'email_verify_request', str(user['id']), count=5, window=3600)
         user = auth.begin_account_write(handler, c)
         queue_verification(c, user)
+    elif path == '/api/admin/email/promo':
+        import commerce_merch as merch
+        auth.require_staff(handler, 'settings')
+        recipient = auth.identifier_value(data.get('recipient'), email=True)
+        auth.rate(handler, 'email_promo_send', recipient, count=10, window=3600)
+        promo_id = data.get('promo_id')
+        if type(promo_id) is not int or promo_id < 1:
+            raise auth.AuthError(400, 'Wybierz kod rabatowy.')
+        c.execute('BEGIN IMMEDIATE')
+        promo = c.execute('SELECT * FROM promo_codes WHERE id=?', (promo_id,)).fetchone()
+        if not promo:
+            raise auth.AuthError(404, 'Nie znaleziono kodu rabatowego.')
+        try:
+            merch.find_code(c, promo['code'], promo['min_subtotal'])
+        except merch.MerchError:
+            raise auth.AuthError(400, 'Kod nie jest obecnie aktywny.')
+        identifier = enqueue_guest(c, 'promo_code', recipient,
+                                   f'promo_code:{promo_id}:{secrets.token_urlsafe(12)}')
+        c.commit()
+        handler.respond(200, {'ok': True, 'id': identifier})
+        return True
     elif path == '/api/admin/email/test':
         auth.rate(handler, 'email_admin_test', count=5, window=3600)
         recipient = auth.identifier_value(data.get('recipient'), email=True)
@@ -336,10 +357,10 @@ def _message(c, row, config):
         link = os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/') + '/konto/email?action=' + action + '#token=' + raw
         if action == 'verify':
             subject = 'Zastal Store, potwierdź adres e-mail'
-            body = f'Potwierdź adres e-mail swojego konta Zastal Store:\n\n{link}\n\nLink jest jednorazowy i ważny przez 24 godziny.\nJeżeli nie tworzono konta, zignoruj tę wiadomość.'
+            body = f'Potwierdź adres e-mail, aby korzystać z konta Zastal Store. W koncie sprawdzisz zamówienia i dostawę.\n\n{link}\n\nLink jest jednorazowy i ważny przez 24 godziny.\nJeżeli nie zakładano konta, zignoruj tę wiadomość.'
         else:
             subject = 'Zastal Store, zmiana hasła'
-            body = f'Ustaw nowe hasło do konta Zastal Store:\n\n{link}\n\nLink jest jednorazowy i ważny przez godzinę.\nJeżeli nie proszono o zmianę hasła, zignoruj tę wiadomość.'
+            body = f'Otrzymaliśmy prośbę o zmianę hasła do konta Zastal Store. Nowe hasło ustawisz tutaj:\n\n{link}\n\nLink jest jednorazowy i ważny przez godzinę. Po zmianie hasła wylogujemy pozostałe sesje.\nJeżeli nie proszono o zmianę hasła, zignoruj tę wiadomość.'
     elif row['kind'] == 'welcome':
         subject = 'Zastal Store, konto jest gotowe'
         body = ('Adres e-mail został potwierdzony. Możesz już korzystać z konta w Zastal Store.\n\n'
@@ -358,6 +379,19 @@ def _message(c, row, config):
             c.commit()
             return None
         subject, body = composed
+    elif row['kind'] == 'promo_code':
+        import commerce_merch as merch
+        promo_id = int(row['dedupe_key'].split(':')[1])
+        promo = c.execute('SELECT * FROM promo_codes WHERE id=?', (promo_id,)).fetchone()
+        if not promo:
+            c.commit()
+            return None
+        try:
+            merch.find_code(c, promo['code'], promo['min_subtotal'])
+        except merch.MerchError:
+            c.commit()
+            return None
+        subject, body = promo_message(promo, os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
     elif row['kind'] == 'stock_alert':
         import commerce_merch as merch
         composed = merch.alert_message(c, int(row['dedupe_key'].rsplit(':', 1)[1]), os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
@@ -381,6 +415,22 @@ def _message(c, row, config):
     return message
 
 
+def promo_message(promo, origin):
+    amount = f'{promo["value"]}%' if promo['kind'] == 'percent' else f'{promo["value"] / 100:.2f} PLN'
+    lines = [f'Kod rabatowy: {promo["code"]}', f'Rabat: {amount}']
+    if promo['min_subtotal']:
+        lines.append(f'Wartość produktów od: {promo["min_subtotal"] / 100:.2f} PLN')
+    if promo['starts']:
+        lines.append(f'Ważny od: {promo["starts"]}')
+    if promo['ends']:
+        lines.append(f'Ważny do: {promo["ends"]}')
+    if promo['max_uses']:
+        lines.append('Liczba użyć kodu jest ograniczona.')
+    lines += ['', 'Wpisz kod w koszyku przed złożeniem zamówienia.', '',
+              origin + '/sklep']
+    return 'Zastal Store, kod rabatowy ' + promo['code'], '\n'.join(lines) + '\n'
+
+
 def render_html(subject, body, origin, kind=None):
     """A restrained, email-client-safe layout for account and order messages."""
     clean_origin = origin.rstrip('/')
@@ -398,6 +448,7 @@ def render_html(subject, body, origin, kind=None):
 
     is_order = kind in ORDER_KINDS or 'Pozycje:' in content
     is_auth = kind in AUTH_KINDS or kind == 'welcome'
+    is_promo = kind == 'promo_code'
     number = re.search(r'\bZS-\d+\b|#\d+', subject)
     reference = number.group(0) if number else ''
     heading = subject.split(', ', 1)[-1]
@@ -410,10 +461,11 @@ def render_html(subject, body, origin, kind=None):
         heading = 'Konto jest gotowe'
     elif kind == 'order_created' and 'testowe' not in subject:
         heading = 'Zamówienie przyjęte'
-    label = 'Twoje konto' if is_auth else 'Zamówienie' if is_order else 'Zastal Store'
+    label = 'Twoje konto' if is_auth else 'Zamówienie' if is_order else 'Kod rabatowy' if is_promo else 'Zastal Store'
     action_label = ('Potwierdź adres e-mail' if kind == 'email_verification' else
                     'Ustaw nowe hasło' if kind == 'password_reset' else
                     'Przejdź do konta' if kind == 'welcome' else
+                    'Zobacz produkty' if is_promo else
                     'Sprawdź dostawę' if is_order and 'wysłane' in subject.lower() else
                     'Sprawdź zamówienie' if is_order else 'Otwórz wiadomość')
 
@@ -444,7 +496,11 @@ def render_html(subject, body, origin, kind=None):
                 group = []
         return ''.join(result)
 
-    if is_order and 'Pozycje:' in content:
+    if is_promo:
+        pairs = [line.split(': ', 1) for line in content if ': ' in line]
+        other = [line for line in content if line and ': ' not in line]
+        body_markup = '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #e8eae7;margin:15px 0 24px">' + ''.join(row(*pair, strong=pair[0] == 'Kod rabatowy') for pair in pairs) + '</table>' + prose(other)
+    elif is_order and 'Pozycje:' in content:
         split = content.index('Pozycje:')
         intro, rest = content[:split], content[split + 1:]
         items = []

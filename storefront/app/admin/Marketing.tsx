@@ -13,6 +13,7 @@ export default function Marketing(){
  const auth=useAuth();
  const [codes,setCodes]=useState<Promo[]>([]),[alerts,setAlerts]=useState<Alert[]>([]),[draft,setDraft]=useState<Draft>(empty);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[alertsError,setAlertsError]=useState("");
+ const [promoRecipient,setPromoRecipient]=useState(""),[selectedPromo,setSelectedPromo]=useState("");
  const load=useCallback(async()=>{
   try{setCodes(await auth.request<Promo[]>("/api/admin/promo"));}catch(e){setError(e instanceof Error?e.message:"Nie można pobrać kodów.");}
   try{setAlerts(await auth.request<Alert[]>("/api/admin/stock-alerts"));setAlertsError("");}catch(e){setAlertsError(e instanceof Error?e.message:"Brak dostępu do listy powiadomień.");}
@@ -27,6 +28,11 @@ export default function Marketing(){
   }catch(e){setError(e instanceof Error?e.message:"Nie udało się zapisać kodu.");}finally{setBusy(false);}};
  const toggle=async(promo:Promo)=>{setBusy(true);setError("");try{await auth.request(`/api/admin/promo/${promo.id}`,{method:"PATCH",body:JSON.stringify({active:!promo.active})});await load();}catch(e){setError(e instanceof Error?e.message:"Nie udało się zmienić kodu.");}finally{setBusy(false);}};
  const notify=async()=>{setBusy(true);try{const result=await auth.request<{queued:number}>("/api/admin/stock-alerts/notify",{method:"POST",body:"{}"});setMessage(result.queued?`Zakolejkowano ${result.queued} powiadomień.`:"Nikt nie czeka na rozmiar, który jest już dostępny.");await load();}catch(e){setError(e instanceof Error?e.message:"Nie udało się wysłać powiadomień.");}finally{setBusy(false);}};
+ const sendPromo=async(e:React.FormEvent)=>{e.preventDefault();if(busy||!selectedPromo||!promoRecipient.trim())return;
+  setBusy(true);setError("");setMessage("");
+  try{await auth.request("/api/admin/email/promo",{method:"POST",body:JSON.stringify({promo_id:Number(selectedPromo),recipient:promoRecipient.trim()})});
+   setMessage("Wiadomość z kodem trafiła do kolejki. Jej status sprawdzisz w Poczcie sklepu.");setPromoRecipient("");
+  }catch(e){setError(e instanceof Error?e.message:"Nie udało się wysłać kodu.");}finally{setBusy(false);}};
  const kindLabel=(promo:Promo)=>promo.kind==="percent"?`${promo.value}%`:formatMoney(promo.value);
  return <>
   {error&&<p className="account-error" role="alert">{error}</p>}{message&&<p className="admin-list-success" role="status">{message}</p>}
@@ -45,6 +51,15 @@ export default function Marketing(){
    <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Kod</th><th>Rabat</th><th>Warunki</th><th>Użycia</th><th>Status</th><th></th></tr></thead><tbody>
     {codes.map(promo=><tr key={promo.id}><td><strong>{promo.code}</strong>{promo.note&&<small className="admin-muted"> {promo.note}</small>}</td><td>{kindLabel(promo)}</td><td>{[promo.min_subtotal?`od ${formatMoney(promo.min_subtotal)}`:"",promo.starts?`od ${promo.starts}`:"",promo.ends?`do ${promo.ends}`:""].filter(Boolean).join(", ")||"bez warunków"}</td><td>{promo.uses}{promo.max_uses?` / ${promo.max_uses}`:""}</td><td>{promo.active?"aktywny":"wyłączony"}</td><td><button className="admin-edit-button" disabled={busy} onClick={()=>void toggle(promo)}>{promo.active?"Wyłącz":"Włącz"}</button></td></tr>)}
    </tbody></table></div>{!codes.length&&<p className="admin-empty">Nie ma jeszcze kodów rabatowych.</p>}
+   <form className="account-form admin-promo-form" onSubmit={sendPromo}>
+    <h3>Wyślij kod e-mailem</h3>
+    <p>Wybierz aktywny kod i wpisz adres odbiorcy. Wiadomość pokaże wartość rabatu, próg zamówienia i termin ważności, jeśli są ustawione.</p>
+    <div className="admin-form-grid">
+     <label>Kod rabatowy<select required value={selectedPromo} onChange={e=>setSelectedPromo(e.target.value)}><option value="">Wybierz kod</option>{codes.filter(p=>p.active&&(!p.max_uses||p.uses<p.max_uses)).map(p=><option key={p.id} value={p.id}>{p.code} · {kindLabel(p)}</option>)}</select></label>
+     <label>Adres odbiorcy<input type="email" required value={promoRecipient} onChange={e=>setPromoRecipient(e.target.value)} placeholder="adres@domena.pl"/></label>
+    </div>
+    <div className="admin-form-footer"><button className="button button-dark" disabled={busy||!selectedPromo}>{busy?"Dodawanie…":"Wyślij kod"}</button></div>
+   </form>
   </section>
   <section className="admin-panel"><div className="admin-list-actions"><p><BellRing size={16}/> Klienci czekający na rozmiar. Powiadomienia wychodzą automatycznie po przyjęciu towaru; tu możesz je wysłać od razu.</p><button className="admin-edit-button" disabled={busy} onClick={()=>void notify()}><RefreshCw size={14}/>Wyślij teraz</button></div>
    {alertsError?<p className="admin-empty">{alertsError}</p>:<div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Produkt</th><th>Rozmiar</th><th>Stan</th><th>Czeka osób</th></tr></thead><tbody>
