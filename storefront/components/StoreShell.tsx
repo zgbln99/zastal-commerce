@@ -127,24 +127,23 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
   useEffect(() => { setShopOpen(false); }, [pathname]);
   // The header is fixed: 64 px top bar on phones, 88 px bar + 48 px menu on desktop, plus 32 px for the pre-launch notice.
   const offset = pathname === "/" ? "" : notice ? "pt-24 md:pt-42" : "pt-16 md:pt-34";
-  const menuLink = "inline-flex h-12 items-center gap-1 border-b-2 border-transparent px-3 text-[13px] font-semibold uppercase tracking-[0.12em] text-white/85 transition-colors hover:border-orange hover:text-white";
+  const menuLink = "inline-flex h-12 items-center gap-1 border-b-2 border-transparent px-3.5 text-[15px] font-medium text-white/90 transition-colors hover:border-orange hover:text-white";
   const menuActive = "border-orange text-white";
   const coverFor = (category: string) => store.products.find(p => p.category === category);
   return <div className={cn("store-site flex min-h-dvh flex-col bg-background text-foreground", offset)}>
     <a href="#main-content" className="skip-link">Przejdź do treści</a>
     <header className="fixed inset-x-0 top-0 z-40 bg-background shadow-[0_1px_0_0_var(--border)]" onMouseLeave={() => setShopOpen(false)}>
-      {notice && <div className="bg-orange text-white"><div className="container flex h-8 items-center justify-between gap-4 text-xs"><span className="font-semibold uppercase tracking-[0.12em]">Zastal Zielona Góra</span><Link href="/pomoc" className="truncate hover:underline">Zamówienia online chwilowo niedostępne</Link></div></div>}
+      {notice && <div className="bg-orange text-white"><div className="container flex h-8 items-center justify-between gap-4 text-xs"><span className="font-semibold">Zastal Zielona Góra</span><Link href="/pomoc" className="truncate hover:underline">Zamówienia online chwilowo niedostępne</Link></div></div>}
       <div className="container flex h-16 items-center gap-3 md:h-22 md:gap-6">
         <button className={cn(iconButton, "md:hidden")} aria-label="Otwórz menu" onClick={() => store.setDialog("menu")}><Menu2 size={20}/></button>
-        <Link href="/" className="flex min-w-0 items-center gap-3 md:gap-4" aria-label="Zastal Store, strona główna">
-          <img src="/assets/zastal-logo.svg" alt="" className="size-11 shrink-0 md:size-16" width={64} height={64}/>
-          <span className="min-w-0 leading-none"><span className="block whitespace-nowrap text-xl font-bold tracking-tight text-primary md:text-[28px]">ZASTAL <span className="font-medium text-foreground">STORE</span></span><span className="mt-1 hidden text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground sm:block">{brand.tagline}</span></span>
+        <Link href="/" className="flex shrink-0 items-center" aria-label="Zastal Store, strona główna">
+          <img src="/assets/zastal-logo.svg" alt="Zastal Zielona Góra" className="h-9 w-auto sm:h-10 md:h-[60px]" width={212} height={60}/>
         </Link>
         <SearchBox products={store.products} className="mx-auto hidden w-full max-w-lg md:block"/>
         <div className="ml-auto flex items-center gap-1.5 md:gap-2">
           <button className={cn(iconButton, "md:hidden")} aria-label="Szukaj produktów" onClick={() => store.setDialog("search")}><Search size={20}/></button>
-          <Link className={cn(iconButton, "relative md:size-12")} href="/ulubione" aria-label={"Ulubione: " + store.favorites.length}><Heart size={22}/>{store.favorites.length > 0 && <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-orange text-[11px] font-semibold text-white">{store.favorites.length}</span>}</Link>
-          <Link className={cn(iconButton, "md:size-12")} href="/konto" aria-label={auth.user ? "Moje konto" : "Konto"} title={auth.user ? "Moje konto" : "Zaloguj się"}><User size={22}/></Link>
+          <Link className={cn(iconButton, "relative hidden sm:inline-flex md:size-12")} href="/ulubione" aria-label={"Ulubione: " + store.favorites.length}><Heart size={22}/>{store.favorites.length > 0 && <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-orange text-[11px] font-semibold text-white">{store.favorites.length}</span>}</Link>
+          <Link className={cn(iconButton, "hidden sm:inline-flex md:size-12")} href="/konto" aria-label={auth.user ? "Moje konto" : "Konto"} title={auth.user ? "Moje konto" : "Zaloguj się"}><User size={22}/></Link>
           <button className="inline-flex h-10 items-center gap-2 rounded-full bg-primary pl-3 pr-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 md:h-12 md:pl-4 md:pr-2.5" onClick={() => store.setDialog("cart")} aria-label={"Otwórz koszyk (" + store.count + ")"}><ShoppingCart size={20}/><span className="hidden sm:inline">Koszyk</span><b className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold text-primary">{store.count}</b></button>
         </div>
       </div>
@@ -162,7 +161,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
           <Link href="/karta-podarunkowa" className={cn(menuLink, pathname === "/karta-podarunkowa" && menuActive)} onMouseEnter={() => setShopOpen(false)}>Karta podarunkowa</Link>
           <Link href="/kontakt" className={cn(menuLink, pathname === "/kontakt" && menuActive)} onMouseEnter={() => setShopOpen(false)}>Kontakt</Link>
         </nav>
-        <div className="ml-auto flex items-center gap-3">{brand.competitions.length > 0 && <span className="hidden text-[11px] font-medium uppercase tracking-[0.16em] text-white/70 lg:inline">Gramy w</span>}<CompetitionLogos items={brand.competitions} tone="dark"/></div>
+        <div className="ml-auto flex items-center"><CompetitionLogos items={brand.competitions} tone="dark"/></div>
       </div></div>
     </header>
     {store.status === "error" && <div className="catalog-error border-b border-destructive/30 bg-destructive/10"><div className="container flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><span>{store.error}</span><button className={pill} onClick={store.refresh}>Spróbuj ponownie</button></div></div>}
@@ -170,9 +169,9 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
     <footer className="mt-24 border-t border-border bg-muted/60">
       <div className="container grid gap-10 py-16 md:grid-cols-4 md:gap-8">
         <div className="footer-about space-y-4">
-          <Link href="/" className="flex items-center gap-3"><img src="/assets/zastal-logo.svg" alt="Zastal Zielona Góra" className="size-14" width={56} height={56}/><span className="leading-none"><span className="block text-xl font-bold tracking-tight text-primary">ZASTAL <span className="font-medium text-foreground">STORE</span></span><span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">{brand.tagline}</span></span></Link>
-          {brand.competitions.length > 0 && <CompetitionLogos items={brand.competitions} size="lg" className="pt-1"/>}
-          <p className="text-sm text-muted-foreground">Odzież i akcesoria dla kibiców Zastalu Zielona Góra.</p>
+          <Link href="/" className="inline-flex"><img src="/assets/zastal-logo.svg" alt="Zastal Zielona Góra" className="h-14 w-auto" width={198} height={56}/></Link>
+          <p className="text-sm text-muted-foreground">{brand.tagline}</p>
+          {brand.competitions.some(c => c.image) && <CompetitionLogos items={brand.competitions} size="lg" className="pt-1"/>}
           <ul className="space-y-2 text-sm text-muted-foreground">
             {seller.email && <li className="flex items-center gap-2"><At size={16} className="text-primary"/><a href={"mailto:" + seller.email} className="hover:text-foreground">{seller.email}</a></li>}
             {seller.phone && <li className="flex items-center gap-2"><Call size={16} className="text-primary"/><a href={"tel:" + seller.phone.replace(/\s+/g, "")} className="hover:text-foreground">{seller.phone}</a></li>}
@@ -196,7 +195,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
         <Link href="/pomoc" onClick={() => store.setDialog(null)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-muted"><TruckFast size={18}/>Pomoc i dostawa</Link>
         <Link href="/kontakt" onClick={() => store.setDialog(null)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-muted"><At size={18}/>Kontakt</Link>
       </nav>
-      {brand.competitions.length > 0 && <div className="mt-6 border-t border-border pt-5"><p className="mb-3 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Zastal gra w</p><CompetitionLogos items={brand.competitions} size="lg"/></div>}
+      {brand.competitions.some(c => c.image) && <div className="mt-6 border-t border-border pt-5"><CompetitionLogos items={brand.competitions} size="lg"/></div>}
     </Modal>}
     {store.dialog === "search" && <SearchDialog/>}{store.dialog === "cart" && <CartDialog/>}{store.quickId != null && <QuickProduct key={store.quickId}/>}
     {store.notice && <div className="store-toast" role="status"><Check size={16} className="text-orange"/><span>{store.notice}</span><button className="inline-flex size-7 items-center justify-center rounded-full hover:bg-background/20" aria-label="Zamknij powiadomienie" onClick={() => store.setNotice("")}><X size={16}/></button></div>}

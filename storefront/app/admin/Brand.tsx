@@ -23,8 +23,8 @@ export default function Brand(){
  if(!config)return <p className="staff-empty">{error||"Wczytywanie ustawień marki…"}</p>;
  return <form onSubmit={save}>
   {error&&<p className="account-error" role="alert">{error}</p>}{message&&<p className="admin-list-success" role="status">{message}</p>}
-  <section className="admin-panel"><div className="admin-list-actions"><p><Trophy size={16}/> Logotypy rozgrywek pokazują się w pasku menu, w menu na telefonie i w stopce. Wgraj oficjalne pliki otrzymane od ligi i FIBA (PNG z przezroczystym tłem); do tego czasu sklep pokazuje samą nazwę.</p></div>
-   <div className="admin-form-grid"><label>Podpis pod nazwą sklepu<input value={config.tagline} maxLength={60} onChange={e=>setConfig({...config,tagline:e.target.value})}/><small>Np. „Oficjalny sklep klubu”. Widoczny w nagłówku i stopce.</small></label></div>
+  <section className="admin-panel"><div className="admin-list-actions"><p><Trophy size={16}/> Logotypy rozgrywek pokazują się w pasku menu, w menu na telefonie i w stopce. Wgraj oficjalne pliki otrzymane od ligi i FIBA (PNG z przezroczystym tłem). Rozgrywki bez pliku nie są pokazywane w sklepie.</p></div>
+   <div className="admin-form-grid"><label>Podpis pod nazwą sklepu<input value={config.tagline} maxLength={60} onChange={e=>setConfig({...config,tagline:e.target.value})}/><small>Np. „Oficjalny sklep klubu”. Widoczny w stopce i w nagłówku e-maili.</small></label></div>
   </section>
   <section className="admin-panel"><div className="admin-list-actions"><p>Rozgrywki ({config.competitions.length}/6)</p><button type="button" className="button button-outline" disabled={config.competitions.length>=6} onClick={()=>setConfig({...config,competitions:[...config.competitions,{key:"",name:"",url:"",image:"",enabled:true}]})}><Plus size={15}/> Dodaj rozgrywki</button></div>
    <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Logo</th><th>Nazwa</th><th>Adres www</th><th>Widoczne</th><th>Kolejność</th><th></th></tr></thead><tbody>
