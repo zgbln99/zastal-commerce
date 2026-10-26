@@ -96,6 +96,8 @@ class EmailTests(unittest.TestCase):
         self.assertIn('Sprawdź zamówienie</a>', order)
         self.assertIn('Kurier DPD', order)
         self.assertIn('&lt;Junior&gt;', order)
+        self.assertIn('Koszulka &lt;Junior&gt;</strong>', order)
+        self.assertIn('border-radius:24px', order)
         self.assertNotIn('<Junior>', order)
 
     def test_capture_rejects_real_recipients(self):

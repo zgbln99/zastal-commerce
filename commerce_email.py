@@ -456,10 +456,19 @@ def render_html(subject, body, origin, kind=None):
             body_markup += '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:18px 0 26px;border-top:1px solid #e7ebe7">' + ''.join(row(*pair) for pair in meta) + '</table>'
         body_markup += ''.join(paragraph(line, muted=True) for line in notes)
         if items:
-            body_markup += '<h2 style="margin:25px 0 12px;color:#183e2a;font-size:12px;font-weight:700;letter-spacing:.09em">PRODUKTY</h2>'
+            body_markup += '<h2 style="margin:32px 0 12px;color:#17231c;font-size:17px;font-weight:600;letter-spacing:-.02em">Zamówione produkty</h2>'
             body_markup += '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #e7ebe7">'
             for item in items:
-                body_markup += '<tr><td style="padding:14px 0;border-bottom:1px solid #e7ebe7;font-size:14px;color:#27352c;line-height:1.5">' + escaped(item) + '</td></tr>'
+                matched = re.fullmatch(r'(\d+) × (.+?) / (.+), ([\d.,]+ PLN)', item)
+                if matched:
+                    qty, name, size, price = matched.groups()
+                    body_markup += ('<tr><td style="padding:17px 0;border-bottom:1px solid #e8eae7;color:#68716a;font-size:14px;vertical-align:top;width:36px">' + escaped(qty) + ' ×</td>'
+                                    '<td style="padding:17px 8px 17px 0;border-bottom:1px solid #e8eae7;vertical-align:top;line-height:1.45">'
+                                    '<strong style="font-size:14px;font-weight:600;color:#17231c">' + escaped(name) + '</strong><br>'
+                                    '<span style="font-size:12px;color:#68716a">Rozmiar: ' + escaped(size) + '</span></td>'
+                                    '<td align="right" style="padding:17px 0;border-bottom:1px solid #e8eae7;color:#17231c;font-size:14px;white-space:nowrap;vertical-align:top">' + escaped(price) + '</td></tr>')
+                else:
+                    body_markup += '<tr><td colspan="3" style="padding:17px 0;border-bottom:1px solid #e8eae7;font-size:14px;color:#17231c;line-height:1.5">' + escaped(item) + '</td></tr>'
             body_markup += '</table>'
         summary = []
         extra = []
@@ -475,28 +484,29 @@ def render_html(subject, body, origin, kind=None):
         body_markup = prose(content)
 
     if action_url:
-        body_markup += ('<table role="presentation" cellspacing="0" cellpadding="0" style="margin:27px 0 14px"><tr><td bgcolor="#174832">'
-                        '<a href="' + escaped(action_url) + '" style="display:inline-block;padding:15px 22px;'
-                        'background:#174832;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none">'
+        body_markup += ('<table role="presentation" cellspacing="0" cellpadding="0" style="margin:29px 0 13px"><tr><td bgcolor="#174e38" style="border-radius:24px">'
+                        '<a href="' + escaped(action_url) + '" style="display:inline-block;padding:13px 24px;'
+                        'background:#174e38;border-radius:24px;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none">'
                         + escaped(action_label) + '</a></td></tr></table>')
         if is_auth:
             body_markup += paragraph('Jeśli przycisk nie działa, skopiuj adres do przeglądarki:', muted=True)
             body_markup += '<p style="margin:0 0 20px;color:#345742;font-size:12px;line-height:1.5;word-break:break-all">' + escaped(action_url) + '</p>'
 
     return ('<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
-            '<body style="margin:0;padding:0;background:#eef1ec;color:#1b2e21;font-family:Arial,Helvetica,sans-serif">'
-            '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#eef1ec"><tr><td align="center" style="padding:30px 14px">'
-            '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:580px;background:#ffffff">'
-            '<tr><td style="padding:26px 34px 23px;border-top:4px solid #174832;border-bottom:1px solid #e7ebe7">'
-            '<span style="font-size:20px;line-height:1;font-weight:800;letter-spacing:.04em;color:#174832">ZASTAL</span>'
-            '<span style="margin-left:10px;font-size:11px;letter-spacing:.14em;color:#607066">STORE</span></td></tr>'
-            '<tr><td style="padding:35px 34px 29px"><p style="margin:0 0 13px;font-size:11px;letter-spacing:.12em;font-weight:700;color:#56745d">'
-            + escaped(label) + (' &nbsp;·&nbsp; ' + escaped(reference) if reference else '') + '</p>'
-            '<h1 style="margin:0 0 22px;color:#1a3022;font-size:28px;line-height:1.18;font-weight:700;letter-spacing:-.02em">'
+            '<body style="margin:0;padding:0;background:#ffffff;color:#17231c;font-family:Arial,Helvetica,sans-serif">'
+            '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#ffffff"><tr><td align="center" style="padding:0 20px">'
+            '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff">'
+            '<tr><td style="padding:27px 0 25px;border-bottom:1px solid #e8eae7">'
+            '<span style="font-size:21px;line-height:1;font-weight:800;letter-spacing:.015em;color:#174e38">ZASTAL</span>'
+            '<span style="display:inline-block;margin:0 12px;color:#d7ded8;font-size:19px;font-weight:300">│</span>'
+            '<span style="font-size:12px;letter-spacing:.12em;font-weight:700;color:#17231c">STORE</span></td></tr>'
+            '<tr><td style="padding:42px 0 35px"><p style="margin:0 0 12px;font-size:12px;font-weight:500;color:#68716a">'
+            + escaped(label.capitalize()) + (' · ' + escaped(reference) if reference else '') + '</p>'
+            '<h1 style="margin:0 0 24px;color:#17231c;font-size:32px;line-height:1.13;font-weight:600;letter-spacing:-.045em">'
             + escaped(heading) + '</h1>' + body_markup + '</td></tr>'
-            '<tr><td style="padding:22px 34px 29px;border-top:1px solid #e7ebe7;color:#657168;font-size:12px;line-height:1.7">'
-            'Zastal Store · Zielona Góra<br>Masz pytanie? Napisz na '
-            '<a href="mailto:office@basketzg.pl" style="color:#174832;text-decoration:underline">office@basketzg.pl</a>'
+            '<tr><td style="padding:23px 0 38px;border-top:1px solid #e8eae7;color:#68716a;font-size:12px;line-height:1.8">'
+            '<span style="color:#17231c;font-weight:600">Zastal Store</span> · Zielona Góra<br>'
+            '<a href="mailto:office@basketzg.pl" style="color:#174e38;text-decoration:underline">office@basketzg.pl</a>'
             '</td></tr></table></td></tr></table></body></html>')
 
 
