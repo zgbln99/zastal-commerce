@@ -17,8 +17,8 @@ type Store = {
 };
 const Context = createContext<Store | null>(null);
 const CART = "zastal_store_cart_v2", FAVORITES = "zastal_store_favs";
-export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(catalog.map(p => ({ ...p, stock: 0, variants: [], verified: false })));
+export function StoreProvider({ children, initialUrls=[] }: { children: React.ReactNode; initialUrls?:{id:number;slug?:string}[] }) {
+  const [products, setProducts] = useState<Product[]>(catalog.map(p => ({ ...p, slug:initialUrls.find(entry=>entry.id===p.id)?.slug, stock: 0, variants: [], verified: false })));
   const [players, setPlayers] = useState<Player[]>([]);
   const [playersStatus, setPlayersStatus] = useState<Store["playersStatus"]>("loading");
   const [playersError, setPlayersError] = useState("");

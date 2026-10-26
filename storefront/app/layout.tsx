@@ -14,7 +14,7 @@ import "./storefront-v3.css";
 import "./storefront-v4.css";
 import "./minimal-store.css";
 import CommerceRoot from "../components/CommerceRoot";
-import { storeStatus } from "../lib/store-status";
+import { publicCatalog, storeStatus } from "../lib/store-status";
 export const dynamic = "force-dynamic";
 /** Robots stay closed until sales are live; the description changes with the store phase. */
 export async function generateMetadata(): Promise<Metadata> {
@@ -26,8 +26,9 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(process.env.ZASTAL_SITE_ORIGIN || "https://zastalstore.51-15-21-164.sslip.io"),
   };
 }
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="pl"><body><CommerceRoot>{children}</CommerceRoot></body></html>;
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const initialUrls=await publicCatalog();
+  return <html lang="pl"><body><CommerceRoot initialUrls={initialUrls}>{children}</CommerceRoot></body></html>;
 }
 
 import "./minimal-store.css";
