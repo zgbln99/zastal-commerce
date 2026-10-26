@@ -32,7 +32,7 @@ commerce_brand.py         # podpis sklepu i logotypy rozgrywek (upload PNG/WebP 
 commerce_mailtheme.py     # wersja HTML każdego e-maila w barwach sklepu, podgląd w panelu Poczta
 commerce_email.py         # kolejka wiadomości (outbox) i treści
 commerce_reports.py, commerce_digest.py, commerce_returns.py, commerce_dpd.py, commerce_cms.py, commerce_pages.py, commerce_media.py, commerce_pricing.py, commerce_launch.py
-storefront/app/           # strony: /, /sklep, /kategoria/[slug], /szukaj, /produkt/[handle], /koszyk, /zamowienie, /konto, /pomoc, /kontakt, /newsletter, /zawodnicy, /karta-podarunkowa, /informacje/[slug], /admin
+storefront/app/           # strony: /, /sklep, /kategoria/[slug], /szukaj, /produkt/[handle], /koszyk, /zamowienie, /konto, /pomoc, /kontakt, /newsletter, /zawodnicy, /karta-podarunkowa, /informacje/[slug], /admin; feed/produkty.xml (Google Merchant / Meta, tylko w trybie live)
 storefront/components/    # StoreShell (nagłówek, koszyk, stopka), HomeCanvas (sekcje CMS), ProductCard, PurchaseControls, CompetitionLogos, search/SearchBox, PromoField, NewsletterForm
 storefront/components/templates/essentials/ui/texture-button.tsx   # przycisk z zestawu kairoui, bez zmian
 storefront/lib/           # commerce.mjs (koszyk, filtry, productPath), money.ts, json-ld.tsx, site.ts, catalog-paths.ts, home-layout.ts
@@ -52,6 +52,8 @@ docs/                     # runbook wdrożenia, raport wydania, szablon opisu pr
 - E-maile: `commerce_email.enqueue_guest(c, kind, recipient, dedupe)` z rodzajem w `GUEST_KINDS` i gałęzią w `_message`.
 - Nowa kolumna opcji produktu: `DEFAULT_OPTIONS` + `EXTENDED_COLUMNS` + `validate_product` + `save_options` w `commerce_personalization.py`.
 - Storefront: komponenty klienckie w zwięzłym JSX, klasy Tailwind, ikony `reicon-react` (nowe widoki) lub `lucide-react` (panel). Stare arkusze CSS żyją w warstwie `legacy` i nie wygrywają z utilities.
+- Zdjęcia: `ProductImage` z `sizes` (albo `next/image` z `fill`) dla lokalnych ścieżek `/assets/**` i `/api/store/media/**` (optymalizator w `next.config.mjs`); bez `sizes` zostaje zwykły `<img>` dla starych arkuszy. SVG i adresy zewnętrzne zawsze `unoptimized`.
+- Próg darmowej dostawy liczy się od wartości produktów **po** rabacie (API `shipping_cost(method, subtotal-discount)`, storefront `FreeShipping`/`CheckoutClient` tak samo). Nieopłacone zamówienia wygasają po `unpaid_hours` (domyślnie 336 h = 14 dni; PayU ma własny limit 72 h) przez `tools/maintenance.py` albo przycisk „Wygaś nieopłacone” w panelu.
 - Nic fikcyjnego: brak atrap integracji, numerów przesyłek czy dokumentów poza izolowanym środowiskiem testowym.
 
 ## Validation checklist

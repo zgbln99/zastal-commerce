@@ -1,6 +1,6 @@
 "use client";
 import {useCallback,useEffect,useState} from "react";
-import {BellRing,Plus,RefreshCw,Tag} from "lucide-react";
+import {BellRing,Plus,RefreshCw,Rss,Tag} from "lucide-react";
 import {useAuth} from "../../components/AuthProvider";
 import {formatMoney} from "./Operations";
 type Promo={id:number;code:string;kind:"percent"|"amount";value:number;min_subtotal:number;starts:string;ends:string;max_uses:number;uses:number;active:number;note:string;created:string};
@@ -27,6 +27,8 @@ export default function Marketing(){
   }catch(e){setError(e instanceof Error?e.message:"Nie udało się zapisać kodu.");}finally{setBusy(false);}};
  const toggle=async(promo:Promo)=>{setBusy(true);setError("");try{await auth.request(`/api/admin/promo/${promo.id}`,{method:"PATCH",body:JSON.stringify({active:!promo.active})});await load();}catch(e){setError(e instanceof Error?e.message:"Nie udało się zmienić kodu.");}finally{setBusy(false);}};
  const notify=async()=>{setBusy(true);try{const result=await auth.request<{queued:number}>("/api/admin/stock-alerts/notify",{method:"POST",body:"{}"});setMessage(result.queued?`Zakolejkowano ${result.queued} powiadomień.`:"Nikt nie czeka na rozmiar, który jest już dostępny.");await load();}catch(e){setError(e instanceof Error?e.message:"Nie udało się wysłać powiadomień.");}finally{setBusy(false);}};
+ const [feedUrl,setFeedUrl]=useState("/feed/produkty.xml");
+ useEffect(()=>{try{setFeedUrl(window.location.origin+"/feed/produkty.xml");}catch{}},[]);
  const kindLabel=(promo:Promo)=>promo.kind==="percent"?`${promo.value}%`:formatMoney(promo.value);
  return <>
   {error&&<p className="account-error" role="alert">{error}</p>}{message&&<p className="admin-list-success" role="status">{message}</p>}
@@ -46,6 +48,7 @@ export default function Marketing(){
     {codes.map(promo=><tr key={promo.id}><td><strong>{promo.code}</strong>{promo.note&&<small className="admin-muted"> {promo.note}</small>}</td><td>{kindLabel(promo)}</td><td>{[promo.min_subtotal?`od ${formatMoney(promo.min_subtotal)}`:"",promo.starts?`od ${promo.starts}`:"",promo.ends?`do ${promo.ends}`:""].filter(Boolean).join(", ")||"bez warunków"}</td><td>{promo.uses}{promo.max_uses?` / ${promo.max_uses}`:""}</td><td>{promo.active?"aktywny":"wyłączony"}</td><td><button className="admin-edit-button" disabled={busy} onClick={()=>void toggle(promo)}>{promo.active?"Wyłącz":"Włącz"}</button></td></tr>)}
    </tbody></table></div>{!codes.length&&<p className="admin-empty">Nie ma jeszcze kodów rabatowych.</p>}
   </section>
+  <section className="admin-panel"><div className="admin-list-actions"><p><Rss size={16}/> Feed produktów dla Google Merchant Center i Meta (katalog, reklamy Shopping, Instagram): jedna pozycja na rozmiar, EAN jako GTIN, ceny brutto i dostępność z magazynu. Przed startem sprzedaży feed jest pusty. Adres do wpisania jako źródło danych: <strong>{feedUrl}</strong></p><a className="button button-outline" href="/feed/produkty.xml" target="_blank" rel="noreferrer">Otwórz feed</a></div></section>
   <section className="admin-panel"><div className="admin-list-actions"><p><BellRing size={16}/> Klienci czekający na rozmiar. Powiadomienia wychodzą automatycznie po przyjęciu towaru; tu możesz je wysłać od razu.</p><button className="admin-edit-button" disabled={busy} onClick={()=>void notify()}><RefreshCw size={14}/>Wyślij teraz</button></div>
    {alertsError?<p className="admin-empty">{alertsError}</p>:<div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Produkt</th><th>Rozmiar</th><th>Stan</th><th>Czeka osób</th></tr></thead><tbody>
     {alerts.map(alert=><tr key={`${alert.product_id}-${alert.size}`}><td>{alert.name}</td><td>{alert.size}</td><td>{alert.stock} szt.</td><td><strong>{alert.waiting}</strong></td></tr>)}

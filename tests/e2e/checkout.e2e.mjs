@@ -61,6 +61,9 @@ try {
   const manifest = await (await fetch(WEB + '/manifest.webmanifest')).json();
   const sitemap = await (await fetch(WEB + '/sitemap.xml')).text();
   step('seo: llms.txt, manifest and sitemap list slugs and categories', llms.includes('/produkt/' + kidsShirt.slug) && manifest.icons.length >= 2 && sitemap.includes('/kategoria/dzieci') && sitemap.includes('/produkt/' + kidsShirt.slug) && !sitemap.includes('/produkt/9<'));
+  const feed = await (await fetch(WEB + '/feed/produkty.xml')).text();
+  const kidsVariant = kidsShirt.variants[0];
+  step('seo: Merchant feed lists one item per size with GTIN and group id', feed.includes('xmlns:g="http://base.google.com/ns/1.0"') && feed.includes(`<g:id>${kidsVariant.sku}</g:id>`) && (kidsVariant.ean.startsWith('2') ? feed.includes(`<g:mpn>${kidsVariant.sku}</g:mpn><g:identifier_exists>no</g:identifier_exists>`) : feed.includes(`<g:gtin>${kidsVariant.ean}</g:gtin>`)) && feed.includes(`<g:item_group_id>${kidsShirt.sku}</g:item_group_id>`) && feed.includes('/produkt/' + kidsShirt.slug + '?rozmiar='), `${(feed.match(/<item>/g) || []).length} pozycji`);
   const og = await fetch(WEB + '/produkt/' + kidsShirt.slug + '/opengraph-image');
   step('seo: product Open Graph image renders', og.status === 200 && (og.headers.get('content-type') || '').includes('image/png'));
   await page.goto(WEB + '/produkt/9', { waitUntil: 'networkidle' });
@@ -206,6 +209,9 @@ try {
   await shot(d, '12-admin-sales-settings-1440');
   await d.locator('.admin-navitem', { hasText: 'Zamówienia' }).first().click();
   await d.waitForSelector('.ops-orders-table');
+  await d.getByRole('button', { name: 'Wygaś nieopłacone' }).click();
+  await d.waitForSelector('.ops-success');
+  step('admin: expire-unpaid button answers without a request body', (await d.locator('.ops-success').innerText()).includes('nie przekroczyło jeszcze terminu'));
   await d.getByRole('button', { name: `Otwórz ZS-${String(created.id).padStart(5, '0')}` }).click();
   await d.waitForSelector('.ops-order-commerce');
   await shot(d, '13-admin-order-transfer-1440');

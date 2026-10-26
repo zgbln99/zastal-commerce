@@ -36,7 +36,7 @@ SETTINGS = {
 DEFAULTS = {'transfer_enabled': False, 'transfer_recipient': '', 'transfer_account': '', 'transfer_bank': '',
             'transfer_title_prefix': 'ZASTAL', 'pickup_payment_enabled': False, 'payu_enabled': False,
             'pickup_address': '', 'pickup_hours': '', 'invoice_enabled': True, 'fiscal_confirmed': False,
-            'unpaid_hours': 72, 'order_note': '', 'terms_version': '', 'digest_enabled': False, 'digest_email': ''}
+            'unpaid_hours': 336, 'order_note': '', 'terms_version': '', 'digest_enabled': False, 'digest_email': ''}
 LEGACY_SHIPPING = (
     ('odbior', 'Odbiór osobisty', 'pickup', 0, None, 1, 0, '', '', 10),
     ('paczkomat', 'Automat paczkowy', 'locker', 1299, 25000, 0, 1, '', '', 20),
@@ -214,6 +214,17 @@ def save_shipping(c, data, method_id=None):
                   (values['name'], values['kind'], values['price'], values['free_from'], int(values['enabled']), int(values['requires_address']),
                    values['carrier'], values['tracking_url'], values['note'], values['sort'], method_id))
     return _shipping_public(c.execute('SELECT * FROM shipping_methods WHERE id=?', (method_id,)).fetchone())
+
+
+def payment_window_label(hours):
+    """Human wording for the unpaid-order deadline: whole days when possible, hours otherwise."""
+    hours = int(hours)
+    if hours >= 24 and hours % 24 == 0:
+        days = hours // 24
+        return '1 dzień' if days == 1 else f'{days} dni'
+    if hours == 1:
+        return '1 godzinę'
+    return f'{hours} godziny' if hours % 10 in (2, 3, 4) and hours % 100 not in (12, 13, 14) else f'{hours} godzin'
 
 
 def shipping_cost(method, subtotal):
@@ -549,7 +560,7 @@ def order_email(c, order, detail, kind, origin):
             if info:
                 lines += ['Dane do przelewu:', f'  Odbiorca: {info["recipient"]}', f'  Numer rachunku: {info["account"]}',
                           f'  Tytuł: {info["title"]}', f'  Kwota: {amount}', '',
-                          f'Zamówienie czeka na wpłatę przez {config["unpaid_hours"]} godzin; potem zostanie anulowane.', '']
+                          f'Zamówienie czeka na wpłatę przez {payment_window_label(config["unpaid_hours"])}; potem zostanie anulowane.', '']
         elif detail['payment_method'] == 'pickup':
             lines += ['Płatność przy odbiorze osobistym.', '']
         elif detail['payment_status'] != 'paid':

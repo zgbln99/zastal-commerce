@@ -249,6 +249,8 @@ class Handler(BaseHTTPRequestHandler):
         return self.headers.get("X-Real-IP") or self.client_address[0]
 
     def body(self):
+        # The "expire unpaid" action carries no parameters: an empty body is fine there.
+        if self.path=='/api/admin/orders/expire-unpaid' and int(self.headers.get("Content-Length","0") or 0)<1:return {}
         try:
             data=json.loads(self.raw_body(1_900_000 if self.path=="/api/admin/home/media" else 35000))
             if not isinstance(data,dict):raise Invalid("Oczekiwano obiektu")
@@ -774,13 +776,14 @@ class Handler(BaseHTTPRequestHandler):
                         result.append(item)
                     now=stamp()
                     subtotal=total
-                    shipping=sales.shipping_cost(method,subtotal)
                     promo=None;discount=0
                     if promo_input:
                         promo_subtotal=sum(item['unit_price']*item['qty'] for item in result if not giftcards.is_gift_line(item))
                         if promo_subtotal<=0:raise Invalid('Kod rabatowy nie obejmuje kart podarunkowych')
                         try:promo,discount=merch.find_code(c,promo_input,promo_subtotal)
                         except merch.MerchError as ex:raise Invalid(str(ex))
+                    # Free-shipping thresholds apply to what the customer actually pays for the goods, i.e. after the discount.
+                    shipping=sales.shipping_cost(method,subtotal-discount)
                     total+=shipping-discount
                     gift_applied=0
                     if gift_input:

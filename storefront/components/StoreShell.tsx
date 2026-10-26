@@ -13,7 +13,7 @@ import { useAuth } from "./AuthProvider";
 import PriceReduction from "./PriceReduction";
 import FreeShipping from "./FreeShipping";
 import SearchBox from "./search/SearchBox";
-import PromoField from "./PromoField";
+import PromoField, { type PromoPreview } from "./PromoField";
 import NewsletterForm from "./NewsletterForm";
 import CompetitionLogos from "./CompetitionLogos";
 import { TextureButton } from "@/components/templates/essentials/ui/texture-button";
@@ -37,6 +37,7 @@ function SearchDialog() {
 }
 
 function CartDialog() {
+  const [promo, setPromo] = useState<PromoPreview | null>(null);
   const store = useStore(); const router = useRouter();
   const checkedPlayers = store.playersStatus === "ready" ? store.players : [];
   const valid = store.status === "ready" && canCheckout(store.cart, store.products, checkedPlayers);
@@ -58,7 +59,7 @@ function CartDialog() {
         const printLabel = personalizationLabel(line, store.players);
         const fee = p?.personalization_enabled ? p.personalization_fee || 0 : 0;
         return <article className="cart-item flex gap-4 py-4" key={cartLineKey(line)}>
-          <Link href={productPath(p || { id: line.id })} onClick={() => store.setDialog(null)} className="size-24 shrink-0 overflow-hidden rounded-xl bg-muted"><ProductImage product={p || { name, image: "/assets/product-unavailable.svg" }} className="size-full object-cover"/></Link>
+          <Link href={productPath(p || { id: line.id })} onClick={() => store.setDialog(null)} className="size-24 shrink-0 overflow-hidden rounded-xl bg-muted"><ProductImage product={p || { name, image: "/assets/product-unavailable.svg" }} sizes="96px" className="size-full object-cover"/></Link>
           <div className="min-w-0 flex-1 text-sm">
             <Link href={productPath(p || { id: line.id })} onClick={() => store.setDialog(null)} className="block font-medium hover:text-primary">{name}</Link>
             <small className="block text-xs text-muted-foreground">{line.size === "UNI" ? "Rozmiar uniwersalny" : "Rozmiar: " + line.size}</small>
@@ -77,8 +78,8 @@ function CartDialog() {
       })}</div>
       <div className="mt-4 border-t border-border pt-4">
         <div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Produkty</span><strong className="text-base font-medium">{prices ? fmt(store.subtotal) : "…"}</strong></div>
-        <div className="mt-3"><PromoField subtotal={store.subtotal} enabled={store.sales.checkoutEnabled && prices}/></div>
-        <FreeShipping subtotal={store.subtotal} methods={store.sales.shipping} enabled={store.sales.checkoutEnabled && prices}/>
+        <div className="mt-3"><PromoField subtotal={store.subtotal} enabled={store.sales.checkoutEnabled && prices} onChange={setPromo}/></div>
+        <FreeShipping subtotal={Math.max(0, store.subtotal - (promo?.discount || 0))} methods={store.sales.shipping} enabled={store.sales.checkoutEnabled && prices}/>
         <p className="mt-2 text-xs text-muted-foreground">Koszt dostawy wybierzesz w następnym kroku. <Link href="/koszyk" onClick={() => store.setDialog(null)} className="underline underline-offset-2 hover:text-foreground">Pełny koszyk</Link></p>
         {store.error && <p className="field-error mt-2">{store.error}</p>}
         <TextureButton size="lg" className="mt-4 w-full" disabled={!valid} onClick={() => { store.setDialog(null); router.push("/zamowienie"); }}>{store.sales.checkoutEnabled ? "Przejdź do zamówienia" : "Informacje o zamówieniach"} <ArrowRight size={18}/></TextureButton>
@@ -96,7 +97,7 @@ function QuickProduct() {
   return <Modal title={p.name} onClose={() => store.setQuickId(null)} className="sm:max-w-3xl">
     <button className={cn(iconButton, "absolute right-4 top-4 z-10")} aria-label="Zamknij produkt" onClick={() => store.setQuickId(null)}><X size={20}/></button>
     <div className="grid gap-6 sm:grid-cols-[1fr_1.1fr]">
-      <div className="aspect-[4/5] overflow-hidden rounded-xl bg-muted"><ProductImage product={p} className="size-full object-cover"/></div>
+      <div className="aspect-[4/5] overflow-hidden rounded-xl bg-muted"><ProductImage product={p} sizes="(min-width: 640px) 40vw, 100vw" className="size-full object-cover"/></div>
       <div className="flex flex-col gap-3">
         <span className="eyebrow">{label(p.category)}</span>
         <h2 className="text-2xl font-medium leading-tight">{p.name}</h2>
@@ -152,7 +153,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
           <div className="relative h-12" onMouseEnter={() => setShopOpen(true)}>
             <button type="button" className={cn(menuLink, (shopOpen || pathname === "/sklep" || pathname?.startsWith("/kategoria/")) && menuActive)} aria-expanded={shopOpen} aria-haspopup="true" onClick={() => setShopOpen(open => !open)} onKeyDown={e => { if (e.key === "Escape") setShopOpen(false); }}>Sklep <ChevronDown size={14} className={cn("transition-transform", shopOpen && "rotate-180")}/></button>
             {shopOpen && <div className="absolute left-0 top-full z-50 w-[44rem] rounded-b-2xl border border-t-0 border-border bg-background p-5 text-foreground shadow-xl" onKeyDown={e => { if (e.key === "Escape") setShopOpen(false); }}>
-              <div className="grid grid-cols-4 gap-3">{CATEGORIES.map(c => { const cover = coverFor(c); return <Link key={c} href={categoryUrl(c)} className="group rounded-xl border border-border p-2 transition-colors hover:border-primary/40" onClick={() => setShopOpen(false)}><span className="block aspect-square overflow-hidden rounded-lg bg-muted">{cover && <ProductImage product={cover} className="size-full object-cover transition-transform duration-500 group-hover:scale-105"/>}</span><span className="mt-2 block text-sm font-semibold">{label(c)}</span><span className="block text-xs text-muted-foreground">{store.products.filter(p => p.category === c).length} produktów</span></Link>; })}</div>
+              <div className="grid grid-cols-4 gap-3">{CATEGORIES.map(c => { const cover = coverFor(c); return <Link key={c} href={categoryUrl(c)} className="group rounded-xl border border-border p-2 transition-colors hover:border-primary/40" onClick={() => setShopOpen(false)}><span className="block aspect-square overflow-hidden rounded-lg bg-muted">{cover && <ProductImage product={cover} sizes="220px" className="size-full object-cover transition-transform duration-500 group-hover:scale-105"/>}</span><span className="mt-2 block text-sm font-semibold">{label(c)}</span><span className="block text-xs text-muted-foreground">{store.products.filter(p => p.category === c).length} produktów</span></Link>; })}</div>
               <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-border pt-4 text-sm"><Link href="/sklep" className="inline-flex items-center gap-1 font-semibold text-primary hover:underline" onClick={() => setShopOpen(false)}>Wszystkie produkty <ArrowRight size={14}/></Link><Link href="/sklep?q=retro" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Kolekcja Retro</Link><Link href="/zawodnicy" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Koszulki zawodników</Link><Link href="/karta-podarunkowa" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Karta podarunkowa</Link></div>
             </div>}
           </div>

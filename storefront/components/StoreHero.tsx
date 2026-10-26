@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowRight, ChevronLeft, ChevronRight } from "reicon-react";
@@ -7,6 +8,7 @@ import { autoplayAllowed, buildHeroSlides, carouselInterval, carouselKeyStep, ne
 import { useStore } from "./StoreProvider";
 import { TextureButton } from "@/components/templates/essentials/ui/texture-button";
 import { cn } from "@/lib/utils";
+import { optimizable } from "./ProductCard";
 
 /** Full-height photo hero from the kit, driven by the CMS hero section (and its optional product slides). */
 export default function StoreHero({ settings }: { settings?: SectionSettings }) {
@@ -47,7 +49,7 @@ export default function StoreHero({ settings }: { settings?: SectionSettings }) 
     onTouchStart={event => { if (event.touches.length === 1) { const point = event.touches[0]; touch.current = { x: point.clientX, y: point.clientY }; } else touch.current = null; }}
     onTouchCancel={() => { touch.current = null; }}
     onTouchEnd={event => { if (touch.current && event.changedTouches.length === 1) { const point = event.changedTouches[0]; const step = swipeDirection(touch.current.x, touch.current.y, point.clientX, point.clientY); if (step && slides.length > 1) move(step); } touch.current = null; }}>
-    <img key={slide.image} src={slide.image} alt={slide.image_alt} className={cn("absolute inset-0 size-full object-cover", slide.image_role === "lifestyle" ? "object-center" : "object-contain bg-muted p-10 sm:p-16")} fetchPriority={index === 0 ? "high" : "auto"} decoding="async"/>
+    <Image key={slide.image} src={slide.image} alt={slide.image_alt} fill sizes="100vw" priority={index === 0} unoptimized={!optimizable(slide.image)} className={cn("object-cover", slide.image_role === "lifestyle" ? "object-center" : "object-contain bg-muted p-10 sm:p-16")}/>
     <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/30 to-black/10" aria-hidden="true"/>
     <div className={cn("container relative z-10 pb-16 pt-44 sm:pb-24", align === "center" && "text-center", align === "right" && "text-right")} role="group" aria-roledescription="slajd" aria-label={`${index + 1} z ${slides.length}`}>
       <div key={slide.id} className={cn("max-w-3xl", align === "center" && "mx-auto", align === "right" && "ml-auto")}>

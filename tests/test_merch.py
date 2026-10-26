@@ -124,6 +124,18 @@ class MerchTests(unittest.TestCase):
         self.assertEqual(self.admin.request('POST', '/api/admin/stock-alerts/notify')[1], {'queued': 0})
 
     # ------------------------------------------------------------ promo codes
+    def test_free_shipping_threshold_counts_the_discounted_goods(self):
+        self.assertEqual(self.admin.request('POST', '/api/admin/promo', {'code': 'KIBIC10', 'kind': 'percent', 'value': 10})[0], 201)
+        self.go_live()
+        kurier = next(m for m in self.admin.request('GET', '/api/admin/shipping')[1] if m['code'] == 'kurier')
+        self.assertEqual(self.admin.request('PATCH', '/api/admin/shipping/' + str(kurier['id']), {'free_from': 7500})[0], 200)
+        # 79.00 PLN of goods clears the 75.00 PLN threshold on its own...
+        code, reply = self.order()
+        self.assertEqual((code, reply['total']), (201, 7900), reply)
+        # ...but with 10% off the customer pays 71.10 PLN for the goods, so the courier is charged again.
+        code, reply = self.order(promo_code='kibic10', idempotency_key='live-order-key-00000002')
+        self.assertEqual((code, reply['total'], reply['discount']), (201, 7900 - 790 + 1499, 790), reply)
+
     def test_promo_codes_are_validated_applied_and_consumed(self):
         code, promo = self.admin.request('POST', '/api/admin/promo', {'code': 'kibic10', 'kind': 'percent', 'value': 10, 'min_subtotal': 5000, 'max_uses': 1})
         self.assertEqual(code, 201, promo)

@@ -218,7 +218,8 @@ class SalesTests(unittest.TestCase):
             self.assertEqual(c.execute("SELECT stock FROM product_variants WHERE sku='TS-L'").fetchone()[0], 1)
             c.execute("UPDATE orders SET created='2020-01-01T00:00:00+00:00' WHERE id=?", (reply2['id'],))
             c.commit()
-        code, result = self.admin.request('POST', '/api/admin/orders/expire-unpaid', {})
+        # The panel button sends no body at all.
+        code, result = self.admin.request('POST', '/api/admin/orders/expire-unpaid')
         self.assertEqual((code, result['cancelled']), (200, [reply2['id']]))
         with api.connect() as c:
             self.assertEqual(c.execute("SELECT stock FROM product_variants WHERE sku='TS-L'").fetchone()[0], 2)
@@ -302,6 +303,10 @@ class SalesTests(unittest.TestCase):
         self.assertEqual(self.admin.request('PATCH', '/api/admin/settings', {'transfer_account': '123'})[0], 400)
         self.assertEqual(self.admin.request('PATCH', '/api/admin/settings', {'unknown': 1})[0], 400)
         self.assertEqual(self.admin.request('PATCH', '/api/admin/settings', {'unpaid_hours': 0})[0], 400)
+        # Unpaid orders wait 14 days by default; the customer e-mail says so in days, not hours.
+        self.assertEqual(self.admin.request('GET', '/api/admin/settings')[1]['settings']['unpaid_hours'], 336)
+        import commerce_sales as sales
+        self.assertEqual((sales.payment_window_label(336), sales.payment_window_label(72), sales.payment_window_label(5)), ('14 dni', '3 dni', '5 godzin'))
         code, created = self.admin.request('POST', '/api/admin/shipping', {'code': 'dpd', 'name': 'DPD kurier', 'kind': 'courier', 'price': 1599, 'free_from': 20000, 'enabled': False})
         self.assertEqual(code, 201, created)
         self.assertEqual(self.admin.request('POST', '/api/admin/shipping', {'code': 'dpd', 'name': 'x', 'kind': 'courier', 'price': 1})[0], 409)

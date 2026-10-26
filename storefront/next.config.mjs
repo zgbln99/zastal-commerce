@@ -9,6 +9,12 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Product photos: bundled assets and uploads served by the API (through the /api rewrite) are resized and converted on demand.
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    localPatterns: [{ pathname: '/assets/**' }, { pathname: '/api/store/media/**' }],
+    minimumCacheTTL: 86400,
+  },
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },

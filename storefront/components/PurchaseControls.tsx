@@ -26,12 +26,17 @@ export default function PurchaseControls({ product, onUnitPriceChange }: { produ
   const anyAvailable = product.variants.some(v => v.stock > 0);
   const released = product.released !== false;
   const soldOutSize = product.verified && !!size && stock === 0;
-  // Link from the players page: /produkt/ID?zawodnik=PLAYER preselects that player.
-  useEffect(() => {
-    if (!product.personalization_enabled) return;
-    try { const chosen = new URLSearchParams(window.location.search).get("zawodnik"); if (chosen && /^[0-9]{1,6}$/.test(chosen)) setPrint(current => ({ ...current, mode: "player", playerId: chosen })); } catch {}
-  }, [product.id, product.personalization_enabled]);
   const sizeKey = product.sizes?.join(",") ?? "";
+  // Links from the players page (?zawodnik=PLAYER) and the product feed (?rozmiar=SIZE) preselect that player or size.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const chosen = params.get("zawodnik");
+      if (product.personalization_enabled && chosen && /^[0-9]{1,6}$/.test(chosen)) setPrint(current => ({ ...current, mode: "player", playerId: chosen }));
+      const wanted = params.get("rozmiar");
+      if (wanted && product.sizes?.includes(wanted)) setSize(wanted);
+    } catch {}
+  }, [product.id, product.personalization_enabled, sizeKey]);
   useEffect(() => { if (!product.sizes) setSize("UNI"); else if (size && !product.sizes.includes(size)) setSize(""); else if (size === "UNI") setSize(""); }, [sizeKey]);
   const select = (value: string) => { setSize(value); setQuantity(1); setError(""); };
   return <div className="flex flex-col gap-4">

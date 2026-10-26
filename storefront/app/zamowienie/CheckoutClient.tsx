@@ -68,7 +68,7 @@ export default function CheckoutClient(){
  const accountLink="/konto?next="+encodeURIComponent(id?"/zamowienie?id="+id+"&token="+(token||""):"/zamowienie");
  const [promoInput,setPromoInput]=useState(""),[promo,setPromo]=useState<{code:string;discount:number;label:string}|null>(null),[promoError,setPromoError]=useState(""),[promoBusy,setPromoBusy]=useState(false);
  const discount=promo?Math.min(promo.discount,store.subtotal):0;
- const shipping=method?shippingCost(method,store.subtotal):0;
+ const shipping=method?shippingCost(method,store.subtotal-discount):0;
  const [giftInput,setGiftInput]=useState(""),[gift,setGift]=useState<{code:string;balance:number}|null>(null),[giftError,setGiftError]=useState(""),[giftBusy,setGiftBusy]=useState(false);
  const giftApplied=gift?Math.min(gift.balance,Math.max(0,store.subtotal+shipping-discount)):0;
  const total=Math.max(0,store.subtotal+shipping-discount-giftApplied);

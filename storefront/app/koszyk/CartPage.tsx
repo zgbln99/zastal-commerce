@@ -1,18 +1,20 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { ArrowRight, ChevronRight, Minus, Plus, ShoppingCart, Trash, TruckFast } from "reicon-react";
 import { fmt } from "../../lib/catalog";
 import { availableQty, canCheckout, cartLineKey, lineUnitPrice, personalizationLabel, productPath, variantCartQuantity } from "../../lib/commerce.mjs";
 import { useStore } from "../../components/StoreProvider";
 import { ProductImage } from "../../components/ProductCard";
 import FreeShipping from "../../components/FreeShipping";
-import PromoField from "../../components/PromoField";
+import PromoField, { type PromoPreview } from "../../components/PromoField";
 import { TextureButton } from "@/components/templates/essentials/ui/texture-button";
 
 /** Full cart page (the drawer's big sibling): the same lines, quantities, discount code and totals on their own address. */
 export default function CartPage() {
   const store = useStore(); const router = useRouter();
+  const [promo, setPromo] = useState<PromoPreview | null>(null);
   const checkedPlayers = store.playersStatus === "ready" ? store.players : [];
   const valid = store.status === "ready" && canCheckout(store.cart, store.products, checkedPlayers);
   const prices = store.status === "ready" && store.cart.every(line => store.products.find(p => p.id === line.id)?.verified);
@@ -27,7 +29,7 @@ export default function CartPage() {
         const stock = availableQty(p, line.size), combined = variantCartQuantity(store.cart, line.id, line.size);
         const printLabel = personalizationLabel(line, store.players);
         return <article className="cart-item flex gap-4 py-5" key={cartLineKey(line)}>
-          <Link href={productPath(p || { id: line.id })} className="size-28 shrink-0 overflow-hidden rounded-xl bg-muted"><ProductImage product={p || { name, image: "/assets/product-unavailable.svg" }} className="size-full object-cover"/></Link>
+          <Link href={productPath(p || { id: line.id })} className="size-28 shrink-0 overflow-hidden rounded-xl bg-muted"><ProductImage product={p || { name, image: "/assets/product-unavailable.svg" }} sizes="112px" className="size-full object-cover"/></Link>
           <div className="min-w-0 flex-1">
             <Link href={productPath(p || { id: line.id })} className="font-medium hover:text-primary">{name}</Link>
             <p className="text-sm text-muted-foreground">{line.size === "UNI" ? "Rozmiar uniwersalny" : "Rozmiar: " + line.size}{printLabel ? " · " + printLabel : ""}</p>
@@ -42,8 +44,8 @@ export default function CartPage() {
       <aside className="h-fit rounded-2xl border border-border bg-card p-6">
         <h2 className="text-lg font-medium">Podsumowanie</h2>
         <div className="mt-4 flex items-center justify-between text-sm"><span className="text-muted-foreground">Produkty</span><strong className="font-medium">{prices ? fmt(store.subtotal) : "…"}</strong></div>
-        <div className="mt-4"><PromoField subtotal={store.subtotal} enabled={store.sales.checkoutEnabled && prices}/></div>
-        <div className="mt-4"><FreeShipping subtotal={store.subtotal} methods={store.sales.shipping} enabled={store.sales.checkoutEnabled && prices}/></div>
+        <div className="mt-4"><PromoField subtotal={store.subtotal} enabled={store.sales.checkoutEnabled && prices} onChange={setPromo}/></div>
+        <div className="mt-4"><FreeShipping subtotal={Math.max(0, store.subtotal - (promo?.discount || 0))} methods={store.sales.shipping} enabled={store.sales.checkoutEnabled && prices}/></div>
         <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground"><TruckFast size={14} className="mt-0.5 shrink-0"/>Koszt dostawy i płatność wybierzesz w następnym kroku.</p>
         {store.error && <p className="field-error mt-2">{store.error}</p>}
         <TextureButton size="lg" className="mt-5 w-full" disabled={!valid} onClick={() => router.push("/zamowienie")}>{store.sales.checkoutEnabled ? "Przejdź do zamówienia" : "Informacje o zamówieniach"} <ArrowRight size={18}/></TextureButton>
