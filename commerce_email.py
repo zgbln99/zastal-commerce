@@ -382,8 +382,8 @@ def render_html(subject, body, origin):
     blocks = []
     for paragraph in body.strip().split('\n\n'):
         lines = paragraph.splitlines()
-        if len(lines) == 1 and lines[0].startswith(clean_origin + '/') and len(lines[0]) < 2048:
-            url = html.escape(lines[0], quote=True)
+        if len(lines) == 1 and len(lines[0]) < 2048 and (lines[0].startswith(clean_origin + '/') or lines[0].startswith('Szczegóły zamówienia: ' + clean_origin + '/')):
+            url = html.escape(lines[0].removeprefix('Szczegóły zamówienia: '), quote=True)
             blocks.append('<p style="margin:24px 0"><a href="' + url + '" style="display:inline-block;background:#184a33;color:#fff;text-decoration:none;padding:14px 22px;font-weight:700">Otwórz w sklepie</a></p>')
         else:
             blocks.append('<p style="margin:0 0 18px;line-height:1.65;white-space:pre-line">' + '<br>'.join(html.escape(line) for line in lines) + '</p>')

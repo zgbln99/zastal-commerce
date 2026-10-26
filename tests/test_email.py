@@ -77,6 +77,8 @@ class EmailTests(unittest.TestCase):
         self.assertNotIn('<script>', markup)
         self.assertIn('href="https://store.example.test/konto/email?action=verify#token=abc"', markup)
         self.assertIn('zamówienie &lt;5&gt;', markup)
+        order_markup = self.email.render_html('Zastal Store, status', 'Szczegóły zamówienia: https://store.example.test/zamowienie?id=5', 'https://store.example.test')
+        self.assertIn('href="https://store.example.test/zamowienie?id=5"', order_markup)
 
     def test_capture_rejects_real_recipients(self):
         from email.message import EmailMessage
