@@ -33,7 +33,7 @@ Wszystkie kroki wykonuje osoba z dostępem do serwera. Żaden krok nie kasuje ba
 | nowe tabele | `store_settings`, `shipping_methods`, `order_details`, `payments`, `payment_notifications`, `payment_refunds`, `pos_shifts`, `returns`, `product_prices`, `stock_alerts`, `promo_codes`, `gift_cards`, `gift_card_transactions` | tworzone puste (`product_prices` dostaje bieżące ceny) |
 | `product_options` (2) | kolumny: opis, odznaka, premiera, data dodania | ALTER TABLE |
 | `product_options` (3) | kolumny `slug` (adres produktu, uzupełniany z nazwy), `meta_title`, `meta_description` | ALTER TABLE, bez utraty |
-| nowe tabele (2) | `reviews` (opinie z moderacją), `subscribers` (newsletter, podwójne potwierdzenie), `contact_messages` (formularz kontaktowy) | CREATE TABLE IF NOT EXISTS |
+| nowe tabele (2) | `subscribers` (newsletter, podwójne potwierdzenie), `contact_messages` (formularz kontaktowy), `site_brand` (podpis i logotypy rozgrywek); tabela `reviews` usuwana przy starcie | CREATE TABLE IF NOT EXISTS |
 | `order_details` (2) | kolumny: kod rabatowy, rabat, karta podarunkowa (kod, kwota, e-mail i wiadomość obdarowanego) | ALTER TABLE |
 | `pos_sales` (2) | kolumna: kwota z karty podarunkowej | ALTER TABLE |
 

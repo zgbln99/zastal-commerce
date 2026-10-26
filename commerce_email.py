@@ -227,7 +227,7 @@ def admin_status(c):
 
 def dispatch(handler, path, c):
     paths = {
-        '/api/auth/email/status': 'GET', '/api/admin/email': 'GET',
+        '/api/auth/email/status': 'GET', '/api/admin/email': 'GET', '/api/admin/email/preview': 'GET',
         '/api/auth/password-reset/request': 'POST', '/api/auth/password-reset/confirm': 'POST',
         '/api/auth/email/verify': 'POST', '/api/account/email/verification': 'POST',
         '/api/admin/email/retry': 'POST', '/api/admin/email/test': 'POST'}
@@ -240,6 +240,11 @@ def dispatch(handler, path, c):
     if handler.command != paths[path]:
         raise auth.AuthError(405, 'Niedozwolona metoda.')
     if handler.command == 'GET':
+        if path == '/api/admin/email/preview':
+            from urllib.parse import parse_qs, urlparse
+            kind = parse_qs(urlparse(handler.path).query).get('kind', ['order_created'])[0]
+            handler.respond(200, preview(c, kind, os.environ.get('ZASTAL_SITE_ORIGIN', 'https://zastal.store').rstrip('/')), 'text/html; charset=utf-8')
+            return True
         handler.respond(200, admin_status(c) if path == '/api/admin/email' else {'configured': configuration()['configured']})
         return True
     auth.require_csrf(handler)
@@ -379,12 +384,36 @@ def _message(c, row, config):
             return None
         import commerce_sales as sales
         subject, body = sales.order_email(c, order, sales.details(c, order['id']), row['kind'], os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
+    try:
+        import commerce_launch as launch
+        seller = launch.values(c)
+    except Exception:
+        seller = {}
     c.commit()
     message = EmailMessage()
     message['From'], message['To'], message['Subject'] = config['from_address'], recipient, subject
     message['Message-ID'] = make_msgid(idstring=f'zastal-{row["id"]}', domain=config['from_address'].split('@', 1)[1])
     message.set_content(body)
+    # Every message also goes out as the shop-styled HTML version; the plain text above stays the fallback.
+    import commerce_mailtheme as theme
+    message.add_alternative(theme.render(subject, body, os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'), seller), subtype='html')
     return message
+
+
+def plain_text(message):
+    """The text part of a message (tests and the admin preview read this, not the HTML)."""
+    part = message.get_body(preferencelist=('plain',)) if message.is_multipart() else message
+    return part.get_content() if part is not None else ''
+
+
+def preview(c, kind, origin):
+    import commerce_mailtheme as theme
+    try:
+        import commerce_launch as launch
+        seller = launch.values(c)
+    except Exception:
+        seller = {}
+    return theme.sample(kind, origin, seller)
 
 
 def _deliver(message, config):

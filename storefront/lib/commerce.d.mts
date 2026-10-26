@@ -8,7 +8,7 @@ export type Variant = { id: number; product_id: number; size: string; sku: strin
 export type PrintArea = { x: number; y: number; w: number; h: number };
 export type PrintLayout = { image: string; areas: { name?: PrintArea; number?: PrintArea }; color: string; font: 'block' | 'condensed' | 'rounded'; calibrated: boolean; note?: string };
 export type DecorationMethod = 'dtf' | 'haft' | 'haft_3d' | 'sitodruk' | 'inne';
-export type Product = CatalogItem & { variants: Variant[]; verified: boolean; slug?: string; rating?: { count: number; average: number }; meta_title?: string; meta_description?: string; personalization_enabled?: boolean; personalization_required?: boolean; personalization_fee?: number; decoration_method?: DecorationMethod; decoration_method_label?: string; preorder?: boolean; preorder_note?: string; preorder_until?: string; size_guide?: string; description?: string; gift_card?: boolean; badge?: string; badge_info?: { code: string; label: string } | null; release_at?: string; release_epoch?: number | null; released?: boolean; print_layout?: PrintLayout | null; price_reduction?: { previous: number; lowest_30d: number; since: string } | null };
+export type Product = CatalogItem & { variants: Variant[]; verified: boolean; slug?: string; meta_title?: string; meta_description?: string; personalization_enabled?: boolean; personalization_required?: boolean; personalization_fee?: number; decoration_method?: DecorationMethod; decoration_method_label?: string; preorder?: boolean; preorder_note?: string; preorder_until?: string; size_guide?: string; description?: string; gift_card?: boolean; badge?: string; badge_info?: { code: string; label: string } | null; release_at?: string; release_epoch?: number | null; released?: boolean; print_layout?: PrintLayout | null; price_reduction?: { previous: number; lowest_30d: number; since: string } | null };
 export function normalizePrintLayout(value: unknown): PrintLayout | null;
 export const DECORATION_LABELS: Record<DecorationMethod, string>;
 export type OrderPrint = { mode: 'player' | 'custom'; player_id?: number; name: string; number: string };
@@ -16,9 +16,11 @@ export type OrderLineExtras = { decoration_method?: DecorationMethod; print_layo
 export type Filters = { category?: string; query?: string; minPrice?: number; maxPrice?: number; size?: string; available?: boolean; sort?: string };
 export type ShippingMethod = { code: string; name: string; kind: 'pickup' | 'locker' | 'courier'; price: number; free_from: number | null; requires_address: boolean; carrier: string; note: string };
 export type PaymentOption = { id: 'payu' | 'transfer' | 'pickup'; name: string; description: string; pickup_only: boolean };
-export type StoreStatus = { loaded: boolean; checkoutEnabled: boolean; phase: 'live' | 'prelaunch'; notice: string; shipping: ShippingMethod[]; payments: PaymentOption[]; pickupAddress: string; pickupHours: string; invoiceEnabled: boolean; orderNote: string; legal: { terms: string; privacy: string; returns: string; shipping: string }; seller: { name: string; email: string; phone: string }; pages: { slug: string; title: string }[] };
+export type Competition = { key: string; name: string; url: string; image: string };
+export type StoreStatus = { loaded: boolean; checkoutEnabled: boolean; phase: 'live' | 'prelaunch'; notice: string; shipping: ShippingMethod[]; payments: PaymentOption[]; pickupAddress: string; pickupHours: string; invoiceEnabled: boolean; orderNote: string; legal: { terms: string; privacy: string; returns: string; shipping: string }; seller: { name: string; email: string; phone: string }; brand: { tagline: string; competitions: Competition[] }; pages: { slug: string; title: string }[] };
 export const PRELAUNCH_STATUS: StoreStatus;
 export function normalizeStoreStatus(raw: unknown): StoreStatus;
+export function normalizeBrand(raw: unknown): { tagline: string; competitions: Competition[] };
 export function shippingCost(method: Pick<ShippingMethod, 'price' | 'free_from'>, subtotal: number): number;
 export function normalizeCart(raw: unknown, products?: CatalogItem[]): CartLine[];
 export function normalizePersonalization(value: unknown): Personalization | null | undefined;

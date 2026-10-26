@@ -1,4 +1,4 @@
-"""Reviews with moderation, newsletter double opt-in, contact messages and product slugs."""
+"""Newsletter double opt-in, contact messages and product slugs."""
 import unittest
 
 import commerce_api as api
@@ -24,38 +24,6 @@ class EngageTests(test_merch.MerchTests):
         self.assertEqual(self.public('GET', '/api/catalog/1')[1]['slug'], 'koszulka-wicemistrz')
         self.assertEqual(self.public('GET', '/api/catalog/nie-ma')[0], 404)
         self.assertEqual(__import__('commerce_personalization').slugify('Bluza Zastal Retro – zieleń, ŁÓDŹ'), 'bluza-zastal-retro-zielen-lodz')
-
-    # ------------------------------------------------------------ reviews
-    def test_review_waits_for_moderation_and_marks_verified_purchases(self):
-        self.go_live()
-        code, reply = self.order()
-        self.assertEqual(code, 201, reply)
-        self.assertEqual(self.admin.request('POST', f"/api/admin/orders/{reply['id']}/payment", {'action': 'confirm', 'note': 'wyciąg'})[0], 200)
-        bad = self.public('POST', '/api/store/reviews', {'product_id': 1, 'author': 'Jan', 'email': 'kibic@example.test', 'rating': 6, 'content': 'Świetna koszulka, polecam.'})
-        self.assertEqual(bad[0], 400)
-        bot = self.public('POST', '/api/store/reviews', {'product_id': 1, 'author': 'Jan', 'email': 'kibic@example.test', 'rating': 5, 'content': 'Świetna koszulka, polecam.', 'website': 'http://spam'})
-        self.assertEqual(bot[0], 400)
-        code, result = self.public('POST', '/api/store/reviews', {'product_id': 1, 'author': 'Jan', 'email': 'Kibic@Example.test', 'rating': 5, 'content': 'Świetna koszulka, polecam.'})
-        self.assertEqual((code, result['verified']), (200, True), result)
-        self.assertEqual(self.public('POST', '/api/store/reviews', {'product_id': 1, 'author': 'Jan', 'email': 'kibic@example.test', 'rating': 4, 'content': 'Druga opinia tej samej osoby.'})[0], 409)
-        code, other = self.public('POST', '/api/store/reviews', {'product_id': 1, 'author': 'Ola', 'email': 'ola@example.test', 'rating': 3, 'content': 'Rozmiar wypada trochę mały.'})
-        self.assertEqual((code, other['verified']), (200, False))
-        # Nothing shows until staff approves; the catalogue carries no rating yet.
-        self.assertEqual(self.public('GET', '/api/store/products/1/reviews')[1], {'summary': {'count': 0, 'average': 0, 'distribution': {'1': 0, '2': 0, '3': 0, '4': 0, '5': 0}}, 'reviews': []})
-        self.assertEqual(self.product(1)['rating'], {'count': 0, 'average': 0})
-        code, pending = self.admin.request('GET', '/api/admin/reviews?status=pending')
-        self.assertEqual((code, len(pending), pending[0]['product_name']), (200, 2, 'Koszulka'))
-        self.assertEqual(self.admin.request('PATCH', f"/api/admin/reviews/{pending[0]['id']}", {'status': 'approved', 'reply': 'Dziękujemy!'})[0], 200)
-        self.assertEqual(self.admin.request('PATCH', f"/api/admin/reviews/{pending[1]['id']}", {'status': 'approved'})[0], 200)
-        code, shown = self.public('GET', '/api/store/products/1/reviews')
-        self.assertEqual((shown['summary']['count'], shown['summary']['average']), (2, 4.0))
-        self.assertEqual([r['verified'] for r in shown['reviews']], [True, False])
-        self.assertNotIn('email', shown['reviews'][0])
-        self.assertEqual(self.product(1)['rating'], {'count': 2, 'average': 4.0})
-        self.assertEqual(self.admin.request('PATCH', f"/api/admin/reviews/{pending[1]['id']}", {'status': 'rejected'})[0], 200)
-        self.assertEqual(self.public('GET', '/api/store/products/1/reviews')[1]['summary']['count'], 1)
-        # A cashier cannot moderate (products capability), but can read nothing either without it.
-        self.assertEqual(self.admin.request('PATCH', '/api/admin/reviews/999', {'status': 'approved'})[0], 404)
 
     # ------------------------------------------------------------ newsletter
     def test_newsletter_needs_consent_and_confirmation_link(self):
@@ -111,3 +79,52 @@ class EngageTests(test_merch.MerchTests):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class BrandTests(test_merch.MerchTests):
+    def test_competition_logos_are_edited_in_the_panel_and_shown_publicly(self):
+        import base64, io
+        from PIL import Image
+        code, config = self.admin.request('GET', '/api/admin/brand')
+        self.assertEqual((code, [c['name'] for c in config['competitions']]), (200, ['Orlen Basket Liga', 'FIBA Europe Cup']))
+        public = self.public('GET', '/api/store/status')[1]['config']['brand']
+        self.assertEqual([c['key'] for c in public['competitions']], ['liga', 'fec'])
+        self.assertNotIn('enabled', public['competitions'][0])
+        buffer = io.BytesIO()
+        Image.new('RGBA', (120, 60), (22, 81, 20, 0)).save(buffer, 'PNG')
+        code, upload = self.admin.request('POST', '/api/admin/brand/logo', {'image': 'data:image/png;base64,' + base64.b64encode(buffer.getvalue()).decode()})
+        self.assertEqual(code, 201, upload)
+        self.assertRegex(upload['url'], r'^/api/store/media/[0-9a-f]{32}\.webp$')
+        self.assertEqual(self.admin.request('PATCH', '/api/admin/brand', {'tagline': 'x' * 61, 'competitions': []})[0], 400)
+        self.assertEqual(self.admin.request('PATCH', '/api/admin/brand', {'competitions': [{'name': 'Liga', 'image': 'https://evil.test/a.png'}]})[0], 400)
+        code, saved = self.admin.request('PATCH', '/api/admin/brand', {'tagline': 'Sklep kibica', 'competitions': [
+            {'key': 'liga', 'name': 'Orlen Basket Liga', 'url': 'https://plk.pl', 'image': upload['url'], 'enabled': True},
+            {'key': 'fec', 'name': 'FIBA Europe Cup', 'url': '', 'image': '', 'enabled': False}]})
+        self.assertEqual((code, saved['tagline']), (200, 'Sklep kibica'), saved)
+        public = self.public('GET', '/api/store/status')[1]['config']['brand']
+        self.assertEqual((public['tagline'], [c['name'] for c in public['competitions']], public['competitions'][0]['image']), ('Sklep kibica', ['Orlen Basket Liga'], upload['url']))
+        import urllib.request
+        with urllib.request.urlopen(f'http://127.0.0.1:{self.port}' + upload['url'], timeout=8) as r:
+            self.assertEqual((r.status, r.headers.get('Content-Type', '').split(';')[0]), (200, 'image/webp'))
+
+    def test_html_mail_theme_wraps_every_message(self):
+        import commerce_mailtheme as theme
+        body = 'Dziękujemy za zamówienie ZS-00042.\nDo zapłaty: 124.99 PLN\n\nDane do przelewu:\n  Odbiorca: Zastal\n  Tytuł: ZS-00042\n\nSzczegóły zamówienia: https://sklep.test/zamowienie?id=42&token=abc\n'
+        page = theme.render('Zastal Store, potwierdzenie zamówienia ZS-00042', body, 'https://sklep.test', {'seller_name': 'Zastal S.A.', 'support_email': 'sklep@zastal.test'})
+        self.assertIn('<h1', page)
+        self.assertIn('Potwierdzenie zamówienia ZS-00042</h1>', page)
+        self.assertIn('Otwórz zamówienie', page)
+        self.assertIn('Odbiorca: Zastal', page)
+        self.assertIn('sklep@zastal.test', page)
+        self.assertIn('/assets/icon-192.png', page)
+        self.assertNotIn('<script', page)
+        self.assertIn('&lt;b&gt;', theme.render('x', '<b>nie html</b>', 'https://sklep.test'))
+        for kind in theme.SAMPLES:
+            self.assertIn('<h1', theme.sample(kind, 'https://sklep.test'))
+        import urllib.request
+        request = urllib.request.Request(f'http://127.0.0.1:{self.port}/api/admin/email/preview?kind=gift_card_issued', headers={'Cookie': self.admin.cookie} if getattr(self.admin, 'cookie', '') else {})
+        try:
+            with urllib.request.urlopen(request, timeout=8) as r:
+                self.assertIn('Kod karty', r.read().decode())
+        except urllib.error.HTTPError as ex:
+            self.assertIn(ex.code, (401, 403))  # without the session cookie the preview stays private

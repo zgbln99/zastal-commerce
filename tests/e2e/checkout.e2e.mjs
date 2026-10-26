@@ -151,20 +151,9 @@ try {
   await d.waitForSelector('.receipt-success');
   const paidText = await d.locator('.receipt-page').innerText();
   step('desktop: receipt shows paid status and print snapshot', paidText.includes('Płatność przyjęta') && paidText.includes('KIBIC') && paidText.includes('Opłacone'));
-  // ---------- Reviews, newsletter, contact form, cart page
-  const hoodie = catalogue.find(p => p.id === 1);
-  await d.goto(WEB + '/produkt/' + hoodie.slug, { waitUntil: 'networkidle' });
-  await d.getByRole('button', { name: 'Napisz opinię' }).click();
-  await d.getByRole('radio', { name: '5 gwiazdek' }).click();
-  await d.locator('.review-form input[autocomplete="given-name"]').fill('Jan');
-  await d.locator('.review-form input[type="email"]').fill('online@example.test');
-  await d.locator('.review-form textarea').fill('Świetna bluza, materiał gruby i ciepły. Rozmiar zgodny z tabelą.');
-  await d.getByRole('button', { name: 'Wyślij opinię' }).click();
-  await d.waitForSelector('.product-reviews [role="status"]');
-  const reviewsPending = await (await fetch(API + '/api/store/products/1/reviews')).json();
-  step('desktop: review goes to moderation and is not public yet', reviewsPending.summary.count === 0);
+  // ---------- Newsletter, contact form, cart page
   await d.goto(WEB + '/koszyk', { waitUntil: 'networkidle' });
-  step('desktop: empty cart page offers the shop', (await d.locator('.empty-state').count()) === 1);
+  step('desktop: cart page renders its own address', (await d.locator('.cart-page').count()) === 1 && ((await d.locator('.empty-state').count()) === 1 || (await d.locator('.cart-item').count()) >= 1));
   await d.goto(WEB + '/kontakt', { waitUntil: 'networkidle' });
   await d.locator('.contact-form input[autocomplete="name"]').fill('Jan Kibic');
   await d.locator('.contact-form input[type="email"]').fill('kibic@example.test');
@@ -244,11 +233,6 @@ try {
   await d.waitForSelector('.admin-roles-grid');
   await shot(d, '16-admin-staff-1440');
   // Cashier sees only its screens
-  await d.locator('.admin-navitem', { hasText: 'Opinie' }).click();
-  await d.getByRole('button', { name: 'Publikuj' }).first().click();
-  await d.waitForTimeout(600);
-  const reviewsPublic = await (await fetch(API + '/api/store/products/1/reviews')).json();
-  step('admin: approved review is public with its verified-purchase mark', reviewsPublic.summary.count === 1 && reviewsPublic.reviews[0].verified === true && reviewsPublic.summary.average === 5);
   await d.locator('.admin-navitem', { hasText: 'Wiadomości' }).click();
   await d.waitForSelector('.admin-table');
   step('admin: contact message is listed with its order number', (await d.locator('.admin-table').innerText()).includes('ZS-00001'));

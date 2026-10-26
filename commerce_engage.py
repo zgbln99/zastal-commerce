@@ -1,8 +1,7 @@
-"""Customer engagement: product reviews with moderation, newsletter with double opt-in, contact messages.
+"""Customer engagement: newsletter with double opt-in and contact messages.
 
 Everything here is opt-in data given by shoppers themselves; nothing is sent anywhere without the
-addressee's own action (a confirmation link for the newsletter, a published review only after staff
-approval). Money is never involved, so the module only needs ordinary transactions.
+addressee's own action (a confirmation link for the newsletter). Money is never involved, so the module only needs ordinary transactions.
 """
 import datetime as dt
 import hashlib
@@ -12,7 +11,6 @@ import secrets
 import unicodedata
 
 EMAIL = re.compile(r'[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}')
-REVIEW_STATUSES = ('pending', 'approved', 'rejected')
 SUBSCRIBER_STATUSES = ('pending', 'confirmed', 'unsubscribed')
 MESSAGE_STATUSES = ('new', 'answered', 'closed')
 CONFIRM_TTL_HOURS = 72
@@ -33,14 +31,8 @@ def stamp(moment=None):
 
 
 def init_schema(c):
+    c.execute('DROP TABLE IF EXISTS reviews')  # the review feature was removed before launch
     c.executescript('''
-        CREATE TABLE IF NOT EXISTS reviews(
-            id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL REFERENCES products(id),
-            author TEXT NOT NULL, email TEXT NOT NULL, rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
-            content TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
-            verified INTEGER NOT NULL DEFAULT 0 CHECK(verified IN (0,1)), order_id INTEGER,
-            reply TEXT NOT NULL DEFAULT '', created TEXT NOT NULL, moderated_at TEXT, moderated_by TEXT NOT NULL DEFAULT '',
-            UNIQUE(product_id,email));
         CREATE TABLE IF NOT EXISTS subscribers(
             id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE,
             status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','unsubscribed')),
@@ -77,107 +69,6 @@ def _honeypot(data):
     # Bots fill every field; the storefront keeps this one hidden and empty.
     if data.get('website'):
         raise EngageError(400, 'Nie udało się wysłać formularza')
-
-
-# ------------------------------------------------------------------ reviews
-def _bought(c, product_id, email):
-    """A paid live order from this address that contains the product: the review is a verified purchase."""
-    product = c.execute('SELECT sku FROM products WHERE id=?', (product_id,)).fetchone()
-    variant_skus = {row['sku'] for row in c.execute('SELECT sku FROM product_variants WHERE product_id=?', (product_id,))}
-    skus = variant_skus | ({product['sku']} if product else set())
-    rows = c.execute('''SELECT o.id,o.items FROM orders o JOIN order_details d ON d.order_id=o.id
-                        WHERE d.customer_email=? AND d.mode='live' AND d.payment_status IN ('paid','partially_refunded')
-                        ORDER BY o.id DESC LIMIT 50''', (email,)).fetchall()
-    for row in rows:
-        try:
-            items = json.loads(row['items'])
-        except ValueError:
-            continue
-        # Order lines carry SKUs (product and variant), never the catalogue id.
-        if any(isinstance(item, dict) and (item.get('sku') in skus or item.get('variant_sku') in skus) for item in items):
-            return row['id']
-    return None
-
-
-def submit_review(c, data):
-    if not isinstance(data, dict):
-        raise EngageError(400, 'Nieprawidłowe dane')
-    _honeypot(data)
-    product_id = data.get('product_id')
-    if isinstance(product_id, bool) or not isinstance(product_id, int):
-        raise EngageError(400, 'Wybierz produkt')
-    product = c.execute('SELECT id,name FROM products WHERE id=?', (product_id,)).fetchone()
-    if not product:
-        raise EngageError(404, 'Produkt nie istnieje', 'product_not_found')
-    rating = data.get('rating')
-    if isinstance(rating, bool) or not isinstance(rating, int) or not 1 <= rating <= 5:
-        raise EngageError(400, 'Wybierz ocenę od 1 do 5 gwiazdek', 'invalid_rating')
-    author = _text(data.get('author'), 'imię', 60)
-    email = _email(data.get('email'))
-    content = _text(data.get('content'), 'treść opinii', 2000, minimum=10)
-    if c.execute('SELECT 1 FROM reviews WHERE product_id=? AND email=? AND status<>?', (product_id, email, 'rejected')).fetchone():
-        raise EngageError(409, 'Z tego adresu dodano już opinię o tym produkcie', 'already_reviewed')
-    order_id = _bought(c, product_id, email)
-    c.execute('DELETE FROM reviews WHERE product_id=? AND email=? AND status=?', (product_id, email, 'rejected'))
-    c.execute('INSERT INTO reviews(product_id,author,email,rating,content,verified,order_id,created) VALUES(?,?,?,?,?,?,?,?)',
-              (product_id, author, email, rating, content, 1 if order_id else 0, order_id, stamp()))
-    return {'ok': True, 'message': 'Dziękujemy. Opinia pojawi się po sprawdzeniu przez obsługę sklepu.', 'verified': bool(order_id)}
-
-
-def _public_review(row):
-    return {'id': row['id'], 'author': row['author'], 'rating': row['rating'], 'content': row['content'],
-            'created': row['created'], 'verified': bool(row['verified']), 'reply': row['reply']}
-
-
-def product_reviews(c, product_id, limit=50):
-    rows = c.execute('SELECT * FROM reviews WHERE product_id=? AND status=? ORDER BY verified DESC,id DESC LIMIT ?',
-                     (product_id, 'approved', limit)).fetchall()
-    return {'summary': summary(c, product_id), 'reviews': [_public_review(r) for r in rows]}
-
-
-def summary(c, product_id):
-    rows = c.execute('SELECT rating,COUNT(*) AS n FROM reviews WHERE product_id=? AND status=? GROUP BY rating', (product_id, 'approved')).fetchall()
-    distribution = {str(star): 0 for star in range(1, 6)}
-    for row in rows:
-        distribution[str(row['rating'])] = row['n']
-    count = sum(distribution.values())
-    average = round(sum(int(star) * n for star, n in distribution.items()) / count, 2) if count else 0
-    return {'count': count, 'average': average, 'distribution': distribution}
-
-
-def annotate(c, products):
-    """Attach approved rating summaries to catalogue rows (cards, JSON-LD) in one query."""
-    rows = c.execute('SELECT product_id,COUNT(*) AS n,AVG(rating) AS avg FROM reviews WHERE status=? GROUP BY product_id', ('approved',)).fetchall()
-    ratings = {row['product_id']: {'count': row['n'], 'average': round(row['avg'], 2)} for row in rows}
-    for product in products:
-        product['rating'] = ratings.get(product['id'], {'count': 0, 'average': 0})
-    return products
-
-
-def admin_reviews(c, status=''):
-    where, params = ('WHERE r.status=?', (status,)) if status in REVIEW_STATUSES else ('', ())
-    rows = c.execute(f'''SELECT r.*,p.name AS product_name FROM reviews r JOIN products p ON p.id=r.product_id {where}
-                         ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END, r.id DESC LIMIT 500''', params).fetchall()
-    return [dict(r) for r in rows]
-
-
-def moderate(c, review_id, data, staff):
-    row = c.execute('SELECT * FROM reviews WHERE id=?', (review_id,)).fetchone()
-    if not row:
-        raise EngageError(404, 'Nie znaleziono opinii')
-    updates, params = [], []
-    if 'status' in data:
-        if data['status'] not in REVIEW_STATUSES:
-            raise EngageError(400, 'Nieznany status opinii')
-        updates += ['status=?', 'moderated_at=?', 'moderated_by=?']
-        params += [data['status'], stamp(), staff]
-    if 'reply' in data:
-        updates.append('reply=?')
-        params.append(_text(data['reply'], 'odpowiedź', 1000, minimum=0))
-    if not updates:
-        raise EngageError(400, 'Brak zmian')
-    c.execute(f'UPDATE reviews SET {",".join(updates)} WHERE id=?', (*params, review_id))
-    return dict(c.execute('SELECT r.*,p.name AS product_name FROM reviews r JOIN products p ON p.id=r.product_id WHERE r.id=?', (review_id,)).fetchone())
 
 
 # ------------------------------------------------------------------ newsletter
@@ -375,7 +266,6 @@ def update_message(c, message_id, data):
 
 def counts(c):
     """Open work for the staff dashboard and digest."""
-    pending = c.execute('SELECT COUNT(*) FROM reviews WHERE status=?', ('pending',)).fetchone()[0]
     new_messages = c.execute('SELECT COUNT(*) FROM contact_messages WHERE status=?', ('new',)).fetchone()[0]
     confirmed = c.execute('SELECT COUNT(*) FROM subscribers WHERE status=?', ('confirmed',)).fetchone()[0]
-    return {'pending_reviews': pending, 'new_messages': new_messages, 'subscribers': confirmed}
+    return {'new_messages': new_messages, 'subscribers': confirmed}

@@ -152,7 +152,7 @@ function Block({ section }: { section: HomeSection }) {
 export default function HomeCanvas({ config }: { config: HomeConfig }) {
   const enabled = config.sections.filter(section => section.enabled);
   const startsWithHero = enabled[0]?.type === "hero";
-  return <div className={cn("cms-home", !startsWithHero && "pt-16 md:pt-27")}>
+  return <div className={cn("cms-home", !startsWithHero && "pt-16 md:pt-34")}>
     {enabled.map(section => <Block key={section.id} section={section}/>)}
   </div>;
 }

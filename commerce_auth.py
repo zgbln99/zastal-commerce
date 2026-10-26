@@ -40,8 +40,8 @@ ROUTE_CAPABILITIES = (
     ('/api/admin/orders', 'orders', None), ('/api/admin/inventory', 'inventory', None),
     ('/api/admin/stock-events', None, None), ('/api/admin/transfers', 'transfers', None),
     ('/api/admin/production', 'production', None),
-    ('/api/admin/reviews', 'products', 'products'), ('/api/admin/subscribers', 'customers', 'customers'),
-    ('/api/admin/contact', 'customers', 'customers'),
+    ('/api/admin/subscribers', 'customers', 'customers'),
+    ('/api/admin/contact', 'customers', 'customers'), ('/api/admin/brand', 'cms', 'cms'),
 )
 TTL = {None: 3600, 'customer': 7 * 86400}
 TTL.update({role: 8 * 3600 for role in STAFF_ROLES})

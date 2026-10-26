@@ -27,11 +27,13 @@ commerce_ops.py           # kasa POS, zmiany kasowe, realizacja (kompletacja, na
 commerce_personalization.py  # produkty i opcje (slug, SEO, odznaki, premiery, karta), zawodnicy
 commerce_merch.py         # odznaki, premiery, powiadomienia o dostępności, kody rabatowe
 commerce_giftcards.py     # karty podarunkowe
-commerce_engage.py        # opinie (moderacja), newsletter (podwójne potwierdzenie), wiadomości z formularza
+commerce_engage.py        # newsletter (podwójne potwierdzenie), wiadomości z formularza
+commerce_brand.py         # podpis sklepu i logotypy rozgrywek (upload PNG/WebP z panelu)
+commerce_mailtheme.py     # wersja HTML każdego e-maila w barwach sklepu, podgląd w panelu Poczta
 commerce_email.py         # kolejka wiadomości (outbox) i treści
 commerce_reports.py, commerce_digest.py, commerce_returns.py, commerce_dpd.py, commerce_cms.py, commerce_pages.py, commerce_media.py, commerce_pricing.py, commerce_launch.py
 storefront/app/           # strony: /, /sklep, /kategoria/[slug], /szukaj, /produkt/[handle], /koszyk, /zamowienie, /konto, /pomoc, /kontakt, /newsletter, /zawodnicy, /karta-podarunkowa, /informacje/[slug], /admin
-storefront/components/    # StoreShell (nagłówek, koszyk, stopka), HomeCanvas (sekcje CMS), ProductCard, PurchaseControls, ProductReviews, search/SearchBox, PromoField, NewsletterForm
+storefront/components/    # StoreShell (nagłówek, koszyk, stopka), HomeCanvas (sekcje CMS), ProductCard, PurchaseControls, CompetitionLogos, search/SearchBox, PromoField, NewsletterForm
 storefront/components/templates/essentials/ui/texture-button.tsx   # przycisk z zestawu kairoui, bez zmian
 storefront/lib/           # commerce.mjs (koszyk, filtry, productPath), money.ts, json-ld.tsx, site.ts, catalog-paths.ts, home-layout.ts
 storefront/app/tailwind.css, kit.css   # tokeny i warstwy CSS (patrz DESIGN.md)

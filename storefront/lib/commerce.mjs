@@ -24,10 +24,23 @@ export function normalizeStoreStatus(raw) {
     invoiceEnabled: config.invoice_enabled !== false, orderNote: text(config.order_note, 400),
     legal: { terms: https(legal.terms_url), privacy: https(legal.privacy_url), returns: https(legal.returns_url), shipping: https(legal.shipping_url) },
     seller: { name: text(seller.name, 160), email: text(seller.support_email, 254), phone: text(seller.support_phone, 40) },
+    brand: normalizeBrand(config.brand),
     pages: Array.isArray(config.pages) ? config.pages.filter(p => p && typeof p.slug === 'string' && /^[a-z0-9][a-z0-9-]{0,59}$/.test(p.slug)).map(p => ({ slug: p.slug, title: text(p.published_title || p.title, 120) || p.slug })) : [],
   };
 }
-export const PRELAUNCH_STATUS = Object.freeze({ loaded: false, checkoutEnabled: false, phase: 'prelaunch', notice: '', shipping: [], payments: [], pickupAddress: '', pickupHours: '', invoiceEnabled: true, orderNote: '', legal: { terms: '', privacy: '', returns: '', shipping: '' }, seller: { name: '', email: '', phone: '' }, pages: [] });
+/** Competition logotypes and the tagline edited in the admin panel; only shop-served images and https links pass. */
+export function normalizeBrand(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const text = (input, limit) => typeof input === 'string' ? input.trim().slice(0, limit) : '';
+  const competitions = Array.isArray(source.competitions) ? source.competitions.filter(c => c && typeof c === 'object' && typeof c.name === 'string' && c.name.trim()).slice(0, 6).map((c, index) => ({
+    key: typeof c.key === 'string' && /^[a-z0-9-]{1,30}$/.test(c.key) ? c.key : 'rozgrywki-' + (index + 1),
+    name: text(c.name, 60),
+    url: typeof c.url === 'string' && /^https:\/\/[^\s<>"']+$/.test(c.url) ? c.url : '',
+    image: typeof c.image === 'string' && /^\/api\/store\/media\/[0-9a-f]{32}\.webp$/.test(c.image) ? c.image : '',
+  })) : [];
+  return { tagline: text(source.tagline, 60) || 'Oficjalny sklep klubu', competitions };
+}
+export const PRELAUNCH_STATUS = Object.freeze({ loaded: false, checkoutEnabled: false, phase: 'prelaunch', notice: '', shipping: [], payments: [], pickupAddress: '', pickupHours: '', invoiceEnabled: true, orderNote: '', legal: { terms: '', privacy: '', returns: '', shipping: '' }, seller: { name: '', email: '', phone: '' }, brand: { tagline: 'Oficjalny sklep klubu', competitions: [] }, pages: [] });
 export function normalizePersonalization(value) {
   if (value == null) return undefined;
   if (!value || typeof value !== 'object') return null;

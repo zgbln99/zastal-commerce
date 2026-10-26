@@ -4,24 +4,14 @@ import ProductDetail from "./ProductDetail";
 import { storeStatus } from "../../../lib/store-status";
 import { getProduct, type CatalogEntry } from "../../../lib/catalog-paths";
 import ProductUnavailable from "./ProductUnavailable";
-import { JsonLdScript, firstParagraph, productBreadcrumbJsonLd, productJsonLd, type LdReview } from "../../../lib/json-ld";
+import { JsonLdScript, firstParagraph, productBreadcrumbJsonLd, productJsonLd} from "../../../lib/json-ld";
 import { absolute } from "../../../lib/site";
 
-const API = process.env.ZASTAL_CMS_API || "http://127.0.0.1:8880";
 const isId = (handle: string) => /^[1-9][0-9]{0,8}$/.test(handle);
 
 /** Current catalogue entry by slug or id. "missing" is a real 404; "unavailable" means the API did not answer and the client renders from its own catalogue. */
 async function resolve(handle: string): Promise<{ kind: "ok"; item: CatalogEntry } | { kind: "missing" } | { kind: "unavailable" }> {
   return getProduct(handle);
-}
-
-async function approvedReviews(id: number): Promise<LdReview[]> {
-  try {
-    const response = await fetch(`${API}/api/store/products/${id}/reviews`, { cache: "no-store", signal: AbortSignal.timeout(2000) });
-    if (!response.ok) return [];
-    const data = await response.json();
-    return Array.isArray(data?.reviews) ? data.reviews : [];
-  } catch { return []; }
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ handle: string }> }): Promise<Metadata> {
@@ -47,9 +37,9 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
     const qs = new URLSearchParams(Object.entries(query).flatMap(([key, value]) => typeof value === "string" ? [[key, value]] : Array.isArray(value) ? value.map(v => [key, v]) : [])).toString();
     permanentRedirect("/produkt/" + item.slug + (qs ? "?" + qs : ""));
   }
-  const [status, reviews] = await Promise.all([storeStatus(), item.rating.count > 0 ? approvedReviews(item.id) : Promise.resolve([])]);
+  const status = await storeStatus();
   return <>
-    <JsonLdScript data={[productBreadcrumbJsonLd(item), productJsonLd(item, status.live, reviews)]}/>
+    <JsonLdScript data={[productBreadcrumbJsonLd(item), productJsonLd(item, status.live)]}/>
     <ProductDetail key={item.id} productId={item.id}/>
   </>;
 }

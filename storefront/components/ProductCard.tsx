@@ -7,7 +7,6 @@ import { fmt } from "../lib/catalog";
 import { productDisplayPrice, productPath, type Product } from "../lib/commerce.mjs";
 import { useStore } from "./StoreProvider";
 import PriceReduction from "./PriceReduction";
-import Stars from "./Stars";
 import { cn } from "@/lib/utils";
 
 export function ProductImage({ product, media, className = "", eager = false }: { product: ImageProduct; media?: ProductMedia; className?: string; eager?: boolean; showLabel?: boolean }) {
@@ -40,7 +39,6 @@ export default function ProductCard({ product, eager = false }: { product: Produ
     <div className="mt-3 min-w-0">
       <Link className="block truncate text-sm font-medium text-foreground hover:text-primary" href={productPath(product)}>{product.name}</Link>
       <p className="mt-0.5 truncate text-xs text-muted-foreground">{product.subtitle || product.category} · {sizeRange}</p>
-      {product.rating && product.rating.count > 0 && <span className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground"><Stars rating={product.rating.average} size={11}/>{product.rating.count}</span>}
       <div className="mt-1.5 text-sm font-medium">{product.verified ? <>{fmt(productDisplayPrice(product))}{product.personalization_required && <span className="ml-1 text-[11px] font-normal text-muted-foreground">z nadrukiem</span>}<PriceReduction product={product} compact/></> : <span className="text-muted-foreground">…</span>}</div>
     </div>
   </article>;

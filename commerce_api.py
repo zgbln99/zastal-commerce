@@ -32,6 +32,7 @@ import commerce_pricing as pricing
 import commerce_merch as merch
 import commerce_giftcards as giftcards
 import commerce_engage as engage
+import commerce_brand as brand
 import commerce_reports as reports
 import commerce_digest as digest
 import commerce_dpd as dpd
@@ -121,6 +122,7 @@ def init():
         merch.init_schema(c)
         giftcards.init_schema(c)
         engage.init_schema(c)
+        brand.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -155,7 +157,6 @@ def compatible_products(c):
         product['price_reduction'] = pricing.reduction(c, product['id'])
         product['sizes'] = [v['size'] for v in c.execute('SELECT size FROM product_variants WHERE product_id=? ORDER BY id', (product['id'],))]
     merch.annotate(c, products)
-    engage.annotate(c, products)
     return products
 
 def catalog(c):
@@ -291,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
                 if operation_route:return self.respond(200,ops.detail(c,int(operation_route.group(1))))
                 if path=='/api/store/status':
                     state=readiness(c)
-                    return self.respond(200,{**launch.snapshot(c,public=True,readiness=state),'config':{**sales.public_config(c,mail.configuration()['configured'],payments.ready(),state['mode']),'pages':pages.listing(c)}})
+                    return self.respond(200,{**launch.snapshot(c,public=True,readiness=state),'config':{**sales.public_config(c,mail.configuration()['configured'],payments.ready(),state['mode']),'pages':pages.listing(c),'brand':brand.public(c)}})
                 if path=='/api/store/pages':return self.respond(200,pages.listing(c))
                 page_route=re.fullmatch(r'/api/store/pages/([a-z0-9-]{1,60})',path)
                 if page_route:return self.respond(200,pages.public_page(c,page_route.group(1)))
@@ -370,9 +371,6 @@ class Handler(BaseHTTPRequestHandler):
                     pid=int(handle) if re.fullmatch(r'[1-9][0-9]{0,8}',handle) else None
                     p=next((x for x in catalog(c) if x["id"]==pid or (pid is None and x.get("slug")==handle)),None)
                     return self.respond(200,p) if p else self.respond(404,{"error":"Produkt nie istnieje"})
-                review_route=re.fullmatch(r'/api/store/products/([1-9][0-9]*)/reviews',path)
-                if review_route:return self.respond(200,engage.product_reviews(c,int(review_route.group(1))))
-                if path=='/api/admin/reviews':return self.respond(200,engage.admin_reviews(c,parse_qs(urlparse(self.path).query).get('status',[''])[0]))
                 if path in ('/api/admin/subscribers','/api/admin/subscribers.csv'):
                     rows=engage.admin_subscribers(c,parse_qs(urlparse(self.path).query).get('status',[''])[0])
                     if path.endswith('.csv'):
@@ -380,6 +378,7 @@ class Handler(BaseHTTPRequestHandler):
                         return self.respond(200,engage.subscribers_csv(rows),'text/csv; charset=utf-8')
                     return self.respond(200,rows)
                 if path=='/api/admin/contact':return self.respond(200,engage.admin_messages(c,parse_qs(urlparse(self.path).query).get('status',[''])[0]))
+                if path=='/api/admin/brand':return self.respond(200,brand.get(c))
                 if path.startswith("/api/orders/"):
                     try:oid=int(path.rsplit("/",1)[1])
                     except ValueError:return self.respond(404,{"error":"Nie znaleziono zamówienia"})
@@ -480,14 +479,13 @@ class Handler(BaseHTTPRequestHandler):
                     with connect() as c:row=giftcards.lookup(c,data.get('code'))
                 except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
                 return self.respond(200,giftcards.public_view(row))
-            if path in ('/api/store/reviews','/api/store/newsletter','/api/store/contact','/api/store/newsletter/confirm','/api/store/newsletter/unsubscribe'):
+            if path in ('/api/store/newsletter','/api/store/contact','/api/store/newsletter/confirm','/api/store/newsletter/unsubscribe'):
                 data=self.body()
-                if path in ('/api/store/reviews','/api/store/newsletter','/api/store/contact') and not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                if path in ('/api/store/newsletter','/api/store/contact') and not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
                 try:
                     with connect() as c:
                         c.execute('BEGIN IMMEDIATE')
-                        if path=='/api/store/reviews':result=engage.submit_review(c,data)
-                        elif path=='/api/store/newsletter':result=engage.subscribe(c,data)
+                        if path=='/api/store/newsletter':result=engage.subscribe(c,data)
                         elif path=='/api/store/contact':result=engage.submit_contact(c,data)
                         elif path=='/api/store/newsletter/confirm':result=engage.confirm(c,data.get('token'))
                         else:result=engage.unsubscribe(c,data.get('token'))
@@ -606,6 +604,9 @@ class Handler(BaseHTTPRequestHandler):
                     result=ops.complete(c,int(completion_route.group(1)),data,self.request_user['id'])
                     mail.enqueue_order(c,result['id'],'order_status_changed')
                 return self.respond(200,result)
+            if path=='/api/admin/brand/logo':
+                try:return self.respond(201,{'url':brand.write_logo(data)})
+                except brand.BrandError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
             if path=='/api/admin/home/media':
                 try:return self.respond(201,{'url':cms.write_media(data)})
                 except ValueError as ex:return self.error(ex)
@@ -1042,16 +1043,21 @@ class Handler(BaseHTTPRequestHandler):
                         audit(c,'giftcard',card['id'],f"Karta {giftcards.mask(card['code'])}: {card['status']}")
                 except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
                 return self.respond(200,card)
-            engage_patch=re.fullmatch(r'/api/admin/(reviews|subscribers|contact)/([1-9][0-9]*)',path)
+            if path=='/api/admin/brand':
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        result=brand.save(c,data)
+                        audit(c,'brand','settings','Zmieniono logotypy rozgrywek i podpis sklepu')
+                except brand.BrandError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,result)
+            engage_patch=re.fullmatch(r'/api/admin/(subscribers|contact)/([1-9][0-9]*)',path)
             if engage_patch:
                 kind,target=engage_patch.group(1),int(engage_patch.group(2))
                 try:
                     with connect() as c:
                         c.execute('BEGIN IMMEDIATE')
-                        if kind=='reviews':
-                            result=engage.moderate(c,target,data,self.request_user['identifier'] if 'identifier' in self.request_user.keys() else '')
-                            if 'status' in data:audit(c,'review',target,f"Opinia o {result['product_name']}: {result['status']}")
-                        elif kind=='subscribers':result=engage.set_subscriber_status(c,target,data.get('status'))
+                        if kind=='subscribers':result=engage.set_subscriber_status(c,target,data.get('status'))
                         else:result=engage.update_message(c,target,data)
                 except engage.EngageError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
                 return self.respond(200,result)
