@@ -130,27 +130,31 @@
 
 .yns-hero {
   display: grid;
-  grid-template-columns: 39% 61%;
+  grid-template-columns: minmax(0, 1.8fr) minmax(320px, 1fr);
   width: calc(100% - 64px);
   max-width: 1280px;
-  height: 404px;
+  height: 490px;
   margin: 24px auto 0;
   background: #f3f4f0;
 }
+.yns-hero-media { position: relative; min-width: 0; overflow: hidden; background: #e5eae2; }
+.yns-hero-media > img { width: 100%; height: 100%; position: absolute; inset: 0; display: block; object-fit: contain; object-position: center; }
+.yns-media-packshot { background: #fff; }
+.yns-media-lifestyle > img, .yns-media-model > img { object-fit: cover; object-position: center 45%; }
 .yns-hero-copy {
-  padding: clamp(30px, 4.1vw, 62px);
+  padding: clamp(30px, 3.8vw, 54px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
+  justify-content: space-between;
   min-width: 0;
 }
+.yns-hero-content { margin: auto 0; }
 .yns-hero h1 {
   font-weight: 650;
   letter-spacing: -.055em;
-  line-height: 1.05;
-  font-size: clamp(42px, 4.3vw, 62px);
-  margin: 0 0 15px;
+  line-height: 1.07;
+  font-size: clamp(38px, 3.7vw, 54px);
+  margin: 0 0 18px;
   color: #1b2b20;
 }
 .yns-hero h1 span { display: block; }
@@ -166,16 +170,22 @@
   align-items: center;
   gap: 20px;
   padding: 9px 0;
-  margin-top: 24px;
+  margin-top: 25px;
   border-bottom: 1px solid #174e38;
   color: #174e38;
   font-size: 13px;
   font-weight: 650;
 }
 .yns-button-primary:hover { color: #0d321f; border-color: #0d321f; }
-.yns-hero-media { position: relative; min-width: 0; overflow: hidden; background: #e5eae2; }
-.yns-hero-media > img { width: 100%; height: 100%; position: absolute; inset: 0; display: block; object-fit: contain; object-position: center; }
-.yns-media-lifestyle > img, .yns-media-model > img { object-fit: cover; object-position: center 45%; }
+.yns-hero-controls { display: flex; align-items: center; gap: 10px; padding-top: 20px; border-top: 1px solid #d9dfd8; }
+.yns-hero-position { white-space: nowrap; font-size: 11px; font-weight: 650; color: #244d38; font-variant-numeric: tabular-nums; }
+.yns-hero-position span { color: #9ba79b; padding: 0 3px; }
+.yns-hero-progress { display: flex; flex: 1; gap: 4px; margin: 0 8px; }
+.yns-hero-progress button { flex: 1; height: 18px; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.yns-hero-progress button::after { content: ""; display: block; height: 2px; background: #cbd4ca; }
+.yns-hero-progress button.active::after { background: #174e38; }
+.yns-hero-controls > button { display: grid; place-items: center; width: 30px; height: 30px; background: transparent; border: 0; color: #174e38; cursor: pointer; }
+.yns-hero-controls > button:hover, .yns-hero-controls > button:focus-visible { background: #e6ebe4; }
 
 /* The YNS product grid uses airy cards and image-first merchandising. */
 .store-site .home-page > .home-collections.container { padding-top: 60px !important; }
@@ -250,7 +260,7 @@
   .yns-mobile-nav { display: inline-flex; }
   .yns-header-inner { justify-content: space-between; }
   .yns-brand { margin-right: auto; }
-  .yns-hero { grid-template-columns: 43% 57%; }
+  .yns-hero { grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr); }
   .yns-hero-copy { padding: 34px; }
 }
 @media (max-width: 760px) {
@@ -267,11 +277,13 @@
   .yns-cart-label { display: none; }
   .yns-cart-count { position: absolute; top: 0; right: -1px; background: #19513a; color: white; width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 20px; font-size: 10px; }
   .yns-hero { display: flex; flex-direction: column; width: calc(100% - 32px); height: auto; margin-top: 16px; }
-  .yns-hero-copy { padding: 26px 22px 24px; }
+  .yns-hero-copy { padding: 25px 22px 20px; min-height: 260px; }
+  .yns-hero-content { margin: 0 0 28px; }
   .yns-hero h1 { font-size: clamp(36px, 9vw, 48px); margin-bottom: 10px; }
   .yns-hero-description { font-size: 13px; }
   .yns-button-primary { margin-top: 15px; }
-  .yns-hero-media { height: 230px; min-height: 0; }
+  .yns-hero-media { height: 285px; min-height: 0; }
+  .yns-hero-controls { margin-top: auto; }
   .store-site .home-page > .home-collections.container { padding-top: 52px !important; }
   .store-site .home-section-heading h2 { font-size: 27px; }
   .store-site .home-collection-grid { gap: 10px; }
