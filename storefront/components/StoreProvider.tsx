@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { catalog } from "../lib/catalog";
-import { extendCartLine, updateCartLine, mergeCatalog, lineUnitPrice, normalizeCart, normalizeFavorites, normalizePersonalization, removePurchased as subtractPurchased, type CartLine, type Product, type Personalization, type Player, type PrintDisplay } from "../lib/commerce.mjs";
+import { extendCartLine, updateCartLine, mergeCatalog, lineUnitPrice, normalizeCart, normalizeFavorites, normalizePersonalization, normalizeStoreStatus, PRELAUNCH_STATUS, removePurchased as subtractPurchased, type CartLine, type Product, type Personalization, type Player, type PrintDisplay, type StoreStatus } from "../lib/commerce.mjs";
 
 type Store = {
   products: Product[]; cart: CartLine[]; favorites: number[]; hydrated: boolean;
@@ -13,11 +13,12 @@ type Store = {
   dialog: "cart" | "search" | "menu" | null; setDialog: (dialog: Store["dialog"]) => void;
   quickId: number | null; setQuickId: (id: number | null) => void;
   notice: string; setNotice: (text: string) => void;
+  sales: StoreStatus; refreshSales: () => Promise<void>;
 };
 const Context = createContext<Store | null>(null);
 const CART = "zastal_store_cart_v2", FAVORITES = "zastal_store_favs";
-export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(catalog.map(p => ({ ...p, stock: 0, variants: [], verified: false })));
+export function StoreProvider({ children, initialUrls=[] }: { children: React.ReactNode; initialUrls?:{id:number;slug?:string}[] }) {
+  const [products, setProducts] = useState<Product[]>(catalog.map(p => ({ ...p, slug:initialUrls.find(entry=>entry.id===p.id)?.slug, stock: 0, variants: [], verified: false })));
   const [players, setPlayers] = useState<Player[]>([]);
   const [playersStatus, setPlayersStatus] = useState<Store["playersStatus"]>("loading");
   const [playersError, setPlayersError] = useState("");
@@ -30,6 +31,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [dialog, setDialog] = useState<Store["dialog"]>(null);
   const [quickId, setQuickId] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
+  const [sales, setSales] = useState<StoreStatus>(PRELAUNCH_STATUS);
+  const refreshSales = useCallback(async () => {
+    try {
+      const response = await fetch("/api/store/status", { cache: "no-store", signal: AbortSignal.timeout(12000) });
+      if (!response.ok) throw new Error();
+      setSales(normalizeStoreStatus(await response.json()));
+    } catch { setSales(old => ({ ...old, loaded: true })); }
+  }, []);
+  useEffect(() => { void refreshSales(); }, [refreshSales]);
   useEffect(() => {
     try {
       setCart(normalizeCart(localStorage.getItem(CART)));
@@ -105,7 +115,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const favorite = (id: number) => { if (hydrated) setFavorites(old => old.includes(id) ? old.filter(x => x !== id) : [...old, id]); };
   const count = cart.reduce((sum, line) => sum + line.quantity, 0);
   const subtotal = useMemo(() => cart.reduce((sum, line) => sum + lineUnitPrice(products.find(p => p.id === line.id), line) * line.quantity, 0), [cart, products]);
-  return <Context.Provider value={{ products, cart, favorites, hydrated, status, error, storageError, players, playersStatus, playersError, refreshPlayers, refresh: () => refresh(), add, update, clear: () => setCart([]), removePurchased: items => setCart(old => subtractPurchased(old, items)), favorite, count, subtotal, dialog, setDialog, quickId, setQuickId, notice, setNotice }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ products, cart, favorites, hydrated, status, error, storageError, players, playersStatus, playersError, refreshPlayers, refresh: () => refresh(), add, update, clear: () => setCart([]), removePurchased: items => setCart(old => subtractPurchased(old, items)), favorite, count, subtotal, dialog, setDialog, quickId, setQuickId, notice, setNotice, sales, refreshSales }}>{children}</Context.Provider>;
 }
 export function useStore() {
   const context = useContext(Context);

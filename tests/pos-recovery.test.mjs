@@ -47,3 +47,18 @@ test('network, successful malformed response, server failure and idempotency con
   assert.equal(isKnownSaleRejection({status:409,code:'insufficient_stock'}),true);
   assert.equal(isKnownSaleRejection({status:409,code:'idempotency_conflict'}),false);
 });
+test('live sale facts (discount, fiscal document, cash, handover) are frozen in the identity and validated on restore',()=>{
+  const sale=resolveSaleAttempt(cart,'cash',null,products,'pos_live1234567890123',null,{discount:500,discount_reason:'pracownik',fiscal:{kind:'paragon',number:' 2026/10/7 '},cash_received:10000,handover:true});
+  assert.equal(sale.payload.discount,500);
+  assert.equal(sale.payload.fiscal.number,'2026/10/7');
+  assert.equal(sale.payload.handover,true);
+  assert.deepEqual(readSaleAttempt(JSON.stringify(sale)),sale);
+  const retry=resolveSaleAttempt(cart,'terminal',sale,products,'pos_other1234567890123',null,{discount:0});
+  assert.deepEqual(retry,sale);
+  for(const bad of [{discount:-1,discount_reason:'x'},{fiscal:{kind:'bon',number:'1'}},{fiscal:{kind:'paragon',number:'<script>'}},{cash_received:1.5},{handover:'yes'}]){
+    assert.equal(resolveSaleAttempt(cart,'cash',null,products,'pos_bad12345678901234',null,bad),null);
+    assert.equal(readSaleAttempt({...sale,signature:JSON.stringify({...sale.payload,...bad})}),null);
+  }
+  const plain=resolveSaleAttempt(cart,'cash',null,products,'pos_plain123456789012');
+  assert.equal('discount' in plain.payload,false);
+});

@@ -289,5 +289,46 @@ class PersonalizationTests(unittest.TestCase):
         self.assertEqual(item['personalization_fee'], 0)
 
 
+
+    def test_extended_options_validate_and_are_copied_onto_order_lines(self):
+        code, product = self.privileged('POST', '/api/admin/products', {
+            'name': 'Koszulka meczowa', 'sku': 'ZS-MECZ-26', 'category': 'Koszulki', 'price': 18900, 'stock': 10,
+            'personalization_enabled': True, 'personalization_required': True, 'personalization_fee': 3500,
+            'decoration_method': 'haft', 'preorder': True, 'preorder_note': 'Wysyłka od 20 listopada', 'preorder_until': '2026-11-20',
+            'size_guide': 'S 48 cm / M 51 cm', 'image': '/assets/photos/product-3.webp',
+            'description': 'Koszulka na mecz.\n\n## Materiał i krój\n- Bawełna 100%',
+            'print_layout': {'image': '/assets/photos/product-3.webp', 'areas': {'name': {'x': 30, 'y': 18, 'w': 40, 'h': 6}, 'number': {'x': 35, 'y': 28, 'w': 30, 'h': 22}}, 'color': '#FFFFFF', 'font': 'block', 'calibrated': False}})
+        self.assertEqual(code, 201, product)
+        self.assertEqual(product['decoration_method'], 'haft')
+        self.assertEqual(product['decoration_method_label'], 'Haft')
+        self.assertTrue(product['preorder'])
+        self.assertEqual(product['print_layout']['areas']['number']['h'], 22.0)
+        self.assertEqual(product['print_layout']['color'], '#ffffff')
+        public = self.guest.request('GET', '/api/catalog/' + str(product['id']))[1]
+        self.assertEqual(public['size_guide'], 'S 48 cm / M 51 cm')
+        self.assertEqual(public['description'], 'Koszulka na mecz.\n\n## Materiał i krój\n- Bawełna 100%')
+        self.assertEqual(public['preorder_note'], 'Wysyłka od 20 listopada')
+        for bad in [{'decoration_method': 'laser'}, {'preorder': True, 'preorder_note': ''}, {'preorder_until': '20-11-2026'},
+                    {'description': 'Materiał: [np. bawełna 100%]'}, {'description': 'Opis <b>pogrubiony</b>'},
+                    {'print_layout': {'image': '/assets/photos/product-3.webp', 'areas': {'name': {'x': 90, 'y': 0, 'w': 20, 'h': 5}}}},
+                    {'print_layout': {'image': '', 'areas': {'name': {'x': 1, 'y': 1, 'w': 5, 'h': 5}}}},
+                    {'print_layout': {'image': '/assets/photos/product-3.webp', 'areas': {'logo': {'x': 1, 'y': 1, 'w': 5, 'h': 5}}}}]:
+            with self.subTest(bad=bad):
+                self.assertEqual(self.privileged('PATCH', '/api/admin/products/' + str(product['id']), bad)[0], 400)
+        code, order = self.order([{'id': product['id'], 'size': 'M', 'quantity': 1, 'personalization': {'mode': 'custom', 'name': 'Kibic', 'number': '7'}}], idempotency_key='extended-line-key-000001')
+        self.assertEqual(code, 201, order)
+        with api.connect() as c:
+            line = json.loads(c.execute('SELECT items FROM orders WHERE id=?', (order['id'],)).fetchone()[0])[0]
+        self.assertEqual(line['decoration_method'], 'haft')
+        self.assertEqual(line['print_layout']['areas']['name']['w'], 40.0)
+        self.assertEqual(line['preorder'], {'note': 'Wysyłka od 20 listopada', 'until': '2026-11-20'})
+        # Changing the product later never rewrites the stored line.
+        self.assertEqual(self.privileged('PATCH', '/api/admin/products/' + str(product['id']), {'print_layout': None, 'decoration_method': 'dtf'})[0], 200)
+        with api.connect() as c:
+            again = json.loads(c.execute('SELECT items FROM orders WHERE id=?', (order['id'],)).fetchone()[0])[0]
+        self.assertEqual(again['print_layout'], line['print_layout'])
+        self.assertEqual(self.privileged('GET', '/api/admin/products')[1][-1]['print_layout'], None)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -60,8 +60,11 @@ test('homepage editor can render inside the administrator route', () => {
 });
 test('private homepage preview receives the same catalogue context', () => {
   const html = render('/admin/podglad', h(HomeCanvas, {config: DEFAULT_HOME}));
-  assert.match(html, /W barwach Zastalu/);
-  assert.match(html, /Kolekcje/);
+  assert.match(html, /Sklep Zastalu/);
+  assert.match(html, /Produkty/);
+  assert.doesNotMatch(html, /Przeglądaj kolekcję/);
+  assert.doesNotMatch(html, /ZASTAL \/ 1946/);
+  assert.doesNotMatch(html, /Zobacz wszystkie produkty/);
   assert.doesNotMatch(html, /Otwórz koszyk/);
 });
 test('public routes keep their storefront shell and catalogue context', () => {

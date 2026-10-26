@@ -3,6 +3,7 @@
 Request identity is normalized without reading mutable catalog/roster rows. Live
 validation and snapshots happen only after a matching receipt retry is checked.
 """
+import json
 import re
 import unicodedata
 from urllib.parse import urlparse
@@ -10,8 +11,19 @@ from urllib.parse import urlparse
 SOURCE_URL = 'https://basketzg.pl/players'
 VERIFIED_AT = '2026-10-10'
 CATEGORIES = ('Koszulki', 'Bluzy', 'Dzieci', 'Akcesoria')
+# Decoration methods the club can actually execute. DTF uses purchased finished transfers.
+DECORATION_METHODS = {'dtf': 'Nadruk DTF', 'haft': 'Haft', 'haft_3d': 'Haft wypukły (3D)',
+                      'sitodruk': 'Sitodruk', 'inne': 'Inna metoda (opis w notatce)'}
+PRINT_FONTS = ('block', 'condensed', 'rounded')
+LAYOUT_AREAS = ('name', 'number')
 DEFAULT_OPTIONS = {'image': '', 'subtitle': '', 'personalization_enabled': False,
-                   'personalization_required': False, 'personalization_fee': 0}
+                   'personalization_required': False, 'personalization_fee': 0,
+                   'decoration_method': 'dtf', 'preorder': False, 'preorder_note': '', 'preorder_until': '',
+                   'size_guide': '', 'print_layout': None, 'description': '', 'badge': '', 'release_at': '', 'created_at': '', 'gift_card': False, 'pos_quick': False}
+EXTENDED_COLUMNS = {'decoration_method': "TEXT NOT NULL DEFAULT 'dtf'", 'preorder': 'INTEGER NOT NULL DEFAULT 0',
+                    'preorder_note': "TEXT NOT NULL DEFAULT ''", 'preorder_until': "TEXT NOT NULL DEFAULT ''",
+                    'size_guide': "TEXT NOT NULL DEFAULT ''", 'print_layout': "TEXT NOT NULL DEFAULT ''",
+                    'description': "TEXT NOT NULL DEFAULT ''", 'badge': "TEXT NOT NULL DEFAULT ''", 'release_at': "TEXT NOT NULL DEFAULT ''", 'created_at': "TEXT NOT NULL DEFAULT ''", 'gift_card': 'INTEGER NOT NULL DEFAULT 0', 'pos_quick': 'INTEGER NOT NULL DEFAULT 0'}
 ROSTER = (
     ('Kuba Galewski', 'GALEWSKI', '1'), ('Andrzej Mazurczak', 'MAZURCZAK', '3'),
     ('Conley Garrison', 'GARRISON', '0'), ('Filip Matczak', 'MATCZAK', '8'),
@@ -36,6 +48,10 @@ def init_schema(c):
             active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)));
         CREATE TABLE IF NOT EXISTS commerce_migrations(name TEXT PRIMARY KEY);
     ''')
+    present = {row['name'] for row in c.execute('PRAGMA table_info(product_options)')}
+    for column, definition in EXTENDED_COLUMNS.items():
+        if column not in present:
+            c.execute(f'ALTER TABLE product_options ADD COLUMN {column} {definition}')
     if not c.execute("SELECT 1 FROM commerce_migrations WHERE name='official-roster-2026-10-10'").fetchone():
         if not c.execute('SELECT 1 FROM players LIMIT 1').fetchone():
             c.executemany('INSERT INTO players(name,print_name,number) VALUES(?,?,?)', ROSTER)
@@ -90,9 +106,52 @@ def product_options(c, pid):
     if not row:
         return dict(DEFAULT_OPTIONS)
     value = {key: row[key] for key in DEFAULT_OPTIONS}
-    for key in ('personalization_enabled', 'personalization_required'):
+    for key in ('personalization_enabled', 'personalization_required', 'preorder', 'gift_card', 'pos_quick'):
         value[key] = bool(value[key])
+    try:
+        value['print_layout'] = json.loads(row['print_layout']) if row['print_layout'] else None
+    except ValueError:
+        value['print_layout'] = None
+    value['decoration_method_label'] = DECORATION_METHODS.get(value['decoration_method'], value['decoration_method'])
     return value
+
+
+def layout_value(value):
+    """Mockup image plus percentage boxes for name and number; immutable copy is stored per order line."""
+    if value is None or value == '' or value == {}:
+        return None
+    if not isinstance(value, dict) or set(value) - {'image', 'areas', 'color', 'font', 'calibrated', 'note'}:
+        raise ValueError('Nieprawidłowy układ nadruku')
+    image = image_value(value.get('image', ''))
+    if not image:
+        raise ValueError('Układ nadruku wymaga zdjęcia produktu (mockupu)')
+    areas_raw = value.get('areas')
+    if not isinstance(areas_raw, dict) or set(areas_raw) - set(LAYOUT_AREAS) or not areas_raw:
+        raise ValueError('Układ nadruku: podaj pole nazwiska i/lub numeru')
+    areas = {}
+    for key, box in areas_raw.items():
+        if not isinstance(box, dict) or set(box) != {'x', 'y', 'w', 'h'}:
+            raise ValueError('Pole nadruku wymaga współrzędnych x, y, w, h')
+        clean = {}
+        for axis in ('x', 'y', 'w', 'h'):
+            number = box[axis]
+            if isinstance(number, bool) or not isinstance(number, (int, float)) or not 0 <= number <= 100:
+                raise ValueError('Współrzędne pola nadruku podaj w procentach 0–100')
+            clean[axis] = round(float(number), 2)
+        if clean['w'] < 2 or clean['h'] < 1 or clean['x'] + clean['w'] > 100 or clean['y'] + clean['h'] > 100:
+            raise ValueError('Pole nadruku musi mieścić się na zdjęciu')
+        areas[key] = clean
+    color = value.get('color', '#ffffff')
+    if not isinstance(color, str) or not re.fullmatch(r'#[0-9a-fA-F]{6}', color):
+        raise ValueError('Kolor nadruku w formacie #rrggbb')
+    font = value.get('font', 'block')
+    if font not in PRINT_FONTS:
+        raise ValueError('Nieznany krój nadruku')
+    calibrated = value.get('calibrated', False)
+    if not isinstance(calibrated, bool):
+        raise ValueError('Kalibracja musi być wartością logiczną')
+    note = text(value.get('note', ''), 'uwaga do układu', 200, empty=True)
+    return {'image': image, 'areas': areas, 'color': color.lower(), 'font': font, 'calibrated': calibrated, 'note': note}
 
 
 def validate_product(data, existing=None):
@@ -125,17 +184,74 @@ def validate_product(data, existing=None):
     values['personalization_fee'] = integer(values['personalization_fee'], 'opłata za nadruk', 0, 10000000)
     if values['personalization_required'] and not values['personalization_enabled']:
         raise ValueError('Wymagany nadruk musi być włączony')
+    if values['decoration_method'] not in DECORATION_METHODS:
+        raise ValueError('Wybierz metodę znakowania')
+    values['preorder'] = flag(values['preorder'], 'przedsprzedaż')
+    values['preorder_note'] = text(values['preorder_note'], 'informacja o przedsprzedaży', 200, empty=True)
+    until = text(values['preorder_until'], 'termin przedsprzedaży', 10, empty=True)
+    if until and not re.fullmatch(r'20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])', until):
+        raise ValueError('Termin przedsprzedaży w formacie RRRR-MM-DD')
+    values['preorder_until'] = until
+    if values['preorder'] and not values['preorder_note']:
+        raise ValueError('Przedsprzedaż wymaga informacji o planowanej wysyłce')
+    values['size_guide'] = text(values['size_guide'], 'rozmiarówka', 2000, empty=True)
+    values['description'] = description_value(values['description'])
+    import commerce_merch as merch
+    if values['badge'] not in merch.MANUAL_BADGES:
+        raise ValueError('Wybierz odznakę z listy')
+    values['release_at'] = merch.release_value(values['release_at'])
+    values['created_at'] = (existing or {}).get('created_at') or ''  # never settable by clients
+    values['gift_card'] = flag(values['gift_card'], 'karta podarunkowa')
+    if values['gift_card'] and values['personalization_enabled']:
+        raise ValueError('Karta podarunkowa nie może mieć nadruku')
+    values['pos_quick'] = flag(values['pos_quick'], 'kafelek kasy')
+    values['print_layout'] = layout_value(values['print_layout'])
+    values.pop('decoration_method_label', None)
     return values
 
 
+def description_value(value):
+    """Plain-text product description (paragraphs, '## ' headings, '- ' lists). No HTML, no unfilled [template fields]."""
+    if value is None:
+        value = ''
+    if not isinstance(value, str) or len(value) > 4000 or any(ord(ch) < 32 and ch not in '\n\t\r' for ch in value):
+        raise ValueError('Opis produktu: maksymalnie 4000 znaków, bez znaków sterujących')
+    value = value.replace('\r\n', '\n').strip('\n')
+    if re.search(r'<\s*/?\s*[a-zA-Z]', value):
+        raise ValueError('Opis produktu nie może zawierać znaczników HTML')
+    unfilled = [token for token in re.findall(r'\[[^\]\n]{1,80}\](?!\()', value)]
+    if unfilled:
+        raise ValueError(f'Opis produktu ma niewypełnione pola szablonu: {unfilled[0]}')
+    return value
+
+
 def save_options(c, pid, value):
-    c.execute('''INSERT INTO product_options(product_id,image,subtitle,personalization_enabled,personalization_required,personalization_fee)
-        VALUES(?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET
+    layout = json.dumps(value['print_layout'], ensure_ascii=False, sort_keys=True) if value.get('print_layout') else ''
+    c.execute('''INSERT INTO product_options(product_id,image,subtitle,personalization_enabled,personalization_required,personalization_fee,
+        decoration_method,preorder,preorder_note,preorder_until,size_guide,print_layout,description,badge,release_at,created_at,gift_card,pos_quick)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET
         image=excluded.image,subtitle=excluded.subtitle,
         personalization_enabled=excluded.personalization_enabled,
         personalization_required=excluded.personalization_required,
-        personalization_fee=excluded.personalization_fee''',
-        (pid, *(value[key] for key in DEFAULT_OPTIONS)))
+        personalization_fee=excluded.personalization_fee,
+        decoration_method=excluded.decoration_method,preorder=excluded.preorder,preorder_note=excluded.preorder_note,
+        preorder_until=excluded.preorder_until,size_guide=excluded.size_guide,print_layout=excluded.print_layout,description=excluded.description,badge=excluded.badge,release_at=excluded.release_at,gift_card=excluded.gift_card,pos_quick=excluded.pos_quick''',
+        (pid, value['image'], value['subtitle'], value['personalization_enabled'], value['personalization_required'],
+         value['personalization_fee'], value['decoration_method'], int(value['preorder']), value['preorder_note'],
+         value['preorder_until'], value['size_guide'], layout, value.get('description', ''), value.get('badge', ''), value.get('release_at', ''), value.get('created_at', ''), int(bool(value.get('gift_card'))), int(bool(value.get('pos_quick')))))
+
+
+def line_extras(c, product_id):
+    """Immutable production facts copied onto an order line at purchase time."""
+    options = product_options(c, product_id)
+    extras = {}
+    if options['personalization_enabled']:
+        extras['decoration_method'] = options['decoration_method']
+        if options['print_layout']:
+            extras['print_layout'] = options['print_layout']
+    if options['preorder']:
+        extras['preorder'] = {'note': options['preorder_note'], 'until': options['preorder_until']}
+    return extras
 
 
 def print_name(value):

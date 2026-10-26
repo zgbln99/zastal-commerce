@@ -65,6 +65,70 @@ class SMTP:
 
 
 class EmailTests(unittest.TestCase):
+    def test_plain_smtp_is_only_allowed_on_loopback(self):
+        with patch.dict(os.environ, {**SMTP_ENV, "ZASTAL_SMTP_TLS": "none", "ZASTAL_SMTP_HOST": "127.0.0.1"}):
+            self.assertTrue(self.email.configuration()["configured"])
+        with patch.dict(os.environ, {**SMTP_ENV, "ZASTAL_SMTP_TLS": "none"}):
+            self.assertFalse(self.email.configuration()["configured"])
+
+    def test_html_email_escapes_content_and_keeps_plain_text(self):
+        markup = self.email.render_html('Zastal Store, zamówienie <5>', 'Status: <script>\n\nhttps://store.example.test/konto/email?action=verify#token=abc', 'https://store.example.test')
+        self.assertIn('&lt;script&gt;', markup)
+        self.assertNotIn('<script>', markup)
+        self.assertIn('href="https://store.example.test/konto/email?action=verify#token=abc"', markup)
+        self.assertIn('Zamówienie &lt;5&gt;', markup)
+        order_markup = self.email.render_html('Zastal Store, status', 'Szczegóły zamówienia: https://store.example.test/zamowienie?id=5', 'https://store.example.test')
+        self.assertIn('href="https://store.example.test/zamowienie?id=5"', order_markup)
+
+    def test_email_layout_prioritizes_action_and_order_summary(self):
+        origin = 'https://store.example.test'
+        verify = self.email.render_html('Zastal Store, potwierdź adres e-mail',
+            'Potwierdź adres e-mail swojego konta Zastal Store:\n\n' + origin + '/konto/email?action=verify#token=abc\n\nLink jest jednorazowy i ważny przez 24 godziny.',
+            origin, kind='email_verification')
+        self.assertIn('Potwierdź adres e-mail</a>', verify)
+        self.assertIn('src="https://store.example.test/assets/zastal-logo-email.png"', verify)
+        self.assertIn('24 godziny', verify)
+        self.assertNotIn('Otwórz w sklepie', verify)
+
+        order = self.email.render_html('Zastal Store, potwierdzenie zamówienia ZS-00042',
+            'Dziękujemy za zamówienie ZS-00042.\nStatus: Potwierdzone\nDo zapłaty: 79.00 PLN\n\nPozycje:\n  1 × Koszulka <Junior> / M, 64.00 PLN\n\nDostawa: Kurier DPD\nRazem do zapłaty: 79.00 PLN\n\nSzczegóły zamówienia: ' + origin + '/zamowienie?id=42',
+            origin, kind='order_created')
+        self.assertIn('ZS-00042', order)
+        self.assertIn('Sprawdź zamówienie</a>', order)
+        self.assertIn('Kurier DPD', order)
+        shipped = self.email.render_html('Zastal Store, zamówienie ZS-00042 wysłane', 'Zamówienie ZS-00042 zostało nadane.\n\nSzczegóły zamówienia: ' + origin + '/zamowienie?id=42', origin, kind='order_status_changed')
+        self.assertIn('Sprawdź dostawę</a>', shipped)
+        self.assertIn('&lt;Junior&gt;', order)
+        self.assertIn('Koszulka &lt;Junior&gt;</strong>', order)
+        self.assertIn('border-radius:24px', order)
+        self.assertNotIn('<Junior>', order)
+
+    def test_staff_can_queue_active_promo_with_real_terms(self):
+        self.c.execute("UPDATE users SET role='admin' WHERE id=?", (self.user['id'],))
+        self.c.execute("""CREATE TABLE promo_codes(id INTEGER PRIMARY KEY,code TEXT,kind TEXT,value INTEGER,
+            min_subtotal INTEGER,starts TEXT,ends TEXT,max_uses INTEGER,uses INTEGER,active INTEGER)""")
+        self.c.execute("INSERT INTO promo_codes VALUES(1,'KIBIC10','percent',10,10000,'','2026-12-31',20,0,1)")
+        self.c.commit()
+        self.h.request_user = self.c.execute('SELECT * FROM users').fetchone()
+        status, result = self.request('/api/admin/email/promo', {'promo_id': 1, 'recipient': 'check@example.test'})
+        self.assertEqual(status, 200)
+        self.assertEqual(result['ok'], True)
+        with patch.dict(os.environ, SMTP_ENV), patch('commerce_email.smtplib.SMTP', SMTP):
+            self.assertEqual(self.email.process_outbox(self.connect)['sent'], 1)
+        plain = SMTP.messages[-1].get_body(preferencelist=('plain',)).get_content()
+        self.assertIn('KIBIC10', plain)
+        self.assertIn('100.00 PLN', plain)
+        self.assertIn('2026-12-31', plain)
+        self.assertIn('Zobacz produkty', SMTP.messages[-1].get_body(preferencelist=('html',)).get_content())
+        self.assertEqual(self.request('/api/admin/email/promo', {'promo_id': 99, 'recipient': 'check@example.test'})[0], 404)
+
+    def test_capture_rejects_real_recipients(self):
+        from email.message import EmailMessage
+        message = EmailMessage();message["To"] = "real@example.com"
+        with patch.dict(os.environ, {**SMTP_ENV, "ZASTAL_SMTP_TLS": "none", "ZASTAL_SMTP_HOST": "127.0.0.1"}), patch("commerce_email.smtplib.SMTP", SMTP):
+            with self.assertRaises(self.email.smtplib.SMTPRecipientsRefused):
+                self.email._deliver(message, self.email.configuration())
+
     def test_order_delivery_discloses_demo_and_nonfiscal_payment_status(self):
         self.c.executescript('CREATE TABLE orders(id INTEGER PRIMARY KEY,status TEXT,total INTEGER); CREATE TABLE order_receipts(order_id INTEGER PRIMARY KEY,customer_id INTEGER);')
         self.c.execute("INSERT INTO orders VALUES(10,'nowe',7900)")
@@ -73,10 +137,25 @@ class EmailTests(unittest.TestCase):
         with patch.dict(os.environ,SMTP_ENV),patch('commerce_email.smtplib.SMTP',SMTP):
             self.assertEqual(self.email.process_outbox(self.connect)['sent'],1)
         self.assertIn('testowe',str(SMTP.messages[0]['Subject']))
-        body=SMTP.messages[0].get_content()
+        body=SMTP.messages[0].get_body(preferencelist=("plain",)).get_content()
         self.assertIn('demonstracyjna',body)
         self.assertIn('niefiskalny',body)
         self.assertIn('nie potwierdza rzeczywistej płatności',body)
+
+    def test_staff_test_message_is_queued_and_smtp_status_is_recorded(self):
+        self.c.execute("UPDATE users SET role='admin' WHERE id=?", (self.user['id'],))
+        self.c.commit()
+        self.h.request_user = self.c.execute('SELECT * FROM users').fetchone()
+        result = self.request('/api/admin/email/test', {'recipient': 'check@example.test'})
+        self.assertEqual(result[0], 200)
+        self.assertEqual(self.c.execute('SELECT status FROM email_outbox').fetchone()[0], 'pending')
+        with patch.dict(os.environ, SMTP_ENV), patch('commerce_email.smtplib.SMTP', SMTP):
+            self.assertEqual(self.email.process_outbox(self.connect)['sent'], 1)
+        self.assertEqual(SMTP.messages[0]['To'], 'check@example.test')
+        self.assertIn('test poczty', str(SMTP.messages[0]['Subject']))
+        self.assertEqual(self.email.admin_status(self.c)['messages'][0]['status'], 'sent')
+        self.h.headers.pop('X-CSRF-Token')
+        self.assertEqual(self.request('/api/admin/email/test', {'recipient': 'check@example.test'})[0], 403)
 
     def setUp(self):
         self.assertIsNotNone(importlib.util.find_spec('commerce_email'), 'email subsystem must exist')
@@ -159,6 +238,11 @@ class EmailTests(unittest.TestCase):
         self.assertNotIn(token, json.dumps(row))
         self.assertEqual(self.request('/api/auth/email/verify', {'token': token}), (200, {'ok': True}))
         self.assertEqual(self.c.execute('SELECT email_verified FROM users').fetchone()[0], 1)
+        self.assertEqual(self.c.execute("SELECT COUNT(*) FROM email_outbox WHERE kind='welcome'").fetchone()[0], 1)
+        with patch.dict(os.environ, SMTP_ENV), patch('commerce_email.smtplib.SMTP', SMTP):
+            self.assertEqual(self.email.process_outbox(self.connect)['sent'], 1)
+        self.assertIn('konto jest gotowe', str(SMTP.messages[-1]['Subject']))
+        self.assertIn('Przejdź do konta', SMTP.messages[-1].get_body(preferencelist=('html',)).get_content())
         self.assertEqual(self.request('/api/auth/email/verify', {'token': token})[0], 400)
 
     def test_missing_smtp_keeps_queue_pending_and_metadata_has_no_payload(self):
@@ -192,7 +276,7 @@ class EmailTests(unittest.TestCase):
         self.c.commit()
         with patch.dict(os.environ, SMTP_ENV), patch('commerce_email.smtplib.SMTP', SMTP):
             self.assertEqual(self.email.process_outbox(self.connect)['sent'], 1)
-        text = SMTP.messages[0].get_content()
+        text = SMTP.messages[0].get_body(preferencelist=("plain",)).get_content()
         self.assertIn('https://store.example.test/konto/email?action=verify#token=', text)
         token = text.split('#token=')[1].split()[0]
         self.assertNotIn(token, json.dumps([dict(r) for r in self.c.execute('SELECT * FROM email_outbox')]))
@@ -314,7 +398,7 @@ class EmailTests(unittest.TestCase):
         self.assertEqual(self.c.execute('SELECT COUNT(*) FROM email_outbox').fetchone()[0], 1)
         with patch.dict(os.environ, SMTP_ENV), patch('commerce_email.smtplib.SMTP', SMTP):
             self.assertEqual(self.email.process_outbox(self.connect)['sent'], 1)
-        self.assertIn('150.00 PLN', SMTP.messages[0].get_content())
+        self.assertIn('150.00 PLN', SMTP.messages[0].get_body(preferencelist=("plain",)).get_content())
         self.c.execute("UPDATE users SET role='admin'")
         self.assertIsNone(self.email.enqueue_order(self.c, 10, 'order_status_changed'))
         self.c.commit()

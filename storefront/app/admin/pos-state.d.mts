@@ -1,7 +1,10 @@
 import type {CartLine,Product} from '../../lib/commerce.mjs';
 export type PaymentMethod='cash'|'terminal';
 export type SaleDisplayLine=CartLine & {name:string;unit_price:number};
-export type SaleAttempt={signature:string;key:string;payload:{items:CartLine[];payment_method:PaymentMethod;payment_confirmed:true;customer_id?:number};display?:SaleDisplayLine[]};
+export type FiscalDocument={kind:'paragon'|'faktura';number:string};
+export type SaleExtras={discount?:number;discount_reason?:string;fiscal?:FiscalDocument|null;cash_received?:number;handover?:boolean};
+export type SaleAttempt={signature:string;key:string;payload:{items:CartLine[];payment_method:PaymentMethod;payment_confirmed:true;customer_id?:number}&SaleExtras;display?:SaleDisplayLine[]};
+export function normalizeSaleExtras(payload:Record<string,unknown>):SaleExtras|null;
 export function readSaleAttempt(raw:unknown):SaleAttempt|null;
-export function resolveSaleAttempt(cart:CartLine[],payment:PaymentMethod,pending:SaleAttempt|null,products:Product[],key:string,customerId?:number|null):SaleAttempt|null;
+export function resolveSaleAttempt(cart:CartLine[],payment:PaymentMethod,pending:SaleAttempt|null,products:Product[],key:string,customerId?:number|null,extras?:SaleExtras|null):SaleAttempt|null;
 export function isKnownSaleRejection(error:unknown):boolean;

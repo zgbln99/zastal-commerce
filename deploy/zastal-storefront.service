@@ -1,0 +1,20 @@
+[Unit]
+Description=Zastal Store storefront (Next.js)
+After=network-online.target zastal-store-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinelx
+WorkingDirectory=/var/lib/sentinelx/uploads/zastal-commerce-app/storefront
+EnvironmentFile=/var/lib/sentinelx/uploads/zastal-commerce-app/.runtime.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npx next start -H 127.0.0.1 -p 8879
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

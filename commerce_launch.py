@@ -80,10 +80,19 @@ def https_url(url):
     return parsed.scheme == "https" and bool(parsed.netloc) and not parsed.username and not parsed.password
 
 
+def valid_support_phone(value):
+    """Require a real contact before live sales; staged test numbers stay private."""
+    value = value.strip()
+    digits = re.sub(r'[^0-9]', '', value)
+    return bool(re.fullmatch(r'\+?[0-9][0-9 -]{7,17}', value) and
+                9 <= len(digits) <= 15 and len(set(digits)) > 1 and
+                'test' not in value.casefold())
+
+
 def checks(v):
     return {
         "seller": bool(v["seller_name"].strip() and niptax_ok(v["tax_id"]) and
-                       v["business_address"].strip() and
+                       v["business_address"].strip() and valid_support_phone(v["support_phone"]) and
                        re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", v["support_email"])),
         "policies": all(https_url(v[key]) for key in ("terms_url","privacy_url","returns_url","shipping_url")),
         "brand": bool(v["brand_approved"]),
@@ -94,14 +103,18 @@ def checks(v):
     }
 
 
-def snapshot(c, public=False):
+def snapshot(c, public=False, readiness=None):
+    """readiness comes from commerce_sales.readiness(); without it every integration is reported missing."""
     v = values(c)
     status = checks(v)
+    if readiness:
+        status.update({key: readiness["checks"][key] for key in INTEGRATIONS})
+    live = bool(readiness) and readiness["mode"] == "live"
     result = {
-        "phase": "prelaunch",
-        "checkout_enabled": False,
+        "phase": "live" if live else "prelaunch",
+        "checkout_enabled": live,
         "registration_enabled": True,
-        "notice": "Sklep Zastalu jest przygotowywany do uruchomienia sprzedaży online.",
+        "notice": "" if live else "Sklep Zastalu jest przygotowywany do uruchomienia sprzedaży online.",
     }
     if not public:
         result.update({
@@ -111,7 +124,9 @@ def snapshot(c, public=False):
             "completed": sum(status.values()),
             "total": len(status),
             "blocking": [LABELS[key] for key in LABELS if not status[key]],
-            "sales_live": False,
+            "sales_live": live,
+            "switch_present": bool(readiness) and readiness["switch_present"],
+            "requested_mode": readiness["requested_mode"] if readiness else "prelaunch",
             "can_activate": False,
         })
     return result
