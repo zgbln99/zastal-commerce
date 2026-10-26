@@ -169,7 +169,8 @@ def catalog(c):
 class Invalid(Exception): pass
 
 def readiness(c):
-    return sales.readiness(c,mail.configuration()['configured'],payments.ready())
+    email_config = mail.configuration()
+    return sales.readiness(c,email_config['configured'] and not email_config['capture'],payments.ready())
 
 def order_detail(c,receipt):
     o=asdict(c.execute('SELECT * FROM orders WHERE id=?',(receipt['order_id'],)).fetchone())

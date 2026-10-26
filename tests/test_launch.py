@@ -7,6 +7,7 @@ import urllib.request
 import urllib.error
 import json
 from pathlib import Path
+from unittest.mock import patch
 import commerce_api as api
 import commerce_launch as launch
 from http_client import Client
@@ -89,6 +90,19 @@ class LaunchTests(unittest.TestCase):
         self.assertFalse(new["checks"][-1]["ok"])
         with api.connect() as c:
             self.assertGreater(c.execute("SELECT COUNT(*) FROM launch_changes").fetchone()[0],0)
+
+    def test_capture_only_smtp_does_not_pass_live_email_gate(self):
+        values = {'ZASTAL_SMTP_HOST': '127.0.0.1', 'ZASTAL_SMTP_PORT': '1025',
+                  'ZASTAL_SMTP_FROM': 'sklep@zastal.test', 'ZASTAL_SMTP_TLS': 'none',
+                  'ZASTAL_SITE_ORIGIN': 'https://store.example.test'}
+        with patch.dict(os.environ, values):
+            with api.connect() as c:
+                self.assertFalse(api.readiness(c)['checks']['email'])
+        values.update(ZASTAL_SMTP_HOST='smtp.example.test', ZASTAL_SMTP_PORT='587',
+                      ZASTAL_SMTP_TLS='starttls')
+        with patch.dict(os.environ, values):
+            with api.connect() as c:
+                self.assertTrue(api.readiness(c)['checks']['email'])
 
     def test_03_admin_endpoint_not_public(self):
         status,data=self.public("GET","/api/admin/launch")
