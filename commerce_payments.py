@@ -334,3 +334,20 @@ def public_payment(c, order_id):
     return {'provider': PROVIDER, 'status': latest['status'] if latest else None,
             'redirect_url': latest['redirect_url'] if latest and latest['status'] in ('new', 'pending') else '',
             'can_retry': bool(latest) and latest['status'] in ('canceled', 'rejected', 'failed')}
+
+
+def notification_event(c, payload, result):
+    """Resolve a verified PayU state transition to one customer message."""
+    if result in ('canceled', 'rejected'):
+        ext = str(payload.get('order', {}).get('extOrderId', ''))[:64]
+        row = c.execute('SELECT order_id FROM payments WHERE ext_order_id=?', (ext,)).fetchone()
+        if row and (sales.details(c, row['order_id']) or {}).get('payment_status') == 'failed':
+            return row['order_id'], 'payment_failed', ext
+    if result in ('refund_pending', 'refund_finalized', 'refund_canceled'):
+        ident = str(payload.get('refund', {}).get('refundId', ''))[:64]
+        row = c.execute('SELECT r.id,p.order_id FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE r.provider_refund_id=?', (ident,)).fetchone()
+        if row:
+            kind = {'refund_pending': 'refund_requested', 'refund_finalized': 'refund_completed',
+                    'refund_canceled': 'refund_canceled'}[result]
+            return row['order_id'], kind, str(row['id'])
+    return None

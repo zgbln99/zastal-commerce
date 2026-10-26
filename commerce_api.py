@@ -446,7 +446,14 @@ class Handler(BaseHTTPRequestHandler):
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
                     status,result=payments.handle_notification(c,raw,self.headers.get('OpenPayu-Signature',''))
-                    if status==200 and result in ('completed',):mail.enqueue_order(c,int(c.execute('SELECT order_id FROM payments WHERE ext_order_id=?',(json.loads(raw)['order']['extOrderId'],)).fetchone()[0]),'order_paid')
+                    if status == 200:
+                        payload = json.loads(raw)
+                        if result == 'completed':
+                            mail.enqueue_order(c, int(c.execute('SELECT order_id FROM payments WHERE ext_order_id=?', (payload['order']['extOrderId'],)).fetchone()[0]), 'order_paid')
+                        else:
+                            event = payments.notification_event(c, payload, result)
+                            if event:
+                                mail.enqueue_order(c, event[0], event[1], event[2])
             except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
             return self.respond(status,{'ok':status==200,'result':result})
         if not self.access(path):return
@@ -778,6 +785,7 @@ class Handler(BaseHTTPRequestHandler):
                         except payments.PaymentError as ex:
                             sales.mark_payment(c,oid,'failed','PayU: '+ex.code)
                             audit(c,'payment',oid,'Nie udało się rozpocząć płatności online: '+ex.code)
+                            mail.enqueue_order(c,oid,'payment_failed','init')
                     mail.enqueue_order(c,oid)
                     reply=checkout_reply(c,oid,total,tracking)
                 return self.respond(201,reply)
@@ -810,10 +818,12 @@ class Handler(BaseHTTPRequestHandler):
                         amount=data.get('amount',order['total'])
                         if detail['payment_method']=='payu':
                             refund=payments.request_refund(c,oid,amount,note,actor)
+                            mail.enqueue_order(c,oid,'refund_requested',str(refund['id']))
                         else:
                             if isinstance(amount,bool) or not isinstance(amount,int) or not 1<=amount<=order['total']:raise Invalid('Nieprawidłowa kwota zwrotu')
                             sales.mark_payment(c,oid,'refunded' if amount>=order['total'] else 'partially_refunded',f'Zwrot ręczny {amount/100:.2f} PLN: {note}')
                             audit(c,'payment',oid,f'Administrator {actor}: zarejestrowano zwrot {amount/100:.2f} PLN ({detail["payment_method"]}) {note}')
+                            mail.enqueue_order(c,oid,'refund_completed',f'manual-{amount}-{secrets.token_hex(6)}')
                     elif action=='note':
                         sales.mark_payment(c,oid,detail['payment_status'],note)
                         audit(c,'payment',oid,f'Administrator {actor}: notatka płatności: {note}')

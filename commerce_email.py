@@ -164,7 +164,7 @@ def _consume_token(c, raw, kind):
     return user
 
 
-ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid', 'return_update')
+ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid', 'return_update', 'payment_failed', 'refund_requested', 'refund_completed', 'refund_canceled')
 GUEST_KINDS = ('stock_alert', 'gift_card_issued', 'staff_digest', 'test_email', 'promo_code')
 # Intermediate workflow steps are not customer events; packing is news only for pickup orders.
 QUIET_STATUSES = ('potwierdzone', 'do_kompletacji', 'nanoszenie_dtf', 'kontrola_jakosci')
@@ -405,7 +405,14 @@ def _message(c, row, config):
             c.commit()
             return None
         import commerce_sales as sales
-        subject, body = sales.order_email(c, order, sales.details(c, order['id']), row['kind'], os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
+        detail = sales.details(c, order['id'])
+        if row['kind'] == 'payment_failed' and detail['payment_status'] != 'failed':
+            c.commit()
+            return None
+        suffix = row['dedupe_key'].split(':', 2)[-1] if row['kind'].startswith('refund_') else ''
+        event_id = int(suffix) if suffix.isdigit() else None
+        event_amount = int(suffix.split('-')[1]) if suffix.startswith('manual-') else None
+        subject, body = sales.order_email(c, order, detail, row['kind'], os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'), event_id=event_id, event_amount=event_amount)
     c.commit()
     message = EmailMessage()
     message['From'], message['To'], message['Subject'] = config['from_address'], recipient, subject
@@ -466,6 +473,7 @@ def render_html(subject, body, origin, kind=None):
                     'Ustaw nowe hasło' if kind == 'password_reset' else
                     'Przejdź do konta' if kind == 'welcome' else
                     'Zobacz produkty' if is_promo else
+                    'Ponów płatność' if kind == 'payment_failed' else
                     'Sprawdź dostawę' if is_order and 'wysłane' in subject.lower() else
                     'Sprawdź zamówienie' if is_order else 'Otwórz wiadomość')
 

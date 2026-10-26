@@ -520,7 +520,7 @@ def _safe(call, fallback):
         return fallback
 
 
-def order_email(c, order, detail, kind, origin):
+def order_email(c, order, detail, kind, origin, event_id=None, event_amount=None):
     number = f'ZS-{order["id"]:05d}'
     config = _safe(lambda: settings(c), dict(DEFAULTS))
     live = bool(detail) and detail['mode'] == 'live'
@@ -548,6 +548,26 @@ def order_email(c, order, detail, kind, origin):
             lines += ['Płatność przy odbiorze osobistym.', '']
         elif detail['payment_status'] != 'paid':
             lines += ['Jeśli płatność online nie została ukończona, wróć do zamówienia i dokończ ją.', '']
+    elif kind == 'payment_failed':
+        subject = f'Zastal Store, płatność za {number} nie powiodła się'
+        lines += [f'Płatność za zamówienie {number} nie została ukończona.',
+                  f'Do zapłaty: {amount}', '',
+                  'Możesz ponowić płatność na stronie zamówienia. Jeśli środki zostały pobrane, nie płać ponownie i skontaktuj się ze sklepem.', '']
+    elif kind in ('refund_requested', 'refund_completed', 'refund_canceled'):
+        refund = c.execute('SELECT amount,status FROM payment_refunds WHERE id=?', (event_id,)).fetchone() if event_id else None
+        refunded = f'{(refund["amount"] if refund else event_amount) / 100:.2f} PLN' if refund or event_amount else amount
+        if kind == 'refund_requested':
+            subject = f'Zastal Store, zwrot za {number} zlecony'
+            lines += [f'Zleciliśmy zwrot {refunded} za zamówienie {number}.',
+                      'Środki wrócą tą samą metodą płatności. Czas księgowania zależy od operatora płatności i banku.', '']
+        elif kind == 'refund_completed':
+            subject = f'Zastal Store, zwrot za {number} zakończony'
+            lines += [f'Zwrócono {refunded} za zamówienie {number}.',
+                      'Jeśli nie widzisz jeszcze środków, sprawdź historię płatności lub skontaktuj się z bankiem.', '']
+        else:
+            subject = f'Zastal Store, zwrot za {number} anulowany'
+            lines += [f'Zwrot {refunded} za zamówienie {number} nie został wykonany.',
+                      'Skontaktuj się z nami, aby wyjaśnić dalsze kroki.', '']
     elif kind == 'order_paid':
         subject = f'Zastal Store, płatność za {number} przyjęta'
         lines += [f'Otrzymaliśmy płatność za zamówienie {number} ({amount}).', 'Przekazujemy je do realizacji.', '']
@@ -598,7 +618,7 @@ def order_email(c, order, detail, kind, origin):
         lines += ['Szczegóły płatności i dostawy oraz kolejne zmiany statusu znajdziesz na stronie zamówienia.', '']
     elif live and order['status'] == 'wyslane':
         lines += ['Status przesyłki możesz sprawdzić na stronie zamówienia.', '']
-    elif live and order['status'] == 'oczekuje_platnosci':
+    elif live and order['status'] == 'oczekuje_platnosci' and kind not in ('payment_failed', 'refund_requested', 'refund_completed', 'refund_canceled'):
         lines += ['Po zaksięgowaniu płatności dostaniesz osobne potwierdzenie.', '']
     raw_items = order['items'] if 'items' in order.keys() else '[]'
     items = json.loads(raw_items) if isinstance(raw_items, str) else raw_items or []
