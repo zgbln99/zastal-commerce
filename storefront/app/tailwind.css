@@ -8,7 +8,7 @@
 @import "./storefront-refresh.css" layer(legacy);
 @import "./product-media.css" layer(legacy);
 @import "./typography.css" layer(legacy);
-@import "./produkt/[id]/product.css" layer(legacy);
+@import "./produkt/[handle]/product.css" layer(legacy);
 @import "./zamowienie/checkout.css" layer(legacy);
 @import "./konto/account.css" layer(legacy);
 @import "./pomoc/help.css" layer(legacy);

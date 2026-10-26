@@ -12,6 +12,8 @@ import PurchaseControls from "../../../components/PurchaseControls";
 import ProductGallery from "../../../components/ProductGallery";
 import PriceReduction from "../../../components/PriceReduction";
 import PageContent from "../../../components/PageContent";
+import ProductReviews from "../../../components/ProductReviews";
+import Stars from "../../../components/Stars";
 import { TextureButton } from "@/components/templates/essentials/ui/texture-button";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +39,7 @@ export default function ProductDetail({ productId }: { productId: number }) {
           <div className="flex items-center justify-between gap-3 text-xs"><Link href={"/sklep?category=" + encodeURIComponent(product.category)} className="eyebrow">{label(product.category)}</Link><span className="text-muted-foreground">SKU: {product.sku}</span></div>
           <h1 className="mt-3 text-3xl font-medium leading-[1.08] tracking-tight sm:text-4xl">{product.name}</h1>
           {product.subtitle && <p className="mt-2 text-muted-foreground">{product.subtitle}</p>}
+          {product.rating && product.rating.count > 0 && <a href="#opinie" className="mt-3 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><Stars rating={product.rating.average}/><span>{product.rating.average.toFixed(1).replace(".", ",")} · {product.rating.count} {product.rating.count === 1 ? "opinia" : product.rating.count >= 2 && product.rating.count <= 4 ? "opinie" : "opinii"}</span></a>}
         </div>
         <div className="product-price-row flex items-start justify-between gap-4 border-y border-border py-4">
           <div><strong className="block text-2xl font-medium">{product.verified ? fmt(selectedPrice ?? product.price + (product.personalization_required ? product.personalization_fee || 0 : 0)) : "Sprawdzanie ceny…"}</strong><small className="text-xs text-muted-foreground">{store.sales.checkoutEnabled ? "Cena brutto · zawiera VAT" : "Cena produktu"}</small><PriceReduction product={product}/></div>
@@ -55,6 +58,7 @@ export default function ProductDetail({ productId }: { productId: number }) {
         </div>
       </div>
     </div>
+    <ProductReviews productId={product.id} productName={product.name}/>
     <section className="mt-20"><div className="section-heading"><h2>Zobacz też</h2><Link className="inline-link" href="/sklep">Cały sklep <ArrowRight size={16}/></Link></div><div className="product-grid">{related.map(p => <ProductCard product={p} key={p.id}/>)}</div></section>
     <RecentlyViewed currentId={product.id}/>
   </div>;

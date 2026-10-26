@@ -223,6 +223,21 @@ def consume(c, promo_id):
     c.execute('UPDATE promo_codes SET uses=uses+1 WHERE id=?', (promo_id,))
 
 
+def release_code(c, order_id):
+    """Gives the use back when an order with a code is cancelled or expires; once per order."""
+    try:
+        detail = c.execute('SELECT promo_code FROM order_details WHERE order_id=?', (order_id,)).fetchone()
+    except sqlite3.OperationalError:
+        return False
+    if not detail or not detail['promo_code']:
+        return False
+    if c.execute('SELECT 1 FROM audit_log WHERE kind=? AND object_id=? AND note LIKE ?', ('order', str(order_id), 'Zwolniono użycie kodu%')).fetchone():
+        return False
+    c.execute('UPDATE promo_codes SET uses=MAX(uses-1,0) WHERE code=?', (detail['promo_code'],))
+    c.execute('INSERT INTO audit_log(kind,object_id,note,created) VALUES(?,?,?,?)', ('order', str(order_id), f'Zwolniono użycie kodu {detail["promo_code"]}', stamp()))
+    return True
+
+
 def public_code(row, discount):
     return {'code': row['code'], 'kind': row['kind'], 'value': row['value'], 'discount': discount,
             'label': f'{row["value"]}%' if row['kind'] == 'percent' else f'{row["value"] / 100:.2f} PLN'}

@@ -124,8 +124,8 @@ def access_token():
         if _token_cache['value'] and _token_cache['expires'] > time.time() + 60:
             return _token_cache['value']
         status, payload = _call('POST', '/pl/standard/user/oauth/authorize', {
-            'grant_type': 'client_credentials', 'client_id': os.environ['ZASTAL_PAYU_CLIENT_ID'],
-            'client_secret': os.environ['ZASTAL_PAYU_CLIENT_SECRET']}, form=True)
+            'grant_type': 'client_credentials', 'client_id': os.environ['ZASTAL_PAYU_CLIENT_ID'].strip(),
+            'client_secret': os.environ['ZASTAL_PAYU_CLIENT_SECRET'].strip()}, form=True)
         token = payload.get('access_token') if status == 200 else None
         if not token:
             raise PaymentError(502, 'Nie udało się uwierzytelnić w PayU.', 'provider_auth_failed')
@@ -202,7 +202,7 @@ def verify_signature(header, raw_body):
     signature = parts.get('signature', '')
     if not digestor or not signature:
         return False
-    expected = digestor(raw_body + os.environ['ZASTAL_PAYU_SECOND_KEY'].encode()).hexdigest()
+    expected = digestor(raw_body + os.environ['ZASTAL_PAYU_SECOND_KEY'].strip().encode()).hexdigest()
     return secrets.compare_digest(expected.lower(), signature.lower())
 
 
@@ -246,9 +246,18 @@ def _apply_order_status(c, order):
             return 'amount_mismatch', ext
         if payment['status'] != 'completed':
             c.execute("UPDATE payments SET status='completed',provider_order_id=?,updated=? WHERE id=?", (provider_id, now, payment['id']))
+            order_row = c.execute('SELECT status FROM orders WHERE id=?', (payment['order_id'],)).fetchone()
+            if order_row and order_row['status'] == 'anulowane':
+                # Paid after the order expired or was cancelled: keep the money visible and flag it for a refund.
+                sales.mark_payment(c, payment['order_id'], 'paid', f'PayU: wpłata {amount / 100:.2f} PLN po anulowaniu zamówienia, zleć zwrot')
+                c.execute('INSERT INTO audit_log(kind,object_id,note,created) VALUES(?,?,?,?)',
+                          ('payment', str(payment['order_id']), f'PayU potwierdził płatność {ext} dla anulowanego zamówienia: wymaga zwrotu', now))
+                return 'paid_after_cancel', ext
             changed = sales.mark_paid(c, payment['order_id'], amount, 'PayU', f'{ext} / {provider_id}')
             c.execute('INSERT INTO audit_log(kind,object_id,note,created) VALUES(?,?,?,?)',
-                      ('payment', str(payment['order_id']), f'PayU potwierdził płatność {ext} ({amount / 100:.2f} PLN)', now))
+                      ('payment', str(payment['order_id']), f'PayU potwierdził płatność {ext} ({amount / 100:.2f} PLN)' + ('' if changed else ' dla zamówienia już opłaconego: podwójna wpłata, zleć zwrot'), now))
+            if not changed:
+                sales.mark_payment(c, payment['order_id'], 'paid', f'PayU: druga wpłata {amount / 100:.2f} PLN ({ext}), zleć zwrot')
             return 'completed' if changed else 'already_paid', ext
         return 'already_completed', ext
     if status in ('CANCELED', 'REJECTED'):
@@ -297,12 +306,23 @@ def _apply_refund_status(c, data):
     return 'refund_pending', ext
 
 
+def open_attempt(c, order_id, minutes=30):
+    """A PayU session started recently and still pending: the shopper should finish it instead of opening another."""
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=minutes)).isoformat(timespec='seconds')
+    row = c.execute("SELECT * FROM payments WHERE order_id=? AND status='pending' AND redirect_url<>'' ORDER BY id DESC LIMIT 1", (order_id,)).fetchone()
+    if not row or row['created'] < since:
+        return None
+    return dict(row)
+
+
 def request_refund(c, order_id, amount, reason, actor_id):
     payment = c.execute("SELECT * FROM payments WHERE order_id=? AND status='completed' ORDER BY id DESC LIMIT 1", (order_id,)).fetchone()
     if not payment:
         raise PaymentError(409, 'Brak zakończonej płatności PayU dla tego zamówienia.', 'no_completed_payment')
     if isinstance(amount, bool) or not isinstance(amount, int) or not 1 <= amount <= payment['amount']:
         raise PaymentError(400, 'Kwota zwrotu musi mieścić się w kwocie płatności.', 'invalid_amount')
+    if c.execute("SELECT 1 FROM payment_refunds WHERE payment_id=? AND status IN ('requested','pending')", (payment['id'],)).fetchone():
+        raise PaymentError(409, 'Poprzedni zwrot czeka jeszcze na rozliczenie przez PayU.', 'refund_in_progress')
     refunded = c.execute("SELECT COALESCE(SUM(amount),0) FROM payment_refunds WHERE payment_id=? AND status IN ('requested','pending','finalized')", (payment['id'],)).fetchone()[0]
     if refunded + amount > payment['amount']:
         raise PaymentError(409, 'Suma zwrotów przekroczyłaby kwotę płatności.', 'refund_exceeds_payment')

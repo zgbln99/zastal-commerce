@@ -14,6 +14,9 @@ import sqlite3
 ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 CODE = re.compile(r'^ZG-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$')
 EMAIL = re.compile(r'^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,}$')
+from zoneinfo import ZoneInfo
+
+LOCAL = ZoneInfo('Europe/Warsaw')
 MIN_VALUE, MAX_VALUE = 1000, 200000
 VALIDITY_DAYS = 365
 STATUSES = ('active', 'blocked')
@@ -108,10 +111,10 @@ def _text(value, label, limit):
 
 def _expiry(value):
     if value in (None, ''):
-        return (now_utc() + dt.timedelta(days=VALIDITY_DAYS)).strftime('%Y-%m-%d')
+        return (now_utc().astimezone(LOCAL) + dt.timedelta(days=VALIDITY_DAYS)).strftime('%Y-%m-%d')
     if not isinstance(value, str) or not re.fullmatch(r'20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])', value):
         raise GiftError(400, 'Data ważności w formacie RRRR-MM-DD')
-    if value < now_utc().strftime('%Y-%m-%d'):
+    if value < now_utc().astimezone(LOCAL).strftime('%Y-%m-%d'):
         raise GiftError(400, 'Data ważności nie może być w przeszłości')
     return value
 
@@ -139,7 +142,7 @@ def lookup(c, value):
 
 
 def state(row, now=None):
-    today = (now or now_utc()).strftime('%Y-%m-%d')
+    today = (now or now_utc()).astimezone(LOCAL).strftime('%Y-%m-%d')
     if row['status'] == 'blocked':
         return 'blocked'
     if row['expires_at'] < today:

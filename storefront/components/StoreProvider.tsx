@@ -6,7 +6,7 @@ import { extendCartLine, updateCartLine, mergeCatalog, lineUnitPrice, normalizeC
 type Store = {
   products: Product[]; cart: CartLine[]; favorites: number[]; hydrated: boolean;
   status: "loading" | "ready" | "error"; error: string; storageError: boolean;
-  players: Player[]; playersStatus: "loading" | "ready" | "error"; playersError: string; refreshPlayers: () => Promise<void>;
+  players: Player[]; playersStatus: "loading" | "ready" | "error"; playersError: string; refreshPlayers: (background?: boolean) => Promise<void>;
   refresh: () => Promise<void>; add: (id: number, size: string, quantity?: number, personalization?: Personalization, display?: PrintDisplay) => boolean;
   update: (id: number, size: string, quantity: number, personalization?: Personalization) => void; clear: () => void; removePurchased: (items: CartLine[]) => void;
   favorite: (id: number) => void; count: number; subtotal: number;
@@ -79,8 +79,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("focus", onFocus);
   }, [refresh]);
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(""), 5000); return () => clearTimeout(timer); }, [notice]);
-  const refreshPlayers = useCallback(async () => {
-    setPlayersStatus("loading"); setPlayersError("");
+  const refreshPlayers = useCallback(async (background = false) => {
+    if (!background) { setPlayersStatus("loading"); setPlayersError(""); }
     try {
       const response = await fetch("/api/players", { cache: "no-store", signal: AbortSignal.timeout(12000) });
       if (!response.ok) throw new Error();
@@ -88,11 +88,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (!Array.isArray(data.players)) throw new Error();
       setPlayers(data.players.filter((p: Player) => Number.isSafeInteger(p.id) && p.id > 0 && typeof p.name === "string" && normalizePersonalization({ mode: "custom", name: p.print_name, number: p.number })));
       setPlayersStatus("ready");
-    } catch { setPlayers([]); setPlayersStatus("error"); setPlayersError("Nie można pobrać aktualnej kadry."); }
+    } catch { if (!background) { setPlayers([]); setPlayersStatus("error"); setPlayersError("Nie można pobrać aktualnej kadry."); } }
   }, []);
   useEffect(() => {
     void refreshPlayers();
-    const onFocus = () => { void refreshPlayers(); };
+    const onFocus = () => { void refreshPlayers(true); };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [refreshPlayers]);

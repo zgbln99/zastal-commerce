@@ -19,11 +19,13 @@ LAYOUT_AREAS = ('name', 'number')
 DEFAULT_OPTIONS = {'image': '', 'subtitle': '', 'personalization_enabled': False,
                    'personalization_required': False, 'personalization_fee': 0,
                    'decoration_method': 'dtf', 'preorder': False, 'preorder_note': '', 'preorder_until': '',
-                   'size_guide': '', 'print_layout': None, 'description': '', 'badge': '', 'release_at': '', 'created_at': '', 'gift_card': False, 'pos_quick': False}
+                   'size_guide': '', 'print_layout': None, 'description': '', 'badge': '', 'release_at': '', 'created_at': '', 'gift_card': False, 'pos_quick': False,
+                   'slug': '', 'meta_title': '', 'meta_description': ''}
 EXTENDED_COLUMNS = {'decoration_method': "TEXT NOT NULL DEFAULT 'dtf'", 'preorder': 'INTEGER NOT NULL DEFAULT 0',
                     'preorder_note': "TEXT NOT NULL DEFAULT ''", 'preorder_until': "TEXT NOT NULL DEFAULT ''",
                     'size_guide': "TEXT NOT NULL DEFAULT ''", 'print_layout': "TEXT NOT NULL DEFAULT ''",
-                    'description': "TEXT NOT NULL DEFAULT ''", 'badge': "TEXT NOT NULL DEFAULT ''", 'release_at': "TEXT NOT NULL DEFAULT ''", 'created_at': "TEXT NOT NULL DEFAULT ''", 'gift_card': 'INTEGER NOT NULL DEFAULT 0', 'pos_quick': 'INTEGER NOT NULL DEFAULT 0'}
+                    'description': "TEXT NOT NULL DEFAULT ''", 'badge': "TEXT NOT NULL DEFAULT ''", 'release_at': "TEXT NOT NULL DEFAULT ''", 'created_at': "TEXT NOT NULL DEFAULT ''", 'slug': "TEXT NOT NULL DEFAULT ''", 'meta_title': "TEXT NOT NULL DEFAULT ''", 'meta_description': "TEXT NOT NULL DEFAULT ''",
+                    'gift_card': 'INTEGER NOT NULL DEFAULT 0', 'pos_quick': 'INTEGER NOT NULL DEFAULT 0'}
 ROSTER = (
     ('Kuba Galewski', 'GALEWSKI', '1'), ('Andrzej Mazurczak', 'MAZURCZAK', '3'),
     ('Conley Garrison', 'GARRISON', '0'), ('Filip Matczak', 'MATCZAK', '8'),
@@ -52,6 +54,7 @@ def init_schema(c):
     for column, definition in EXTENDED_COLUMNS.items():
         if column not in present:
             c.execute(f'ALTER TABLE product_options ADD COLUMN {column} {definition}')
+    backfill_slugs(c)
     if not c.execute("SELECT 1 FROM commerce_migrations WHERE name='official-roster-2026-10-10'").fetchone():
         if not c.execute('SELECT 1 FROM players LIMIT 1').fetchone():
             c.executemany('INSERT INTO players(name,print_name,number) VALUES(?,?,?)', ROSTER)
@@ -101,11 +104,46 @@ def image_value(value):
     return value
 
 
+POLISH = str.maketrans('ąćęłńóśźżĄĆĘŁŃÓŚŹŻ', 'acelnoszzACELNOSZZ')
+
+
+def slugify(value):
+    """URL handle from a product name: ASCII letters, digits and hyphens, as in /produkt/bluza-zastal-logo."""
+    base = unicodedata.normalize('NFKD', str(value or '').translate(POLISH)).encode('ascii', 'ignore').decode().lower()
+    slug = re.sub(r'-{2,}', '-', re.sub(r'[^a-z0-9]+', '-', base)).strip('-')[:80]
+    return slug + '-produkt' if slug.isdigit() else slug
+
+
+def unique_slug(c, wanted, pid):
+    """The requested handle, or the same with the product id when another product already answers to it.
+    Products without an options row answer to the handle made from their name (see product_options)."""
+    if not wanted:
+        return f'produkt-{pid}'
+    if c.execute('SELECT 1 FROM product_options WHERE slug=? AND product_id<>?', (wanted, pid)).fetchone():
+        return f'{wanted}-{pid}'
+    for row in c.execute("SELECT p.id,p.name FROM products p LEFT JOIN product_options o ON o.product_id=p.id WHERE (o.product_id IS NULL OR o.slug='') AND p.id<>?", (pid,)):
+        if slugify(row['name']) == wanted:
+            return f'{wanted}-{pid}'
+    return wanted
+
+
+def backfill_slugs(c):
+    """Existing option rows get a handle once; products without a row get theirs computed on read (see product_options)."""
+    for row in c.execute("SELECT p.id,p.name FROM products p JOIN product_options o ON o.product_id=p.id WHERE o.slug='' ORDER BY p.id").fetchall():
+        c.execute('UPDATE product_options SET slug=? WHERE product_id=?', (unique_slug(c, slugify(row['name']), row['id']), row['id']))
+
+
 def product_options(c, pid):
     row = c.execute('SELECT * FROM product_options WHERE product_id=?', (pid,)).fetchone()
     if not row:
-        return dict(DEFAULT_OPTIONS)
+        product = c.execute('SELECT name FROM products WHERE id=?', (pid,)).fetchone()
+        return {**DEFAULT_OPTIONS, 'slug': unique_slug(c, slugify(product['name']), pid) if product else ''}
     value = {key: row[key] for key in DEFAULT_OPTIONS}
+    if not value['slug']:
+        # Rows written directly (imports, fixtures) answer to the handle made from the name until the admin saves one.
+        product = c.execute('SELECT name FROM products WHERE id=?', (pid,)).fetchone()
+        value['slug'] = unique_slug(c, slugify(product['name']), pid) if product else ''
+
     for key in ('personalization_enabled', 'personalization_required', 'preorder', 'gift_card', 'pos_quick'):
         value[key] = bool(value[key])
     try:
@@ -204,7 +242,17 @@ def validate_product(data, existing=None):
     values['gift_card'] = flag(values['gift_card'], 'karta podarunkowa')
     if values['gift_card'] and values['personalization_enabled']:
         raise ValueError('Karta podarunkowa nie może mieć nadruku')
+    if values['gift_card']:
+        import commerce_giftcards as giftcards
+        if not giftcards.MIN_VALUE <= values['price'] <= giftcards.MAX_VALUE:
+            raise ValueError(f'Cena karty podarunkowej od {giftcards.MIN_VALUE // 100} do {giftcards.MAX_VALUE // 100} PLN')
     values['pos_quick'] = flag(values['pos_quick'], 'kafelek kasy')
+    slug = text(values['slug'], 'adres produktu', 80, empty=True)
+    if slug and (not re.fullmatch(r'[a-z0-9]+(-[a-z0-9]+)*', slug) or slug.isdigit()):
+        raise ValueError('Adres produktu: małe litery ASCII, cyfry i myślniki, np. bluza-zastal-logo')
+    values['slug'] = slug or slugify(values['name'])
+    values['meta_title'] = text(values['meta_title'], 'tytuł SEO', 70, empty=True)
+    values['meta_description'] = text(values['meta_description'], 'opis SEO', 160, empty=True)
     values['print_layout'] = layout_value(values['print_layout'])
     values.pop('decoration_method_label', None)
     return values
@@ -227,18 +275,19 @@ def description_value(value):
 
 def save_options(c, pid, value):
     layout = json.dumps(value['print_layout'], ensure_ascii=False, sort_keys=True) if value.get('print_layout') else ''
+    value['slug'] = unique_slug(c, value.get('slug') or slugify(value.get('name', '')), pid)
     c.execute('''INSERT INTO product_options(product_id,image,subtitle,personalization_enabled,personalization_required,personalization_fee,
-        decoration_method,preorder,preorder_note,preorder_until,size_guide,print_layout,description,badge,release_at,created_at,gift_card,pos_quick)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET
+        decoration_method,preorder,preorder_note,preorder_until,size_guide,print_layout,description,badge,release_at,created_at,gift_card,pos_quick,slug,meta_title,meta_description)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET
         image=excluded.image,subtitle=excluded.subtitle,
         personalization_enabled=excluded.personalization_enabled,
         personalization_required=excluded.personalization_required,
         personalization_fee=excluded.personalization_fee,
         decoration_method=excluded.decoration_method,preorder=excluded.preorder,preorder_note=excluded.preorder_note,
-        preorder_until=excluded.preorder_until,size_guide=excluded.size_guide,print_layout=excluded.print_layout,description=excluded.description,badge=excluded.badge,release_at=excluded.release_at,gift_card=excluded.gift_card,pos_quick=excluded.pos_quick''',
+        preorder_until=excluded.preorder_until,size_guide=excluded.size_guide,print_layout=excluded.print_layout,description=excluded.description,badge=excluded.badge,release_at=excluded.release_at,gift_card=excluded.gift_card,pos_quick=excluded.pos_quick,slug=excluded.slug,meta_title=excluded.meta_title,meta_description=excluded.meta_description''',
         (pid, value['image'], value['subtitle'], value['personalization_enabled'], value['personalization_required'],
          value['personalization_fee'], value['decoration_method'], int(value['preorder']), value['preorder_note'],
-         value['preorder_until'], value['size_guide'], layout, value.get('description', ''), value.get('badge', ''), value.get('release_at', ''), value.get('created_at', ''), int(bool(value.get('gift_card'))), int(bool(value.get('pos_quick')))))
+         value['preorder_until'], value['size_guide'], layout, value.get('description', ''), value.get('badge', ''), value.get('release_at', ''), value.get('created_at', ''), int(bool(value.get('gift_card'))), int(bool(value.get('pos_quick'))), value.get('slug', ''), value.get('meta_title', ''), value.get('meta_description', '')))
 
 
 def line_extras(c, product_id):

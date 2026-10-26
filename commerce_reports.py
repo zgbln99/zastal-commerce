@@ -129,6 +129,12 @@ def _pln(value):
     return f'{value / 100:.2f}'.replace('.', ',')
 
 
+def _cell(value):
+    """Text cells never start with a formula trigger; spreadsheets would otherwise evaluate product names."""
+    text = str(value)
+    return "'" + text if text[:1] in ('=', '+', '-', '@', '\t', '\r') else text
+
+
 def csv_export(report, kind):
     """Semicolon CSV with a BOM and decimal commas, the format Polish spreadsheets open without asking."""
     buffer = io.StringIO()
@@ -136,12 +142,12 @@ def csv_export(report, kind):
     if kind == 'product':
         writer.writerow(['SKU', 'Produkt', 'Sztuk', 'Wartość PLN'])
         for row in report['by_product']:
-            writer.writerow([row['sku'], row['name'], row['qty'], _pln(row['revenue'])])
+            writer.writerow([_cell(row['sku']), _cell(row['name']), row['qty'], _pln(row['revenue'])])
     elif kind == 'orders':
         writer.writerow(['Zamówienie', 'Dzień', 'Kanał', 'Płatność', 'Pozycji', 'Rabat PLN', 'Karta podarunkowa PLN', 'Wartość PLN', 'Status'])
         for row in report['orders']:
-            writer.writerow([f'ZS-{row["id"]:05d}', row['day'], 'sklep online' if row['channel'] == 'online' else 'kasa', row['payment'], row['items'],
-                             _pln(row['discount']), _pln(row['gift_card']), _pln(row['value']), row['status']])
+            writer.writerow([f'ZS-{row["id"]:05d}', row['day'], 'sklep online' if row['channel'] == 'online' else 'kasa', _cell(row['payment']), row['items'],
+                             _pln(row['discount']), _pln(row['gift_card']), _pln(row['value']), _cell(row['status'])])
     else:
         writer.writerow(['Dzień', 'Zamówień', 'Sklep online PLN', 'Kasa PLN', 'Razem PLN'])
         for row in report['by_day']:

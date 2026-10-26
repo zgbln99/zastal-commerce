@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useState} from "react";
 import HomeCanvas from "../../../components/HomeCanvas";
-import {useAuth} from "../../../components/AuthProvider";
+import {can,useAuth} from "../../../components/AuthProvider";
 import {DEFAULT_HOME,type HomeConfig} from "../../../lib/home-layout";
 
 /** Same component tree as the live homepage, fed by private editor state. */
@@ -21,6 +21,6 @@ export default function PreviewPage(){
   return()=>window.removeEventListener("message",listen);
  },[]);
  if(auth.loading)return <main style={{padding:"3rem"}}>Ładowanie podglądu...</main>;
- if(auth.user?.role!=="admin")return <main style={{padding:"3rem"}}>Podgląd jest dostępny tylko w panelu administratora.</main>;
+ if(!can(auth.user,"cms"))return <main style={{padding:"3rem"}}>Podgląd jest dostępny tylko w panelu administratora.</main>;
  return <HomeCanvas config={config}/>;
 }

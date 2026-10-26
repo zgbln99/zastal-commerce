@@ -483,8 +483,11 @@ def expire_unpaid(c, hours=None):
     config = settings(c)
     limit = hours or config['unpaid_hours']
     cutoff = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=limit)).isoformat(timespec='seconds')
+    # A PayU session can outlive the deadline (validityTime is capped at 72 h); give it a day before cancelling.
+    pending_cutoff = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=limit + 24)).isoformat(timespec='seconds')
     rows = c.execute('''SELECT o.id,o.items FROM orders o JOIN order_details d ON d.order_id=o.id
-                        WHERE o.status='oczekuje_platnosci' AND d.payment_status IN ('unpaid','pending','failed') AND d.mode='live' AND o.created<?''', (cutoff,)).fetchall()
+                        WHERE o.status='oczekuje_platnosci' AND d.mode='live'
+                          AND ((d.payment_status IN ('unpaid','failed') AND o.created<?) OR (d.payment_status='pending' AND o.created<?))''', (cutoff, pending_cutoff)).fetchall()
     cancelled = []
     for row in rows:
         if c.execute('SELECT 1 FROM production_tasks WHERE order_id=?', (row['id'],)).fetchone():
@@ -499,7 +502,9 @@ def expire_unpaid(c, hours=None):
 
 def restore_stock(c, order_id, items_json, reason):
     import commerce_giftcards as giftcards
+    import commerce_merch as merch
     giftcards.release(c, order_id, reason)
+    merch.release_code(c, order_id)
     for line in json.loads(items_json):
         if giftcards.is_gift_line(line):
             continue
@@ -526,7 +531,8 @@ def order_email(c, order, detail, kind, origin):
     live = bool(detail) and detail['mode'] == 'live'
     status = STATUS_LABELS.get(order['status'], order['status'])
     amount = f'{order["total"] / 100:.2f} PLN'
-    link = f'{origin}/zamowienie?id={order["id"]}'
+    receipt = _safe(lambda: c.execute('SELECT tracking_token FROM order_receipts WHERE order_id=?', (order['id'],)).fetchone(), None)
+    link = f'{origin}/zamowienie?id={order["id"]}' + (f'&token={receipt["tracking_token"]}' if receipt and receipt['tracking_token'] else '')
     lines = []
     if not live:
         subject = f'Zastal Store, zamówienie testowe #{order["id"]}'

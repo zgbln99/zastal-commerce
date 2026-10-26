@@ -8,7 +8,7 @@ export type Variant = { id: number; product_id: number; size: string; sku: strin
 export type PrintArea = { x: number; y: number; w: number; h: number };
 export type PrintLayout = { image: string; areas: { name?: PrintArea; number?: PrintArea }; color: string; font: 'block' | 'condensed' | 'rounded'; calibrated: boolean; note?: string };
 export type DecorationMethod = 'dtf' | 'haft' | 'haft_3d' | 'sitodruk' | 'inne';
-export type Product = CatalogItem & { variants: Variant[]; verified: boolean; personalization_enabled?: boolean; personalization_required?: boolean; personalization_fee?: number; decoration_method?: DecorationMethod; decoration_method_label?: string; preorder?: boolean; preorder_note?: string; preorder_until?: string; size_guide?: string; description?: string; gift_card?: boolean; badge?: string; badge_info?: { code: string; label: string } | null; release_at?: string; release_epoch?: number | null; released?: boolean; print_layout?: PrintLayout | null; price_reduction?: { previous: number; lowest_30d: number; since: string } | null };
+export type Product = CatalogItem & { variants: Variant[]; verified: boolean; slug?: string; rating?: { count: number; average: number }; meta_title?: string; meta_description?: string; personalization_enabled?: boolean; personalization_required?: boolean; personalization_fee?: number; decoration_method?: DecorationMethod; decoration_method_label?: string; preorder?: boolean; preorder_note?: string; preorder_until?: string; size_guide?: string; description?: string; gift_card?: boolean; badge?: string; badge_info?: { code: string; label: string } | null; release_at?: string; release_epoch?: number | null; released?: boolean; print_layout?: PrintLayout | null; price_reduction?: { previous: number; lowest_30d: number; since: string } | null };
 export function normalizePrintLayout(value: unknown): PrintLayout | null;
 export const DECORATION_LABELS: Record<DecorationMethod, string>;
 export type OrderPrint = { mode: 'player' | 'custom'; player_id?: number; name: string; number: string };
@@ -30,6 +30,7 @@ export function personalizationLabel(line: { personalization?: Personalization |
 export function extendCartLine(cart: CartLine[], line: CartLine, products: Product[]): CartLine[] | null;
 export function updateCartLine(cart: CartLine[], id: number, size: string, quantity: number, personalization?: Personalization, products?: Product[]): CartLine[];
 export function mergeCatalog(rows: unknown, fallback?: CatalogItem[]): Product[];
+export function productPath(product: { id?: number; slug?: string } | undefined | null): string;
 export function normalizeFavorites(raw: unknown, products?: CatalogItem[]): number[];
 export function availableQty(product: Product | undefined, size: string): number;
 export function canCheckout(cart: CartLine[], products: Product[], players?: Player[]): boolean;

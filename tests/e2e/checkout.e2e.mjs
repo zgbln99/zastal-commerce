@@ -17,7 +17,7 @@ const step = (name, ok, note = '') => { results.push({ name, ok, note }); consol
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true });
 
 async function fillCheckout(page, { email, name, delivery, payment, address = true }) {
-  await page.fill('input[type="email"]', email);
+  await page.fill('main input[type="email"]', email);
   await page.fill('input[autocomplete="name"]', name);
   await page.check(`input[name="delivery"][value="${delivery}"]`);
   if (address) {
@@ -47,6 +47,22 @@ try {
   await page.waitForSelector('.order-lookup .account-success');
   step('mobile: order lookup form answers without leaking', true);
   await shot(page, '00-help-390');
+  // ---------- Addresses in the yournextstore shape: slugs, category pages, search, cart page
+  const catalogue = await (await fetch(API + '/api/catalog')).json();
+  const kidsShirt = catalogue.find(p => p.id === 9);
+  step('catalogue: products carry URL slugs', typeof kidsShirt.slug === 'string' && kidsShirt.slug.length > 3 && catalogue.every(p => p.slug), kidsShirt.slug);
+  const redirected = await page.goto(WEB + '/produkt/9', { waitUntil: 'networkidle' });
+  step('mobile: numeric product link redirects to the slug address', redirected.url().endsWith('/produkt/' + kidsShirt.slug), redirected.url());
+  await page.goto(WEB + '/kategoria/dzieci', { waitUntil: 'networkidle' });
+  step('mobile: category page lists only its products', (await page.locator('h1').first().innerText()).includes('Dla dzieci') && (await page.locator('.product-grid article').count()) === catalogue.filter(p => p.category === 'Dzieci').length);
+  await page.goto(WEB + '/szukaj?q=bluza', { waitUntil: 'networkidle' });
+  step('mobile: search page answers the query', (await page.locator('.product-grid article').count()) === catalogue.filter(p => p.name.toLowerCase().includes('bluza')).length);
+  const llms = await (await fetch(WEB + '/llms.txt')).text();
+  const manifest = await (await fetch(WEB + '/manifest.webmanifest')).json();
+  const sitemap = await (await fetch(WEB + '/sitemap.xml')).text();
+  step('seo: llms.txt, manifest and sitemap list slugs and categories', llms.includes('/produkt/' + kidsShirt.slug) && manifest.icons.length >= 2 && sitemap.includes('/kategoria/dzieci') && sitemap.includes('/produkt/' + kidsShirt.slug) && !sitemap.includes('/produkt/9<'));
+  const og = await fetch(WEB + '/produkt/' + kidsShirt.slug + '/opengraph-image');
+  step('seo: product Open Graph image renders', og.status === 200 && (og.headers.get('content-type') || '').includes('image/png'));
   await page.goto(WEB + '/produkt/9', { waitUntil: 'networkidle' });
   step('mobile: preorder product shows note, size guide and structured description', (await page.locator('.product-preorder-note').count()) === 1 && (await page.locator('.product-size-guide').count()) === 1 && (await page.locator('.product-description h2').count()) === 1 && (await page.locator('script[type="application/ld+json"]').count()) >= 1);
   await shot(page, '02a-product-preorder-390');
@@ -62,7 +78,7 @@ try {
   step('mobile: product added to cart', await page.locator('.cart-item').count() === 1);
   await page.getByRole('button', { name: /Przejdź do zamówienia/ }).click();
   await page.waitForURL('**/zamowienie');
-  await page.waitForSelector('input[type="email"]');
+  await page.waitForSelector('main input[type="email"]');
   await fillCheckout(page, { email: 'kibic@example.test', name: 'Jan Kibic', delivery: 'kurier', payment: 'transfer' });
   await page.fill('input[aria-label="Kod rabatowy"]', 'kibic10');
   await page.getByRole('button', { name: 'Zastosuj' }).click();
@@ -86,8 +102,8 @@ try {
   await page.getByRole('button', { name: 'Dodaj do koszyka' }).first().click();
   await page.waitForSelector('.cart-modal');
   await page.getByRole('button', { name: /Przejdź do zamówienia/ }).click();
-  await page.waitForSelector('input[type="email"]');
-  await page.fill('input[type="email"]', 'niepoprawny');
+  await page.waitForSelector('main input[type="email"]');
+  await page.fill('main input[type="email"]', 'niepoprawny');
   await page.check('input[name="delivery"][value="paczkomat"]');
   await page.getByRole('button', { name: /Zamawiam/ }).click();
   const errors = await page.locator('.field-error').count();
@@ -114,7 +130,7 @@ try {
   await d.getByRole('button', { name: 'Dodaj do koszyka' }).click();
   await d.waitForSelector('.cart-modal');
   await d.getByRole('button', { name: /Przejdź do zamówienia/ }).click();
-  await d.waitForSelector('input[type="email"]');
+  await d.waitForSelector('main input[type="email"]');
   await fillCheckout(d, { email: 'online@example.test', name: 'Anna Nowak', delivery: 'odbior', payment: 'payu', address: false });
   await shot(d, '09-checkout-payu-1440');
   // The page redirects to PayU immediately, so capture the reply inside the request route.
@@ -135,6 +151,36 @@ try {
   await d.waitForSelector('.receipt-success');
   const paidText = await d.locator('.receipt-page').innerText();
   step('desktop: receipt shows paid status and print snapshot', paidText.includes('Płatność przyjęta') && paidText.includes('KIBIC') && paidText.includes('Opłacone'));
+  // ---------- Reviews, newsletter, contact form, cart page
+  const hoodie = catalogue.find(p => p.id === 1);
+  await d.goto(WEB + '/produkt/' + hoodie.slug, { waitUntil: 'networkidle' });
+  await d.getByRole('button', { name: 'Napisz opinię' }).click();
+  await d.getByRole('radio', { name: '5 gwiazdek' }).click();
+  await d.locator('.review-form input[autocomplete="given-name"]').fill('Jan');
+  await d.locator('.review-form input[type="email"]').fill('online@example.test');
+  await d.locator('.review-form textarea').fill('Świetna bluza, materiał gruby i ciepły. Rozmiar zgodny z tabelą.');
+  await d.getByRole('button', { name: 'Wyślij opinię' }).click();
+  await d.waitForSelector('.product-reviews [role="status"]');
+  const reviewsPending = await (await fetch(API + '/api/store/products/1/reviews')).json();
+  step('desktop: review goes to moderation and is not public yet', reviewsPending.summary.count === 0);
+  await d.goto(WEB + '/koszyk', { waitUntil: 'networkidle' });
+  step('desktop: empty cart page offers the shop', (await d.locator('.empty-state').count()) === 1);
+  await d.goto(WEB + '/kontakt', { waitUntil: 'networkidle' });
+  await d.locator('.contact-form input[autocomplete="name"]').fill('Jan Kibic');
+  await d.locator('.contact-form input[type="email"]').fill('kibic@example.test');
+  await d.locator('.contact-form input[placeholder="ZS-00012"]').fill('ZS-00001');
+  await d.locator('.contact-form textarea').fill('Czy koszulka będzie dostępna w rozmiarze XXL przed meczem?');
+  await d.getByRole('button', { name: /Wyślij wiadomość/ }).click();
+  await d.waitForSelector('.contact-done');
+  step('desktop: contact form confirms the message', true);
+  await d.goto(WEB + '/', { waitUntil: 'networkidle' });
+  const newsletterForm = d.locator('footer .newsletter-form');
+  await newsletterForm.locator('input[type="email"]').fill('fan@example.test');
+  await newsletterForm.locator('input[type="checkbox"]').check();
+  await newsletterForm.getByRole('button', { name: 'Zapisz się do newslettera' }).click();
+  await d.waitForSelector('footer .newsletter-done');
+  step('desktop: newsletter signup asks for confirmation', (await d.locator('footer .newsletter-done').innerText()).includes('Potwierdź'));
+  await shot(d, '11-contact-newsletter-1440');
   await d.goto(WEB + '/zawodnicy', { waitUntil: 'networkidle' });
   await d.waitForSelector('.player-card');
   const playerLinks = await d.locator('.player-card a[href*="zawodnik="]').count();
@@ -198,6 +244,17 @@ try {
   await d.waitForSelector('.admin-roles-grid');
   await shot(d, '16-admin-staff-1440');
   // Cashier sees only its screens
+  await d.locator('.admin-navitem', { hasText: 'Opinie' }).click();
+  await d.getByRole('button', { name: 'Publikuj' }).first().click();
+  await d.waitForTimeout(600);
+  const reviewsPublic = await (await fetch(API + '/api/store/products/1/reviews')).json();
+  step('admin: approved review is public with its verified-purchase mark', reviewsPublic.summary.count === 1 && reviewsPublic.reviews[0].verified === true && reviewsPublic.summary.average === 5);
+  await d.locator('.admin-navitem', { hasText: 'Wiadomości' }).click();
+  await d.waitForSelector('.admin-table');
+  step('admin: contact message is listed with its order number', (await d.locator('.admin-table').innerText()).includes('ZS-00001'));
+  await d.locator('.admin-navitem', { hasText: 'Newsletter' }).click();
+  await d.waitForSelector('.reports-presets');
+  step('admin: newsletter view offers the CSV export', (await d.locator('a[href*="/api/admin/subscribers.csv"]').count()) === 1);
   await d.getByRole('button', { name: 'Wyloguj' }).click();
   await d.waitForSelector('input[autocomplete="username"]');
   await d.fill('input[autocomplete="username"]', 'kasa');

@@ -62,14 +62,14 @@ export default function Fulfillment({onSaved}:{onSaved:()=>Promise<boolean>}) {
       await loadDetail(id,true);void loadQueue();
     }finally{busyRef.current=false;if(session===lifetime.current)setBusy(false);}
   };
+  const scanForm=useRef<HTMLFormElement>(null),scanQueued=useRef(false);
+  useEffect(()=>{if(scanQueued.current){scanQueued.current=false;scanForm.current?.requestSubmit();}},[scan]);
   if(identity===null||denied)return <p className="staff-notice">Sesja administratora wymaga odświeżenia.</p>;
   const line=detail?.items.find(item=>item.line_index===selectedLine);
   const disabled=busy||detailLoading||!detail||isClosedOrder(detail.status)||detail.status==='spakowane';
   const canPick=!!line&&line.picked_qty<line.qty;
   const canPrint=!!line&&line.print_required&&line.production_ready!==false&&line.printed_qty<line.picked_qty&&line.printed_qty<line.qty;
   const canCheck=!!line&&line.checked_qty<line.picked_qty&&line.checked_qty<line.qty&&(!line.print_required||line.checked_qty<line.printed_qty);
-  const scanForm=useRef<HTMLFormElement>(null),scanQueued=useRef(false);
-  useEffect(()=>{if(scanQueued.current){scanQueued.current=false;scanForm.current?.requestSubmit();}},[scan]);
   const shown=queue.filter(order=>`${orderNumber(order.id)} ${order.items.map(item=>`${item.name||item.sku} ${printLabel(item)}`).join(' ')}`.toLowerCase().includes(query.toLowerCase()));
   const visible=printOnly?shown.filter(order=>order.items.some(item=>item.print_required)):shown;
   return <div className="staff-screen"><div className="staff-notice pos-mode"><strong>Realizacja i stanowisko nadruków</strong><span>Każde potwierdzenie dotyczy jednej sztuki wybranej pozycji. Dwa różne nadruki tego samego rozmiaru realizuj osobno.</span><StaffFullscreen/></div>{error&&<p className="staff-error" role="alert">{error}</p>}{notice&&<p className="staff-success" role="status"><CheckCircle2 size={17}/>{notice}</p>}

@@ -169,8 +169,11 @@ def resolve(c, rid, data, actor_id, payments_module, open_shift):
     if refund_method not in REFUND_METHODS:
         raise ReturnError(400, 'Nieprawidłowa metoda zwrotu środków')
     amount = data.get('refund_amount', current['refund_amount'])
-    if isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= order['total']:
-        raise ReturnError(400, 'Kwota zwrotu musi mieścić się w wartości zamówienia')
+    already = c.execute("SELECT COALESCE(SUM(refund_amount),0) FROM returns WHERE order_id=? AND status='rozliczony' AND id<>?", (order['id'], current['id'])).fetchone()[0]
+    if isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= order['total'] - already:
+        raise ReturnError(400, f'Kwota zwrotu musi mieścić się w pozostałej wartości zamówienia ({(order["total"] - already) / 100:.2f} PLN)')
+    if amount and refund_method in ('cash', 'transfer') and detail and detail['payment_status'] not in ('paid', 'partially_refunded'):
+        raise ReturnError(409, 'Zamówienie nie było opłacone, nie ma czego zwracać')
     restock = data.get('restock', bool(current['restock']))
     if not isinstance(restock, bool):
         raise ReturnError(400, 'Nieprawidłowy znacznik przyjęcia na stan')

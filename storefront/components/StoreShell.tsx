@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowRight, ArrowUpRight, At, Call, Check, ChevronRight, Heart, Location, Menu2, Minus, Plus, Search, ShoppingCart, Trash, TruckFast, User, X } from "reicon-react";
 import { fmt } from "../lib/catalog";
-import { availableQty, canCheckout, cartLineKey, filterProducts, lineUnitPrice, personalizationLabel, productDisplayPrice, variantCartQuantity } from "../lib/commerce.mjs";
+import { availableQty, canCheckout, cartLineKey, filterProducts, lineUnitPrice, personalizationLabel, productDisplayPrice, productPath, variantCartQuantity } from "../lib/commerce.mjs";
 import { useStore } from "./StoreProvider";
 import { ProductImage } from "./ProductCard";
 import PurchaseControls from "./PurchaseControls";
@@ -12,30 +12,26 @@ import Modal from "./Modal";
 import { useAuth } from "./AuthProvider";
 import PriceReduction from "./PriceReduction";
 import FreeShipping from "./FreeShipping";
+import SearchBox from "./search/SearchBox";
+import PromoField from "./PromoField";
+import NewsletterForm from "./NewsletterForm";
 import { TextureButton } from "@/components/templates/essentials/ui/texture-button";
 import { cn } from "@/lib/utils";
+import { categoryPath, categorySlug } from "../lib/site";
 
 const CATEGORIES = ["Koszulki", "Bluzy", "Akcesoria", "Dzieci"];
 const label = (c: string) => c === "Dzieci" ? "Dla dzieci" : c;
-const categoryUrl = (c: string) => "/sklep?category=" + encodeURIComponent(c);
+const categoryUrl = (c: string) => categoryPath(c);
 const pill = "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-muted";
 const pillActive = "border-primary bg-primary text-primary-foreground hover:bg-primary";
 const iconButton = "inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:opacity-50";
 
 function SearchDialog() {
-  const store = useStore(); const router = useRouter();
-  const [query, setQuery] = useState("");
-  const results = filterProducts(store.products, { query });
-  return <Modal title="Szukaj produktów" onClose={() => store.setDialog(null)}>
+  const store = useStore();
+  return <Modal title="Szukaj produktów" onClose={() => store.setDialog(null)} className="search-modal">
     <div className="modal-title"><h2>Szukaj w sklepie</h2><button className={iconButton} aria-label="Zamknij wyszukiwarkę" onClick={() => store.setDialog(null)}><X size={20}/></button></div>
-    <form className="flex items-center gap-2 rounded-full border border-border bg-muted py-1 pl-4 pr-1" onSubmit={e => { e.preventDefault(); store.setDialog(null); router.push("/sklep?q=" + encodeURIComponent(query)); }}>
-      <Search size={18} className="text-muted-foreground"/><input data-autofocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Nazwa produktu lub kolekcja" aria-label="Wyszukaj produkt" className="h-9 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground" style={{ border: 0, boxShadow: "none" }}/>
-      <TextureButton size="sm" type="submit" aria-label="Pokaż wszystkie wyniki">Szukaj</TextureButton>
-    </form>
-    <div className="mt-5 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{query ? "Wyniki wyszukiwania: " + results.length : "Produkty w sklepie"}</div>
-    {results.length ? <div className="mt-3 divide-y divide-border">{results.slice(0, 5).map(p => <Link href={"/produkt/" + p.id} key={p.id} onClick={() => store.setDialog(null)} className="flex items-center gap-3 py-3 hover:text-primary"><span className="size-14 shrink-0 overflow-hidden rounded-lg bg-muted"><ProductImage product={p} className="size-full object-cover"/></span><span className="flex-1 min-w-0"><strong className="block truncate text-sm font-medium">{p.name}</strong><small className="text-xs text-muted-foreground">{p.category}</small></span><b className="text-sm font-medium">{p.verified ? fmt(productDisplayPrice(p)) : "…"}</b><ChevronRight size={16} className="text-muted-foreground"/></Link>)}</div>
-      : <div className="mt-6 flex flex-col items-center gap-2 py-8 text-center text-muted-foreground"><Search size={28}/><p className="text-sm text-foreground">Brak wyników dla „{query}”.</p><span className="text-xs">Spróbuj nazwy kategorii: koszulki, bluzy lub akcesoria.</span></div>}
-    <Link href={"/sklep" + (query ? "?q=" + encodeURIComponent(query) : "")} className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline" onClick={() => store.setDialog(null)}>Zobacz wszystkie wyniki <ArrowRight size={16}/></Link>
+    <SearchBox products={store.products} autoFocus onNavigate={() => store.setDialog(null)}/>
+    <p className="mt-4 text-xs text-muted-foreground">Wpisz nazwę produktu, kolekcję albo kategorię: koszulki, bluzy, akcesoria.</p>
   </Modal>;
 }
 
@@ -61,9 +57,9 @@ function CartDialog() {
         const printLabel = personalizationLabel(line, store.players);
         const fee = p?.personalization_enabled ? p.personalization_fee || 0 : 0;
         return <article className="cart-item flex gap-4 py-4" key={cartLineKey(line)}>
-          <Link href={"/produkt/" + line.id} onClick={() => store.setDialog(null)} className="size-24 shrink-0 overflow-hidden rounded-xl bg-muted"><ProductImage product={p || { name, image: "/assets/product-unavailable.svg" }} className="size-full object-cover"/></Link>
+          <Link href={productPath(p || { id: line.id })} onClick={() => store.setDialog(null)} className="size-24 shrink-0 overflow-hidden rounded-xl bg-muted"><ProductImage product={p || { name, image: "/assets/product-unavailable.svg" }} className="size-full object-cover"/></Link>
           <div className="min-w-0 flex-1 text-sm">
-            <Link href={"/produkt/" + line.id} onClick={() => store.setDialog(null)} className="block font-medium hover:text-primary">{name}</Link>
+            <Link href={productPath(p || { id: line.id })} onClick={() => store.setDialog(null)} className="block font-medium hover:text-primary">{name}</Link>
             <small className="block text-xs text-muted-foreground">{line.size === "UNI" ? "Rozmiar uniwersalny" : "Rozmiar: " + line.size}</small>
             {printLabel && <small className="block text-xs text-muted-foreground">{printLabel} <span>· {prices ? fee ? "+" + fmt(fee) + " / szt." : "Bez dopłaty" : "Sprawdzanie opłaty za nadruk…"}</span></small>}
             <div className="mt-2 flex items-center justify-between gap-3">
@@ -80,8 +76,9 @@ function CartDialog() {
       })}</div>
       <div className="mt-4 border-t border-border pt-4">
         <div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Produkty</span><strong className="text-base font-medium">{prices ? fmt(store.subtotal) : "…"}</strong></div>
+        <div className="mt-3"><PromoField subtotal={store.subtotal} enabled={store.sales.checkoutEnabled && prices}/></div>
         <FreeShipping subtotal={store.subtotal} methods={store.sales.shipping} enabled={store.sales.checkoutEnabled && prices}/>
-        <p className="mt-2 text-xs text-muted-foreground">Koszt dostawy wybierzesz w następnym kroku.</p>
+        <p className="mt-2 text-xs text-muted-foreground">Koszt dostawy wybierzesz w następnym kroku. <Link href="/koszyk" onClick={() => store.setDialog(null)} className="underline underline-offset-2 hover:text-foreground">Pełny koszyk</Link></p>
         {store.error && <p className="field-error mt-2">{store.error}</p>}
         <TextureButton size="lg" className="mt-4 w-full" disabled={!valid} onClick={() => { store.setDialog(null); router.push("/zamowienie"); }}>{store.sales.checkoutEnabled ? "Przejdź do zamówienia" : "Informacje o zamówieniach"} <ArrowRight size={18}/></TextureButton>
         <button className="mt-3 w-full text-center text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => store.setDialog(null)}>Kontynuuj zakupy</button>
@@ -105,7 +102,7 @@ function QuickProduct() {
         <p className="text-sm text-muted-foreground">{p.subtitle}</p>
         <div className="text-xl font-medium">{p.verified ? fmt(selectedPrice ?? p.price + (p.personalization_required ? p.personalization_fee || 0 : 0)) : "Sprawdzanie ceny…"}<PriceReduction product={p}/></div>
         <PurchaseControls product={p} onUnitPriceChange={setSelectedPrice}/>
-        <Link className="inline-link" href={"/produkt/" + p.id} onClick={() => store.setQuickId(null)}>Pełny opis produktu <ArrowUpRight size={16}/></Link>
+        <Link className="inline-link" href={productPath(p)} onClick={() => store.setQuickId(null)}>Pełny opis produktu <ArrowUpRight size={16}/></Link>
         {!store.sales.checkoutEnabled && <p className="quiet-note">Zamówienia online są obecnie niedostępne.</p>}
       </div>
     </div>
@@ -114,14 +111,13 @@ function QuickProduct() {
 
 export default function StoreShell({ children }: { children: React.ReactNode }) {
   const store = useStore(); const pathname = usePathname(); const auth = useAuth(); const router = useRouter();
-  const [headerQuery, setHeaderQuery] = useState("");
   useEffect(() => { store.setDialog(null); store.setQuickId(null); }, [pathname]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key === "k") { e.preventDefault(); store.setQuickId(null); store.setDialog("search"); } };
     window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key);
   }, []);
   const params = useSearchParams();
-  const activeCategory = pathname === "/sklep" ? params?.get("category") || "" : "";
+  const activeCategory = pathname === "/sklep" ? params?.get("category") || "" : pathname?.startsWith("/kategoria/") ? CATEGORIES.find(c => "/kategoria/" + categorySlug(c) === pathname) || "" : "";
   const notice = !store.sales.checkoutEnabled;
   const seller = store.sales.seller;
   const year = new Date().getFullYear();
@@ -134,12 +130,8 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
       {notice && <div className="bg-primary text-primary-foreground"><div className="container flex h-8 items-center justify-between gap-4 text-xs"><span className="font-medium">Zastal Zielona Góra</span><Link href="/pomoc" className="truncate hover:underline">Zamówienia online chwilowo niedostępne</Link></div></div>}
       <div className="container flex h-16 items-center gap-3">
         <button className={cn(iconButton, "md:hidden")} aria-label="Otwórz menu" onClick={() => store.setDialog("menu")}><Menu2 size={20}/></button>
-        <Link href="/" className="flex items-center gap-2.5" aria-label="Zastal Store, strona główna"><img src="/assets/zastal-logo.svg" alt="" className="size-9" width={36} height={36}/><span className="text-lg font-semibold tracking-tight text-primary">Zastal <span className="font-medium text-foreground">Store</span></span></Link>
-        <form className="mx-auto hidden w-full max-w-md items-center gap-2 rounded-full border border-border bg-muted py-1 pl-4 pr-1 md:flex" role="search" onSubmit={e => { e.preventDefault(); router.push("/sklep?q=" + encodeURIComponent(headerQuery)); }}>
-          <Search size={18} className="shrink-0 text-muted-foreground"/>
-          <input aria-label="Szukaj w sklepie" placeholder="Szukaj produktu…" value={headerQuery} onChange={e => setHeaderQuery(e.target.value)} className="h-9 min-w-0 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground" style={{ border: 0, boxShadow: "none", background: "transparent" }}/>
-          <TextureButton size="sm" type="submit">Szukaj</TextureButton>
-        </form>
+        <Link href="/" className="flex items-center gap-2.5" aria-label="Zastal Store, strona główna"><img src="/assets/zastal-logo.svg" alt="" className="size-9" width={36} height={36}/><span className="whitespace-nowrap text-lg font-semibold tracking-tight text-primary max-[400px]:hidden">Zastal <span className="font-medium text-foreground">Store</span></span></Link>
+        <SearchBox products={store.products} className="mx-auto hidden w-full max-w-md md:block"/>
         <div className="ml-auto flex items-center gap-2">
           <button className={cn(iconButton, "md:hidden")} aria-label="Szukaj produktów" onClick={() => store.setDialog("search")}><Search size={20}/></button>
           <Link className={cn(iconButton, "relative")} href="/ulubione" aria-label={"Ulubione: " + store.favorites.length}><Heart size={20}/>{store.favorites.length > 0 && <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-orange text-[11px] font-semibold text-white">{store.favorites.length}</span>}</Link>
@@ -171,8 +163,9 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
         </div>
         <FooterColumn title="Produkty"><Link href="/sklep">Cały sklep</Link>{CATEGORIES.map(c => <Link key={c} href={categoryUrl(c)}>{label(c)}</Link>)}<Link href="/zawodnicy">Koszulki zawodników</Link></FooterColumn>
         <FooterColumn title="Zakupy i pomoc"><Link href="/pomoc#dostawa">Dostawa i odbiór</Link><Link href="/karta-podarunkowa">Karta podarunkowa</Link><Link href="/pomoc#rozmiary">Wybór rozmiaru</Link><Link href="/pomoc#zamowienia">Zamówienia i płatności</Link><Link href="/konto">Moje konto</Link><Link href="/konto?mode=register">Utwórz konto</Link><Link href="/ulubione">Moje ulubione</Link><Link href="/pomoc#prywatnosc">Konto i prywatność</Link></FooterColumn>
-        <FooterColumn title="Klub">{store.sales.pages.map(page => <Link key={page.slug} href={"/informacje/" + page.slug}>{page.title}</Link>)}<a href="https://basketzg.pl/" target="_blank" rel="noreferrer">Strona Zastalu <ArrowUpRight size={13} className="inline"/></a><a href="https://zastal.store/" target="_blank" rel="noreferrer">Aktualny sklep klubowy <ArrowUpRight size={13} className="inline"/></a>{store.sales.checkoutEnabled && store.sales.legal.terms && <a href={store.sales.legal.terms} target="_blank" rel="noreferrer">Regulamin</a>}{store.sales.checkoutEnabled && store.sales.legal.privacy && <a href={store.sales.legal.privacy} target="_blank" rel="noreferrer">Polityka prywatności</a>}{store.sales.checkoutEnabled && store.sales.legal.returns && <a href={store.sales.legal.returns} target="_blank" rel="noreferrer">Zwroty i reklamacje</a>}</FooterColumn>
+        <FooterColumn title="Klub"><Link href="/kontakt">Kontakt</Link>{store.sales.pages.map(page => <Link key={page.slug} href={"/informacje/" + page.slug}>{page.title}</Link>)}<a href="https://basketzg.pl/" target="_blank" rel="noreferrer">Strona Zastalu <ArrowUpRight size={13} className="inline"/></a><a href="https://zastal.store/" target="_blank" rel="noreferrer">Aktualny sklep klubowy <ArrowUpRight size={13} className="inline"/></a>{store.sales.checkoutEnabled && store.sales.legal.terms && <a href={store.sales.legal.terms} target="_blank" rel="noreferrer">Regulamin</a>}{store.sales.checkoutEnabled && store.sales.legal.privacy && <a href={store.sales.legal.privacy} target="_blank" rel="noreferrer">Polityka prywatności</a>}{store.sales.checkoutEnabled && store.sales.legal.returns && <a href={store.sales.legal.returns} target="_blank" rel="noreferrer">Zwroty i reklamacje</a>}</FooterColumn>
       </div>
+      <div className="border-t border-border"><div className="container grid gap-6 py-10 md:grid-cols-[1fr_minmax(0,24rem)] md:items-center"><div><h3 className="text-base font-medium">Newsletter sklepu</h3><p className="mt-1 text-sm text-muted-foreground">Nowości, premiery i promocje. Piszemy rzadko, tylko gdy jest o czym.</p></div><NewsletterForm source="footer"/></div></div>
       <div className="border-t border-border"><div className="container flex flex-wrap items-center justify-between gap-3 py-5 text-xs text-muted-foreground"><span>© {year} Zastal Store</span><span>Polska · PLN · ceny brutto</span><Link href="/pomoc" className="hover:text-foreground">Informacje o sklepie</Link></div></div>
     </footer>
     {store.dialog === "menu" && <Modal title="Menu sklepu" onClose={() => store.setDialog(null)} drawer className="max-w-xs">

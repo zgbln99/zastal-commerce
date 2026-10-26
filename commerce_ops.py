@@ -229,7 +229,7 @@ def create_sale(c, data, actor_id, live=False, can_discount=False, register='Kas
             continue
         c.execute('UPDATE product_variants SET stock=stock-? WHERE id=?', (qty, variant['id']))
         c.execute('''INSERT INTO stock_events(variant_id,delta,reason,created,source)
-            VALUES(?,?,?,?,?)''', (variant['id'], -qty, 'sprzedaż POS demonstracyjna', _stamp(), 'pos-demo'))
+            VALUES(?,?,?,?,?)''', (variant['id'], -qty, 'sprzedaż POS' if live else 'sprzedaż POS demonstracyjna', _stamp(), 'pos' if live else 'pos-demo'))
     for pid in {line['id'] for line in lines}:
         c.execute('''UPDATE products SET stock=(SELECT COALESCE(SUM(stock),0)
             FROM product_variants WHERE product_id=?) WHERE id=?''', (pid, pid))

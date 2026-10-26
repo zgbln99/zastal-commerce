@@ -46,10 +46,12 @@ export default function BarcodeScanner({ onScan, onClose, hint = "Nakieruj apara
         const { BrowserMultiFormatReader } = await import("@zxing/browser");
         const reader = new BrowserMultiFormatReader();
         setEngine("dekoder");
-        controls = await reader.decodeFromVideoDevice(undefined, element, result => { if (result) report(result.getText()); });
+        const started = await reader.decodeFromVideoDevice(undefined, element, result => { if (result) report(result.getText()); });
+        if (stopped) { started.stop(); return; }
+        controls = started;
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
-        setError(/NotAllowed|Permission/i.test(message) ? "Brak zgody na użycie aparatu. Zezwól w ustawieniach przeglądarki albo wpisz kod ręcznie." : message || "Nie udało się uruchomić aparatu.");
+        setError((e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError")) || /NotAllowed|Permission|not allowed/i.test(message) ? "Brak zgody na użycie aparatu. Zezwól w ustawieniach przeglądarki albo wpisz kod ręcznie." : message || "Nie udało się uruchomić aparatu.");
       }
     };
     void start();

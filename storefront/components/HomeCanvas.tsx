@@ -7,7 +7,7 @@ import CampaignSection from "./CampaignSection";
 import StoreHero from "./StoreHero";
 import { useStore } from "./StoreProvider";
 import { fmt } from "../lib/catalog";
-import { productDisplayPrice } from "../lib/commerce.mjs";
+import { productDisplayPrice, productPath } from "../lib/commerce.mjs";
 import { type HomeConfig, type HomeSection, categories, text, num, bool, titleLines, kicker } from "../lib/home-layout";
 import { TextureButton } from "@/components/templates/essentials/ui/texture-button";
 import { cn } from "@/lib/utils";
@@ -78,9 +78,9 @@ function Block({ section }: { section: HomeSection }) {
           <h2 id={section.id} className="text-3xl font-medium leading-[1.08] tracking-tight sm:text-4xl lg:text-5xl">{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2>
           <p className="max-w-md text-base text-primary-foreground/85">{text(s, "description")}</p>
           <div className="flex flex-wrap gap-2 text-sm"><span className="inline-flex items-center gap-2 rounded-full border border-white/25 px-3 py-1.5"><User size={16}/> Zawodnik z listy</span><span className="inline-flex items-center gap-2 rounded-full border border-white/25 px-3 py-1.5"><Tag size={16}/> Własny napis i numer</span></div>
-          <div><TextureButton variant="inverse" size="lg" render={<Link href={"/produkt/" + chosen.id}/>}>{text(s, "button_text")} <ArrowRight size={18}/></TextureButton></div>
+          <div><TextureButton variant="inverse" size="lg" render={<Link href={productPath(chosen)}/>}>{text(s, "button_text")} <ArrowRight size={18}/></TextureButton></div>
         </div>
-        <Link href={"/produkt/" + chosen.id} className="group relative min-h-72 bg-muted"><ProductImage product={chosen} className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"/><span className="absolute bottom-4 left-4 rounded-full bg-background/90 px-3 py-1.5 text-xs font-medium text-foreground backdrop-blur-sm">{chosen.name}{chosen.verified ? " · " + fmt(productDisplayPrice(chosen)) : ""}</span></Link>
+        <Link href={productPath(chosen)} className="group relative min-h-72 bg-muted"><ProductImage product={chosen} className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"/><span className="absolute bottom-4 left-4 rounded-full bg-background/90 px-3 py-1.5 text-xs font-medium text-foreground backdrop-blur-sm">{chosen.name}{chosen.verified ? " · " + fmt(productDisplayPrice(chosen)) : ""}</span></Link>
       </div>
     </section>;
   }
@@ -89,13 +89,13 @@ function Block({ section }: { section: HomeSection }) {
     const image = text(s, "image");
     return <section className="container py-8" aria-labelledby={section.id}>
       <div className="grid overflow-hidden rounded-2xl border border-border bg-card md:grid-cols-2">
-        <Link href={"/produkt/" + chosen.id} className="group relative min-h-72 bg-muted md:order-2">{image ? <img src={image} alt={chosen.name} className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"/> : <ProductImage product={chosen} className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"/>}</Link>
+        <Link href={productPath(chosen)} className="group relative min-h-72 bg-muted md:order-2">{image ? <img src={image} alt={chosen.name} className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"/> : <ProductImage product={chosen} className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"/>}</Link>
         <div className="flex flex-col justify-center gap-5 p-8 sm:p-12">
           {kicker(text(s, "eyebrow")) && <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">{kicker(text(s, "eyebrow"))}</p>}
           <h2 id={section.id} className="text-3xl font-medium leading-[1.08] tracking-tight sm:text-4xl">{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2>
           <p className="max-w-md text-muted-foreground">{text(s, "description")}</p>
           <p className="text-sm"><span className="font-medium">{chosen.name}</span>{chosen.verified && <span className="text-muted-foreground"> · {fmt(productDisplayPrice(chosen))}</span>}</p>
-          <div><TextureButton size="lg" render={<Link href={"/produkt/" + chosen.id}/>}>{text(s, "button_text")} <ArrowRight size={18}/></TextureButton></div>
+          <div><TextureButton size="lg" render={<Link href={productPath(chosen)}/>}>{text(s, "button_text")} <ArrowRight size={18}/></TextureButton></div>
         </div>
       </div>
     </section>;
@@ -106,7 +106,7 @@ function Block({ section }: { section: HomeSection }) {
     return <section className="container py-16 sm:py-20" aria-labelledby={section.id}>
       <Heading id={section.id} title={title} eyebrow={text(s, "eyebrow")} link={links("Akcesoria")} linkText="Zobacz akcesoria"/>
       {text(s, "description") && <p className="-mt-4 mb-8 max-w-xl text-muted-foreground">{text(s, "description")}</p>}
-      <div className="grid gap-4 sm:grid-cols-3">{chosenItems.map(p => <Link key={p.id} href={"/produkt/" + p.id} className="group flex flex-col rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"><span className="aspect-square overflow-hidden rounded-lg bg-muted"><ProductImage product={p} className="size-full object-cover transition-transform duration-500 group-hover:scale-105"/></span><span className="mt-4 flex items-start justify-between gap-3"><span><span className="block text-sm font-medium">{p.name}</span><span className="block text-xs text-muted-foreground">{p.subtitle || "Akcesoria"}</span></span><span className="text-sm font-medium">{p.verified ? fmt(productDisplayPrice(p)) : "…"}</span></span></Link>)}</div>
+      <div className="grid gap-4 sm:grid-cols-3">{chosenItems.map(p => <Link key={p.id} href={productPath(p)} className="group flex flex-col rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"><span className="aspect-square overflow-hidden rounded-lg bg-muted"><ProductImage product={p} className="size-full object-cover transition-transform duration-500 group-hover:scale-105"/></span><span className="mt-4 flex items-start justify-between gap-3"><span><span className="block text-sm font-medium">{p.name}</span><span className="block text-xs text-muted-foreground">{p.subtitle || "Akcesoria"}</span></span><span className="text-sm font-medium">{p.verified ? fmt(productDisplayPrice(p)) : "…"}</span></span></Link>)}</div>
     </section>;
   }
   if (kind === "banner") {

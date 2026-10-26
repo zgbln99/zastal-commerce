@@ -1,5 +1,5 @@
 // Restricted text format → safe block structure. No HTML passes through; links must be https or site-relative.
-const LINK = /\[([^\]\n]{1,200})\]\((https:\/\/[^\s)]{1,400}|\/[a-zA-Z0-9_\-./?=&#%]{0,200})\)/g;
+const LINK = /\[([^\]\n]{1,200})\]\((https:\/\/[^\s)]{1,400}|\/(?!\/)[a-zA-Z0-9_\-./?=&#%]{0,200})\)/g;
 export function parseInline(text) {
   const parts = [];
   let last = 0;

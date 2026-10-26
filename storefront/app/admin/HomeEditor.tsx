@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useMemo,useRef,useState} from "react";
 import {ArrowDown,ArrowUp,Check,CheckCircle2,ChevronLeft,Copy,Eye,EyeOff,History,ImagePlus,Layers3,Monitor,Plus,RefreshCw,Save,Send,Smartphone,Trash2,X,ExternalLink,AlertCircle,Undo2,Redo2} from "lucide-react";
-import {useAuth} from "../../components/AuthProvider";
+import {ApiError,can,useAuth} from "../../components/AuthProvider";
 import {useStore} from "../../components/StoreProvider";
 import {DEFAULT_HOME,EDIT_FIELDS,SECTION_DESCRIPTIONS,copyConfig,makeSection,type Field,type HomeConfig,type HomeResponse,type HomeSection,type SectionKind,type SectionSettings} from "../../lib/home-layout";
 import {campaignReady,productImages,type ProductMedia} from "../../lib/product-media.mjs";
@@ -52,7 +52,7 @@ export default function HomeEditor(){
   }catch(ex){setError(ex instanceof Error?ex.message:"Nie udało się pobrać strony.")}
   finally{setBusy(false)}
  };
- useEffect(()=>{if(auth.user?.role==="admin")void load();},[auth.user?.id]);
+ useEffect(()=>{if(can(auth.user,"cms"))void load();},[auth.user?.id]);
  const edit=(recipe:(d:HomeConfig)=>void)=>{
   setUndo(old=>[...old.slice(-29),clone(draft)]);setRedo([]);
   setDraft(previous=>{const next=clone(previous);recipe(next);return next;});
@@ -100,7 +100,7 @@ export default function HomeEditor(){
    setRemote(result);setDraft(clone(result.config));setUndo([]);setRedo([]);
    setMessage("Zapisano szkic. Zmiany nie są jeszcze widoczne w sklepie.");
    return result;
-  }catch(ex){setError(ex instanceof Error?ex.message:"Nie zapisano zmian.");return null}
+  }catch(ex){setError((ex instanceof Error?ex.message:"Nie zapisano zmian.")+(ex instanceof ApiError&&ex.status===409?" Pobrano aktualną wersję z serwera.":""));if(ex instanceof ApiError&&ex.status===409)void load();return null}
   finally{setSaving(false)}
  };
  const publish=async()=>{
@@ -110,11 +110,12 @@ export default function HomeEditor(){
    let version=remote;
    if(isDirty){
     version=await auth.request<HomeResponse>("/api/admin/home",{method:"PATCH",body:JSON.stringify({config:draft,revision:remote.revision})});
+    setRemote(version);setDraft(clone(version.config));
    }
    const out=await auth.request<HomeResponse>("/api/admin/home/publish",{method:"POST",body:JSON.stringify({revision:version.revision})});
    setRemote(out);setDraft(clone(out.config));setUndo([]);setRedo([]);
    setMessage("Opublikowano stronę główną. Nowy układ jest widoczny dla klientów.");
-  }catch(ex){setError(ex instanceof Error?ex.message:"Nie udało się opublikować strony.")}
+  }catch(ex){setError((ex instanceof Error?ex.message:"Nie udało się opublikować strony.")+(ex instanceof ApiError&&ex.status===409?" Pobrano aktualną wersję z serwera.":""));if(ex instanceof ApiError&&ex.status===409)void load();}
   finally{setBusy(false)}
  };
  const showVersions=async()=>{

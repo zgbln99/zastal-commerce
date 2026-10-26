@@ -5,7 +5,7 @@ import {useAuth} from "../../components/AuthProvider";
 import {useStore} from "../../components/StoreProvider";
 import {formatMoney} from "./Operations";
 type Report={from:string;to:string;scope:"live"|"test";totals:{orders:number;revenue:number;products:number;shipping:number;discount:number;gift_card:number;items:number;average:number};by_day:{day:string;orders:number;revenue:number;online:number;pos:number}[];by_channel:{online:{orders:number;revenue:number};pos:{orders:number;revenue:number}};by_payment:{method:string;label:string;orders:number;revenue:number}[];by_product:{sku:string;name:string;qty:number;revenue:number}[];refunds:{count:number;amount:number};orders:{id:number;day:string;channel:string;payment:string;value:number}[]};
-const iso=(d:Date)=>d.toISOString().slice(0,10);
+const iso=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const shift=(days:number)=>{const d=new Date();d.setDate(d.getDate()+days);return iso(d);};
 const monthStart=(offset:number)=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+offset);return iso(d);};
 const monthEnd=(offset:number)=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+offset+1);d.setDate(0);return iso(d);};
@@ -18,6 +18,7 @@ export default function Reports(){
  const [data,setData]=useState<Report|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const load=useCallback(async()=>{setBusy(true);setError("");try{setData(await auth.request<Report>(`/api/admin/reports/sales?from=${from}&to=${to}&scope=${scope}`));}catch(e){setError(e instanceof Error?e.message:"Nie można pobrać raportu.");}finally{setBusy(false);}},[auth,from,to,scope]);
  useEffect(()=>{void load();},[load]);
+ useEffect(()=>{if(store.sales.loaded)setScope(store.sales.checkoutEnabled?"live":"test");},[store.sales.loaded,store.sales.checkoutEnabled]);
  const csv=(by:string)=>`/api/admin/reports/sales.csv?from=${from}&to=${to}&scope=${scope}&by=${by}`;
  const maxDay=Math.max(1,...(data?.by_day.map(d=>d.revenue)||[1]));
  const t=data?.totals;

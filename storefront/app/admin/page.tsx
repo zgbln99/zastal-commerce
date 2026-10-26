@@ -26,6 +26,7 @@ import Returns from "./Returns";
 import Pages from "./Pages";
 import Marketing from "./Marketing";
 import GiftCards from "./GiftCards";
+import {Messages,Newsletter,Reviews} from "./Engage";
 import Reports from "./Reports";
 import DailyDigest from "./DailyDigest";
 
@@ -48,6 +49,9 @@ const views:{id:OperationsTab; label:string; title:string; description:string; i
   {id:"inventory_import",cap:"inventory",label:"Import magazynu",title:"Import stanów magazynowych",description:"Hurtowa aktualizacja stanów SKU z arkusza CSV.",icon:<Warehouse size={19}/>},
   {id:"marketing",cap:"settings",label:"Promocje i kody",title:"Promocje, kody i powiadomienia",description:"Kody rabatowe z limitami i ważnością oraz klienci czekający na brakujący rozmiar.",icon:<Tag size={19}/>},
   {id:"reports",cap:"settings",label:"Raporty",title:"Raporty sprzedaży",description:"Sprzedaż dziennie, kanały, płatności, produkty i pliki CSV dla księgowości.",icon:<Activity size={19}/>},
+  {id:"reviews",cap:"products",label:"Opinie",title:"Opinie o produktach",description:"Zatwierdzanie opinii klientów i odpowiedzi sklepu.",icon:<Tag size={19}/>},
+  {id:"newsletter",cap:"customers",label:"Newsletter",title:"Newsletter",description:"Adresy z podwójnym potwierdzeniem i eksport CSV do narzędzia mailingowego.",icon:<Users size={19}/>},
+  {id:"messages",cap:"customers",label:"Wiadomości",title:"Wiadomości z formularza kontaktowego",description:"Pytania klientów, numer zamówienia i stan odpowiedzi.",icon:<Users size={19}/>},
   {id:"giftcards",cap:"settings",label:"Karty podarunkowe",title:"Karty podarunkowe",description:"Wydawanie kart sprzedanych przy kasie, salda, historia użyć i blokowanie.",icon:<Tag size={19}/>},
   {id:"settings",cap:"settings",label:"Sprzedaż i dostawy",title:"Sprzedaż, płatności i dostawy",description:"Tryb sprzedaży, PayU, przelew, odbiór osobisty i metody dostawy.",icon:<Settings size={19}/>},
   {id:"launch",cap:"launch",label:"Uruchomienie sklepu",title:"Uruchomienie sprzedaży",description:"Konfiguracja podmiotu, lista warunków i gotowość operacyjna.",icon:<Settings size={19}/>},
@@ -59,7 +63,7 @@ const views:{id:OperationsTab; label:string; title:string; description:string; i
 const navGroups:{label:string;ids:OperationsTab[]}[] = [
   {label:"Praca dziś",ids:["dashboard","orders","pos","fulfillment","production","returns"]},
   {label:"Katalog i magazyn",ids:["products","inventory","inventory_import","transfers","labels","players"]},
-  {label:"Sklep i klienci",ids:["homepage","pages","marketing","customers","giftcards"]},
+  {label:"Sklep i klienci",ids:["homepage","pages","marketing","reviews","newsletter","messages","customers","giftcards"]},
   {label:"Zarządzanie",ids:["reports","email","settings","launch","staff","account","audit"]},
 ];
 
@@ -84,7 +88,8 @@ export default function Admin() {
   const refresh=async():Promise<boolean>=>{const id=++requestId.current;setLoading(true);setMessage("");try{const snapshot=await loadOperationsData(auth.request,auth.user?.capabilities||[]);if(id!==requestId.current)return false;setData(snapshot);setUpdatedAt(new Date().toISOString());return true;}catch(e){if(id===requestId.current)setMessage(e instanceof Error?e.message:"Nie można pobrać danych.");return false;}finally{if(id===requestId.current)setLoading(false);}};
   useEffect(()=>{clearData();if(isStaff(auth.user))void refresh();return()=>{requestId.current++;};},[auth.user?.id]);
   const selectView = (id:OperationsTab) => {if (!allowedViews.some(view => view.id === id)) return; setActiveTab(id); setSidebarOpen(false);};
-  const openOrder = (id:number) => {selectView("orders"); setRequestedOrderId(id);};
+  const canOpenOrders = allowedViews.some(view => view.id === "orders");
+  const openOrder = (id:number) => {if (!canOpenOrders) return; selectView("orders"); setRequestedOrderId(id);};
   useEffect(() => {
     if (!sidebarOpen) return;
     const overflow = document.body.style.overflow;
@@ -125,7 +130,7 @@ export default function Admin() {
     ...(live ? [{label:"Oczekują na płatność", value:String(awaitingPayment.length), note:"Przelewy i nieukończone płatności online", icon:<Clock3 size={20}/>, tab:"orders" as OperationsTab}] : []),
     {label:"Niskie stany wariantów", value:String(lowStock.length), note:"Dostępność 0–2 szt. w rozmiarze", icon:<Warehouse size={20}/>, tab:"inventory" as OperationsTab},
     {label:"Nanoszenie w toku", value:String(activeTasks.length), note:"Aktywne zlecenia DTF", icon:<ClipboardCheck size={20}/>, tab:"production" as OperationsTab},
-  ];
+  ].filter(metric => allowedViews.some(view => view.id === metric.tab));
 
   return <div className="admin-shell">
     {sidebarOpen && <button className="admin-mobile-backdrop" aria-label="Zamknij nawigację" tabIndex={-1} onClick={() => {setSidebarOpen(false); menuButton.current?.focus();}}/>}
@@ -140,6 +145,9 @@ export default function Admin() {
       {activeTab==="settings"&&<SalesSettings/>}
       {activeTab==="marketing"&&<Marketing/>}
       {activeTab==="giftcards"&&<GiftCards/>}
+      {activeTab==="reviews"&&<Reviews/>}
+      {activeTab==="newsletter"&&<Newsletter/>}
+      {activeTab==="messages"&&<Messages/>}
       {activeTab==="reports"&&<Reports/>}
       {activeTab==="returns"&&<Returns onOpenOrder={openOrder}/>}
       {activeTab==="pages"&&<Pages/>}

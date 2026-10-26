@@ -164,7 +164,7 @@ def _consume_token(c, raw, kind):
 
 
 ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid', 'return_update')
-GUEST_KINDS = ('stock_alert', 'gift_card_issued', 'staff_digest', 'test_email')
+GUEST_KINDS = ('stock_alert', 'gift_card_issued', 'staff_digest', 'test_email', 'newsletter_confirm', 'contact_received', 'contact_ack')
 # Intermediate workflow steps are not customer events; packing is news only for pickup orders.
 QUIET_STATUSES = ('potwierdzone', 'do_kompletacji', 'nanoszenie_dtf', 'kontrola_jakosci')
 
@@ -347,6 +347,20 @@ def _message(c, row, config):
     elif row['kind'] == 'gift_card_issued':
         import commerce_giftcards as giftcards
         composed = giftcards.card_message(c, int(row['dedupe_key'].rsplit(':', 1)[1]), os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
+        if not composed:
+            c.commit()
+            return None
+        subject, body = composed
+    elif row['kind'] == 'newsletter_confirm':
+        import commerce_engage as engage
+        composed = engage.newsletter_message(c, row['dedupe_key'], os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
+        if not composed:
+            c.commit()
+            return None
+        subject, body = composed
+    elif row['kind'] in ('contact_received', 'contact_ack'):
+        import commerce_engage as engage
+        composed = engage.contact_message(c, row['dedupe_key'], os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'), row['kind'])
         if not composed:
             c.commit()
             return None
