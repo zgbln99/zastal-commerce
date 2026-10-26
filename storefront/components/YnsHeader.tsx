@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Heart, Menu, Search, ShoppingBag, UserRound } from "lucide-react";
 
 type Props = {
@@ -22,6 +23,9 @@ type Props = {
 export default function YnsHeader({
   pathname, count, favorites, signedIn, checkoutEnabled, openCart, openSearch, openMenu
 }: Props) {
+  const searchParams = useSearchParams();
+  const currentCategory = searchParams?.get("category") ?? null;
+  const currentQuery = searchParams?.get("q") ?? null;
   const links = [
     { href: "/sklep", label: "Wszystkie produkty" },
     { href: "/sklep?category=Koszulki", label: "Koszulki" },
@@ -31,6 +35,13 @@ export default function YnsHeader({
     { href: "/sklep?q=retro", label: "Retro" },
     { href: "/zawodnicy", label: "Zawodnicy" }
   ];
+  const isCurrent = (href: string) => {
+    const [path, query] = href.split("?");
+    if (pathname !== path) return false;
+    if (!query) return !currentCategory && !currentQuery;
+    const params = new URLSearchParams(query);
+    return params.get("category") === currentCategory && params.get("q") === currentQuery;
+  };
   return <>
     <div className="yns-announcement">
       <Link href="/pomoc">{checkoutEnabled ? "Dostawa i odbiór osobisty" : "Zamówienia online chwilowo niedostępne"}</Link>
@@ -44,7 +55,7 @@ export default function YnsHeader({
           <strong>STORE</strong>
         </Link>
         <nav className="yns-navlinks" aria-label="Nawigacja główna">
-          {links.map(link => <Link key={link.href} href={link.href} className={pathname === link.href || (pathname === "/sklep" && !link.href.includes("?")) ? "yns-nav-current" : ""}>{link.label}</Link>)}
+          {links.map(link => <Link key={link.href} href={link.href} className={isCurrent(link.href) ? "yns-nav-current" : ""} aria-current={isCurrent(link.href) ? "page" : undefined}>{link.label}</Link>)}
         </nav>
         <div className="yns-header-actions">
           <button type="button" className="yns-icon" onClick={openSearch} title="Szukaj (Ctrl+K)" aria-label="Szukaj produktów"><Search size={21}/></button>
