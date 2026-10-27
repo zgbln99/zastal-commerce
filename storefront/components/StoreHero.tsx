@@ -1,6 +1,7 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowRight, ChevronLeft, ChevronRight } from "reicon-react";
 import { DEFAULT_HOME, titleLines, text, kicker, type SectionSettings } from "../lib/home-layout";
@@ -14,6 +15,7 @@ import { optimizable } from "./ProductCard";
 export default function StoreHero({ settings }: { settings?: SectionSettings }) {
   const s = settings ?? DEFAULT_HOME.sections[0].settings;
   const store = useStore();
+  const editorPreview = usePathname() === "/admin/podglad";
   const slides = useMemo(() => buildHeroSlides(s, store.products), [s, store.products]);
   const [activeId, setActiveId] = useState("slide-1");
   const [paused, setPaused] = useState(false), [focused, setFocused] = useState(false);
@@ -26,7 +28,7 @@ export default function StoreHero({ settings }: { settings?: SectionSettings }) 
   const interval = carouselInterval(s.interval_ms);
   // The hero runs on its own: only the Pause button, keyboard focus inside the slider, a hidden tab or an open dialog stop it.
   // Hovering with the mouse or a system "reduce motion" setting do not (slides change without animation, and Pause stays one click away).
-  const playing = autoplayAllowed({ count: slides.length, autoplay: s.autoplay !== false, paused, reducedMotion: false, visible, hovered: false, focused, overlayOpen: store.dialog !== null || store.quickId !== null });
+  const playing = autoplayAllowed({ count: slides.length, autoplay: s.autoplay !== false && !editorPreview, paused, reducedMotion: false, visible, hovered: false, focused, overlayOpen: store.dialog !== null || store.quickId !== null });
   useEffect(() => {
     const syncVisibility = () => setVisible(document.visibilityState === "visible");
     syncVisibility();

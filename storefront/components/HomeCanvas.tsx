@@ -154,10 +154,13 @@ function Block({ section }: { section: HomeSection }) {
   return null;
 }
 
-export default function HomeCanvas({ config }: { config: HomeConfig }) {
+/** `editing` wraps every section in a marker box so the editor can pick and highlight it; the public page renders without it. */
+export default function HomeCanvas({ config, editing, selectedId }: { config: HomeConfig; editing?: boolean; selectedId?: string }) {
   const enabled = config.sections.filter(section => section.enabled);
   const startsWithHero = enabled[0]?.type === "hero";
-  return <div className={cn("cms-home", !startsWithHero && "pt-16")}>
-    {enabled.map(section => <Block key={section.id} section={section}/>)}
+  return <div className={cn("cms-home", !startsWithHero && !editing && "pt-16")}>
+    {enabled.map(section => editing
+      ? <div key={section.id} data-section-id={section.id} className={cn("home-pick", selectedId === section.id && "home-pick-on")}><Block section={section}/></div>
+      : <Block key={section.id} section={section}/>)}
   </div>;
 }

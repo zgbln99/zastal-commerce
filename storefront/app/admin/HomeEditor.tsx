@@ -1,20 +1,27 @@
 "use client";
 import {useEffect,useMemo,useRef,useState} from "react";
-import {ArrowDown,ArrowUp,Check,CheckCircle2,ChevronLeft,Copy,Eye,EyeOff,History,ImagePlus,Layers3,Monitor,Plus,RefreshCw,Save,Send,Smartphone,Trash2,X,ExternalLink,AlertCircle,Undo2,Redo2} from "lucide-react";
+import {ArrowDown,ArrowUp,Check,CheckCircle2,Copy,Eye,EyeOff,GripVertical,History,ImagePlus,Layers3,Maximize2,Minimize2,Monitor,Plus,RefreshCw,Save,Send,Smartphone,Trash2,X,ExternalLink,AlertCircle,Undo2,Redo2} from "lucide-react";
 import {ApiError,can,useAuth} from "../../components/AuthProvider";
 import {useStore} from "../../components/StoreProvider";
-import {DEFAULT_HOME,EDIT_FIELDS,SECTION_DESCRIPTIONS,copyConfig,makeSection,type Field,type HomeConfig,type HomeResponse,type HomeSection,type SectionKind,type SectionSettings} from "../../lib/home-layout";
+import {DEFAULT_HOME,EDIT_FIELDS,SECTION_DESCRIPTIONS,makeSection,type Field,type HomeConfig,type HomeResponse,type SectionKind} from "../../lib/home-layout";
 import {campaignReady,productImages,type ProductMedia} from "../../lib/product-media.mjs";
 import {uploadMedia} from "../../lib/media-upload";
 import {buildHeroSlides} from "../../lib/carousel.mjs";
+import {describeDiff,diffHome} from "../../lib/home-diff.mjs";
+import {CategoryPicker,ProductPicker} from "./home-pickers";
 import "./home-editor.css";
 
 const TYPES:SectionKind[]=["hero","categories","products","personalization","retro","accessories","banner","text","services","campaign"];
 type Revision={id:number;revision:number;action:string;created:string};
 type Media={url:string;name:string;bytes:number};
+type LocalDraft={base:number;config:HomeConfig;at:number};
 const FORMAT=new Intl.DateTimeFormat("pl-PL",{dateStyle:"medium",timeStyle:"short"});
 const clone=<T,>(data:T):T=>JSON.parse(JSON.stringify(data));
 const catalogueImages=[{url:"/assets/photos/fans.webp",name:"Kibice Zastalu"}];
+const FRAME={desktop:{width:1440,height:900},mobile:{width:390,height:844}};
+const typing=(target:EventTarget|null)=>target instanceof HTMLElement&&(target.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+const sectionName=(type:string)=>SECTION_DESCRIPTIONS[type as SectionKind]?.name||type;
+const fieldName=(type:string,key:string)=>(EDIT_FIELDS[type as SectionKind]||[]).find(f=>f.key===key)?.label||key;
 
 export default function HomeEditor(){
  const auth=useAuth(),store=useStore();
@@ -30,29 +37,68 @@ export default function HomeEditor(){
  const [addOpen,setAddOpen]=useState(false);
  const [dragging,setDragging]=useState<string|null>(null);
  const [undo,setUndo]=useState<HomeConfig[]>([]),[redo,setRedo]=useState<HomeConfig[]>([]);
- const preview=useRef<HTMLIFrameElement|null>(null);
+ const [slideTab,setSlideTab]=useState(1);
+ const [fullscreen,setFullscreen]=useState(false);
+ const [publishOpen,setPublishOpen]=useState(false),[published,setPublished]=useState<HomeConfig|null>(null),[publishedFailed,setPublishedFailed]=useState(false);
+ const [recovery,setRecovery]=useState<LocalDraft|null>(null);
+ const [box,setBox]=useState({width:0,height:0});
+ const preview=useRef<HTMLIFrameElement|null>(null),stage=useRef<HTMLDivElement|null>(null);
  const selected=draft.sections.find(x=>x.id===selection)||draft.sections[0];
  const isDirty=remote?JSON.stringify(draft)!==JSON.stringify(remote.config):false;
  const enabled=draft.sections.filter(x=>x.enabled).length;
- const notify=()=>{preview.current?.contentWindow?.postMessage({kind:"zastal:home:preview",config:draft},window.location.origin);};
+ const draftKey="zastal:home-draft:"+(auth.user?.id??"staff");
+ const post=(data:object)=>{preview.current?.contentWindow?.postMessage(data,window.location.origin);};
+ const notify=()=>post({kind:"zastal:home:preview",config:draft});
  useEffect(()=>{notify();},[draft,device,loaded]);
- useEffect(()=>{const ready=(event:MessageEvent)=>{if(event.origin===window.location.origin&&event.source===preview.current?.contentWindow&&event.data?.kind==="zastal:home:ready")notify();};window.addEventListener("message",ready);return()=>window.removeEventListener("message",ready);},[draft]);
+ useEffect(()=>{const ready=(event:MessageEvent)=>{
+  if(event.origin!==window.location.origin||event.source!==preview.current?.contentWindow)return;
+  if(event.data?.kind==="zastal:home:ready"){notify();post({kind:"zastal:home:select",id:selected?.id||""});}
+  if(event.data?.kind==="zastal:home:picked"&&typeof event.data.id==="string"&&draft.sections.some(x=>x.id===event.data.id))setSelection(event.data.id);
+ };window.addEventListener("message",ready);return()=>window.removeEventListener("message",ready);},[draft,selected?.id]);
  useEffect(()=>{
   if(!isDirty)return;
   const warn=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};
   window.addEventListener("beforeunload",warn);return()=>window.removeEventListener("beforeunload",warn);
  },[isDirty]);
+ // The stage fills the available space; the preview is a real 1440 px (or 390 px) page scaled down to fit.
+ useEffect(()=>{
+  const el=stage.current;if(!el)return;
+  const measure=()=>setBox({width:el.clientWidth,height:el.clientHeight});
+  measure();const observer=new ResizeObserver(measure);observer.observe(el);return()=>observer.disconnect();
+ },[loaded]);
+ useEffect(()=>{document.body.classList.toggle("staff-fullscreen",fullscreen);return()=>document.body.classList.remove("staff-fullscreen");},[fullscreen]);
+ // The editor has its own title bar, so the page heading above it only costs height.
+ useEffect(()=>{document.body.classList.add("staff-editor");return()=>document.body.classList.remove("staff-editor");},[]);
+ // Unsaved work survives a closed tab: kept per revision, offered back after the next load.
+ useEffect(()=>{
+  if(!remote||recovery)return;
+  try{if(isDirty)localStorage.setItem(draftKey,JSON.stringify({base:remote.revision,config:draft,at:Date.now()}));else localStorage.removeItem(draftKey);}catch{/* private mode */}
+ },[draft,remote,recovery]);
  const load=async()=>{
   setBusy(true);setError("");
   try{
    const res=await auth.request<HomeResponse>("/api/admin/home");
    setRemote(res);setDraft(clone(res.config));
    setSelection(res.config.sections[0]?.id||"");
-   setUndo([]);setRedo([]);setLoaded(true);
+   setUndo([]);setRedo([]);setLoaded(true);setRecovery(null);
+   try{
+    const stored=JSON.parse(localStorage.getItem(draftKey)||"null") as LocalDraft|null;
+    if(stored&&stored.base===res.revision&&stored.config?.version===1&&Array.isArray(stored.config.sections)&&JSON.stringify(stored.config)!==JSON.stringify(res.config))setRecovery(stored);
+    else localStorage.removeItem(draftKey);
+   }catch{/* no stored draft */}
   }catch(ex){setError(ex instanceof Error?ex.message:"Nie udało się pobrać strony.")}
   finally{setBusy(false)}
  };
  useEffect(()=>{if(can(auth.user,"cms"))void load();},[auth.user?.id]);
+ const restoreLocal=()=>{
+  if(!recovery||!remote)return;
+  setUndo([clone(remote.config)]);setRedo([]);setDraft(clone(recovery.config));
+  setSelection(recovery.config.sections[0]?.id||"");setRecovery(null);
+  setMessage("Przywrócono niezapisane zmiany z tej przeglądarki.");
+ };
+ const discardLocal=()=>{try{localStorage.removeItem(draftKey)}catch{/* ignore */}setRecovery(null)};
+ const select=(id:string)=>{setSelection(id);post({kind:"zastal:home:select",id,scroll:true});};
+
  const edit=(recipe:(d:HomeConfig)=>void)=>{
   setUndo(old=>[...old.slice(-29),clone(draft)]);setRedo([]);
   setDraft(previous=>{const next=clone(previous);recipe(next);return next;});
@@ -60,6 +106,9 @@ export default function HomeEditor(){
  };
  const updateSection=(id:string,key:string,value:string|number|boolean)=>{
   edit(d=>{const part=d.sections.find(s=>s.id===id);if(part)part.settings[key]=value});
+ };
+ const reorder=(from:string,to:string)=>{
+  edit(d=>{const a=d.sections.findIndex(x=>x.id===from),b=d.sections.findIndex(x=>x.id===to);if(a<0||b<0)return;const [part]=d.sections.splice(a,1);d.sections.splice(b,0,part)});
  };
  const action=(id:string,type:"up"|"down"|"toggle"|"delete"|"duplicate")=>{
   const part=draft.sections.find(s=>s.id===id);if(!part)return;
@@ -103,6 +152,15 @@ export default function HomeEditor(){
   }catch(ex){setError((ex instanceof Error?ex.message:"Nie zapisano zmian.")+(ex instanceof ApiError&&ex.status===409?" Pobrano aktualną wersję z serwera.":""));if(ex instanceof ApiError&&ex.status===409)void load();return null}
   finally{setSaving(false)}
  };
+ const openPublish=async()=>{
+  if(!remote||saving||busy)return;
+  setPublishOpen(true);setPublished(null);setPublishedFailed(false);
+  try{
+   const res=await fetch("/api/store/home",{cache:"no-store"});
+   const body=await res.json();
+   if(body?.config?.version===1&&Array.isArray(body.config.sections))setPublished(body.config);else setPublishedFailed(true);
+  }catch{setPublishedFailed(true)}
+ };
  const publish=async()=>{
   if(!remote||saving||busy)return;
   setBusy(true);setMessage("");setError("");
@@ -113,9 +171,9 @@ export default function HomeEditor(){
     setRemote(version);setDraft(clone(version.config));
    }
    const out=await auth.request<HomeResponse>("/api/admin/home/publish",{method:"POST",body:JSON.stringify({revision:version.revision})});
-   setRemote(out);setDraft(clone(out.config));setUndo([]);setRedo([]);
+   setRemote(out);setDraft(clone(out.config));setUndo([]);setRedo([]);setPublishOpen(false);
    setMessage("Opublikowano stronę główną. Nowy układ jest widoczny dla klientów.");
-  }catch(ex){setError((ex instanceof Error?ex.message:"Nie udało się opublikować strony.")+(ex instanceof ApiError&&ex.status===409?" Pobrano aktualną wersję z serwera.":""));if(ex instanceof ApiError&&ex.status===409)void load();}
+  }catch(ex){setPublishOpen(false);setError((ex instanceof Error?ex.message:"Nie udało się opublikować strony.")+(ex instanceof ApiError&&ex.status===409?" Pobrano aktualną wersję z serwera.":""));if(ex instanceof ApiError&&ex.status===409)void load();}
   finally{setBusy(false)}
  };
  const showVersions=async()=>{
@@ -174,6 +232,8 @@ export default function HomeEditor(){
   }
   if(selected.type==="campaign"&&f.key==="image")return <div key={f.key} className="home-edit-field"><span>Zdjęcie kampanii</span><div className="home-edit-image">{selected.settings.image?<img src={String(selected.settings.image)} alt={String(selected.settings.image_alt)}/>:<span>Brak zdjęcia</span>}</div>{selected.settings.image_illustrative===true&&selected.settings.image&&<small>Materiał poglądowy</small>}<label>Zdjęcie z galerii powiązanego produktu<select value={String(selected.settings.image||"")} onChange={e=>{const choice=campaignChoices.find(x=>x.image.url===e.target.value);if(choice)chooseCampaignImage(choice.image);}}><option value="">Wybierz zdjęcie</option>{selected.settings.image&&!campaignChoices.some(x=>x.image.url===selected.settings.image)&&<option value={String(selected.settings.image)}>Własny przesłany obraz</option>}{campaignChoices.map(({product,image})=><option key={product.id+image.id} value={image.url}>{product.name} · {image.alt||image.role}{image.illustrative?" · Materiał poglądowy":""}</option>)}</select></label>{!campaignChoices.length&&<small>Brak zdjęć „Na modelu” lub „Lifestyle” w galeriach wybranych produktów. Dodaj pasujące materiały w galerii produktu lub prześlij zdjęcie poniżej.</small>}<label className="home-edit-media-btn">{uploading?"Przetwarzanie / wysyłanie…":"Prześlij pasujące zdjęcie"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={e=>{if(e.target.files?.[0])void upload(e.target.files[0]);e.target.value="";}}/></label><small>JPG, PNG, WebP do 25 MB · automatycznie dopasujemy zdjęcie do sklepu. Uzupełnij opis i potwierdź zgodność produktu, koloru i wzoru.</small></div>;
   if(selected.type==="campaign"&&f.key==="image_illustrative")return <label key={f.key} className="home-campaign-truth"><input type="checkbox" checked={selected.settings.image_illustrative!==false} onChange={e=>{if(e.target.checked||window.confirm("Potwierdzam, że zdjęcie przedstawia dokładnie produkty kampanii, ich kolor i wzór. Czy usunąć oznaczenie „Materiał poglądowy”?"))updateSection(selected.id,"image_illustrative",e.target.checked);}}/>Materiał poglądowy</label>;
+  if(selected.type==="products"&&f.key==="product_ids")return <ProductPicker key={f.key} label="Wybrane produkty" hint="Puste = produkty z katalogu według kategorii" value={String(selected.settings.product_ids||"")} products={store.products} onChange={v=>updateSection(selected.id,"product_ids",v)}/>;
+  if(selected.type==="categories"&&f.key==="categories")return <CategoryPicker key={f.key} label="Kategorie w kolejności na stronie" value={String(selected.settings.categories||"")} onChange={v=>updateSection(selected.id,"categories",v)}/>;
   let val=selected.settings[f.key]??f.defaultValue;
   if(selected.type==="hero"&&selected.settings[f.key]===undefined&&/image_(role|illustrative)$/.test(f.key)){
    const number=f.key.match(/^slide_(2|3)_/)?.[1]||"1";
@@ -193,46 +253,77 @@ export default function HomeEditor(){
    {f.hint&&<small>{f.hint}</small>}
   </label>;
  };
- return <section className="home-builder">
-  <header className="home-builder-bar"><div><span className="home-builder-eyebrow">STORE DESIGN / HOME PAGE</span><h2>Edytor strony głównej</h2><p>{loaded?"Wersja "+remote?.revision+" · publikacja "+remote?.published_revision:"Pobieranie strony..."}</p></div>
-   <div className="home-builder-toolbar"><button onClick={useUndo} disabled={!undo.length} title="Cofnij"><Undo2 size={17}/></button><button onClick={useRedo} disabled={!redo.length} title="Ponów"><Redo2 size={17}/></button>
+ // Shortcuts always see the current handlers: Ctrl/Cmd+S saves, Ctrl/Cmd+Z / Shift+Z / Y step through changes (not while typing in a field).
+ const keys=useRef({save:()=>{},undo:()=>{},redo:()=>{}});
+ keys.current={save:()=>{if(isDirty&&!saving&&!busy)void save()},undo:useUndo,redo:useRedo};
+ useEffect(()=>{
+  const onKey=(event:KeyboardEvent)=>{
+   if(!(event.ctrlKey||event.metaKey)||event.altKey)return;
+   const key=event.key.toLowerCase();
+   if(key==="s"){event.preventDefault();keys.current.save();return}
+   if(typing(event.target))return;
+   if(key==="z"){event.preventDefault();event.shiftKey?keys.current.redo():keys.current.undo()}
+   if(key==="y"){event.preventDefault();keys.current.redo()}
+  };
+  window.addEventListener("keydown",onKey);return()=>window.removeEventListener("keydown",onKey);
+ },[]);
+ const diff=useMemo(()=>published?diffHome(published,draft,{section:sectionName,field:fieldName}):null,[published,draft]);
+ const status=isDirty?{tone:"warn",text:"Niezapisane zmiany"}:remote?.draft_changed?{tone:"info",text:"Szkic czeka na publikację"}:{tone:"ok",text:"Opublikowano"};
+ // Preview geometry: real page size, scaled to the free space.
+ const fw=FRAME[device].width,pad=24;
+ const scale=box.width?Math.min(1,(box.width-pad)/fw,device==="mobile"?(box.height-pad)/FRAME.mobile.height:1):1;
+ const fh=device==="desktop"?Math.max(480,Math.round((box.height-pad)/scale)):FRAME.mobile.height;
+ const hero=selected?.type==="hero";
+ const slideLabels=["Slajd 1","Slajd 2 · Bluzy","Slajd 3 · Koszulki"];
+ return <section className={"home-builder"+(fullscreen?" fullscreen":"")}>
+  <header className="home-builder-bar"><div className="home-builder-title"><h2>Edytor strony głównej</h2>{loaded&&<span className={"home-builder-status "+status.tone}>{status.text}</span>}<p>{loaded?"Wersja "+remote?.revision+" · opublikowana "+remote?.published_revision:"Pobieranie strony..."}</p></div>
+   <div className="home-builder-toolbar"><button onClick={useUndo} disabled={!undo.length} title="Cofnij (Ctrl+Z)" aria-label="Cofnij"><Undo2 size={17}/></button><button onClick={useRedo} disabled={!redo.length} title="Ponów (Ctrl+Y)" aria-label="Ponów"><Redo2 size={17}/></button>
    <button onClick={()=>void showVersions()} disabled={!loaded}><History size={17}/><span>Historia</span></button>
-   <button className="home-builder-save" onClick={()=>void save()} disabled={!loaded||saving||busy||!isDirty}><Save size={17}/><span>Zapisz szkic</span></button>
-   <button className="home-builder-publish" onClick={()=>void publish()} disabled={!loaded||saving||busy}><Send size={17}/><span>Opublikuj</span></button></div>
+   <button onClick={()=>setFullscreen(x=>!x)} title={fullscreen?"Zamknij pełny ekran":"Pełny ekran"} aria-pressed={fullscreen}>{fullscreen?<Minimize2 size={17}/>:<Maximize2 size={17}/>}<span>{fullscreen?"Zamknij":"Pełny ekran"}</span></button>
+   <button className="home-builder-save" onClick={()=>void save()} disabled={!loaded||saving||busy||!isDirty} title="Zapisz szkic (Ctrl+S)"><Save size={17}/><span>Zapisz szkic</span></button>
+   <button className="home-builder-publish" onClick={()=>void openPublish()} disabled={!loaded||saving||busy}><Send size={17}/><span>Opublikuj</span></button></div>
   </header>
-  {error&&<div className="home-builder-message error" role="alert"><AlertCircle size={18}/>{error}<button onClick={()=>setError("")}><X size={17}/></button></div>}
-  {message&&<div className="home-builder-message success" role="status"><CheckCircle2 size={18}/>{message}<button onClick={()=>setMessage("")}><X size={17}/></button></div>}
-  {isDirty&&<p className="home-builder-unsaved"><span/> Niezapisane zmiany — widoczne tylko w podglądzie edytora</p>}
+  {error&&<div className="home-builder-message error" role="alert"><AlertCircle size={18}/>{error}<button aria-label="Zamknij komunikat" onClick={()=>setError("")}><X size={17}/></button></div>}
+  {message&&<div className="home-builder-message success" role="status"><CheckCircle2 size={18}/>{message}<button aria-label="Zamknij komunikat" onClick={()=>setMessage("")}><X size={17}/></button></div>}
+  {recovery&&<div className="home-builder-message recover" role="status"><AlertCircle size={18}/><span>Znaleziono niezapisane zmiany z {FORMAT.format(new Date(recovery.at))}.</span><span className="home-builder-recover-actions"><button onClick={restoreLocal}>Przywróć</button><button onClick={discardLocal}>Odrzuć</button></span></div>}
   <div className="home-builder-workspace">
-   <aside className="home-builder-outline"><div className="home-builder-side-head"><div><Layers3 size={18}/> Sekcje <b>{draft.sections.length}</b></div><small>{enabled} aktywnych</small></div>
-    <div className="home-builder-list">{draft.sections.map((sec,index)=><div key={sec.id} className={"home-builder-item "+(sec.id===selection?"active":"")+(sec.enabled?"":" disabled")+(dragging===sec.id?" dragging":"")} draggable onDragStart={e=>{setDragging(sec.id);e.dataTransfer.effectAllowed="move"}} onDragEnd={()=>setDragging(null)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(!dragging||dragging===sec.id)return;edit(d=>{const from=d.sections.findIndex(x=>x.id===dragging),to=d.sections.findIndex(x=>x.id===sec.id);if(from<0||to<0)return;const [part]=d.sections.splice(from,1);d.sections.splice(to,0,part)});setDragging(null)}}>
-     <button type="button" className="home-builder-item-main" onClick={()=>setSelection(sec.id)}><b>{String(index+1).padStart(2,"0")}</b><span><strong>{SECTION_DESCRIPTIONS[sec.type].name}</strong><small>{String(sec.settings.title||sec.settings.eyebrow||"Sekcja").slice(0,42)}</small></span></button>
+   <aside className="home-builder-outline"><div className="home-builder-side-head"><div><Layers3 size={17}/> Sekcje <b>{draft.sections.length}</b></div><small>{enabled} aktywnych</small></div>
+    <div className="home-builder-list">{draft.sections.map((sec,index)=><div key={sec.id} className={"home-builder-item "+(sec.id===selection?"active":"")+(sec.enabled?"":" disabled")+(dragging===sec.id?" dragging":"")} draggable onDragStart={e=>{setDragging(sec.id);e.dataTransfer.effectAllowed="move"}} onDragEnd={()=>setDragging(null)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(dragging&&dragging!==sec.id)reorder(dragging,sec.id);setDragging(null)}}>
+     <span className="home-builder-grip" aria-hidden="true"><GripVertical size={15}/></span>
+     <button type="button" className="home-builder-item-main" onClick={()=>select(sec.id)} aria-current={sec.id===selection}><span><strong>{SECTION_DESCRIPTIONS[sec.type].name}</strong><small>{String(sec.settings.title||sec.settings.eyebrow||"Bez nagłówka").replace(/\|/g," ").slice(0,40)}</small></span></button>
      <div className="home-builder-item-actions" onClick={e=>e.stopPropagation()}>
       <button aria-label="Przesuń w górę" title="Przesuń w górę" disabled={index===0} onClick={()=>action(sec.id,"up")}><ArrowUp size={14}/></button>
       <button aria-label="Przesuń w dół" title="Przesuń w dół" disabled={index===draft.sections.length-1} onClick={()=>action(sec.id,"down")}><ArrowDown size={14}/></button>
-      <button aria-label={sec.enabled?"Ukryj":"Pokaż"} title={sec.enabled?"Ukryj":"Pokaż"} onClick={()=>action(sec.id,"toggle")}>{sec.enabled?<Eye size={14}/>:<EyeOff size={14}/>}</button>
+      <button aria-label={sec.enabled?"Ukryj":"Pokaż"} title={sec.enabled?"Ukryj":"Pokaż"} className="always" onClick={()=>action(sec.id,"toggle")}>{sec.enabled?<Eye size={14}/>:<EyeOff size={14}/>}</button>
      </div>
     </div>)}</div>
-    <button className="home-builder-add" onClick={()=>setAddOpen(true)}><Plus size={18}/> Dodaj sekcję</button>
+    <button className="home-builder-add" onClick={()=>setAddOpen(true)}><Plus size={17}/> Dodaj sekcję</button>
    </aside>
-   <div className="home-builder-stage"><div className="home-builder-stage-head"><div><span className="home-builder-stage-dot"/> PODGLĄD NA ŻYWO</div><div><button className={device==="desktop"?"on":""} onClick={()=>setDevice("desktop")} title="Komputer"><Monitor size={17}/></button><button className={device==="mobile"?"on":""} onClick={()=>setDevice("mobile")} title="Telefon"><Smartphone size={17}/></button><a href="/" target="_blank" rel="noreferrer" title="Opublikowany sklep"><ExternalLink size={17}/></a></div></div>
-    <div className={"home-builder-stage-scroll "+device}>
-     <div className="home-builder-preview-wrap"><iframe ref={preview} src="/admin/podglad" title="Interaktywny podgląd edytowanej strony" onLoad={notify}/></div>
+   <div className="home-builder-stage"><div className="home-builder-stage-head"><div><span className="home-builder-stage-dot"/> Podgląd na żywo · kliknij sekcję, aby ją edytować</div><div><button className={device==="desktop"?"on":""} onClick={()=>setDevice("desktop")} title="Komputer" aria-label="Widok komputera"><Monitor size={17}/></button><button className={device==="mobile"?"on":""} onClick={()=>setDevice("mobile")} title="Telefon" aria-label="Widok telefonu"><Smartphone size={17}/></button><a href="/" target="_blank" rel="noreferrer" title="Opublikowany sklep" aria-label="Otwórz opublikowany sklep"><ExternalLink size={17}/></a></div></div>
+    <div className={"home-builder-stage-scroll "+device} ref={stage}>
+     <div className="home-builder-preview-wrap" style={{width:fw*scale,height:fh*scale}}><iframe ref={preview} src="/admin/podglad" title="Interaktywny podgląd edytowanej strony" style={{width:fw,height:fh,transform:"scale("+scale+")"}} onLoad={()=>{notify();post({kind:"zastal:home:select",id:selected?.id||""})}}/></div>
     </div>
-    <div className="home-builder-stage-foot">Ten podgląd korzysta z tych samych komponentów co publiczna strona. Zmiany są prywatne do publikacji.</div>
    </div>
-   <aside className="home-builder-properties"><div className="home-builder-side-head"><div>Ustawienia sekcji</div>{selected&&<button title="Duplikuj" onClick={()=>action(selected.id,"duplicate")}><Copy size={17}/></button>}</div>
-    {selected?<><div className="home-builder-prop-intro"><span>{SECTION_DESCRIPTIONS[selected.type].name.toUpperCase()}</span><p>{SECTION_DESCRIPTIONS[selected.type].about}</p></div>
-     <div className="home-builder-fields">{selected.type==="hero"?<>{EDIT_FIELDS.hero.filter(f=>!f.key.startsWith("slide_")).map(field)}{[2,3].map(n=><details key={n}><summary style={{padding:"14px 0",fontWeight:700,cursor:"pointer"}}>Slajd {n} · {n===2?"Bluzy":"Koszulki"}</summary>{EDIT_FIELDS.hero.filter(f=>f.key.startsWith(`slide_${n}_`)).map(field)}</details>)}</>:EDIT_FIELDS[selected.type].map(field)}</div>
+   <aside className="home-builder-properties"><div className="home-builder-side-head"><div>{selected?sectionName(selected.type):"Ustawienia sekcji"}</div>{selected&&<button title="Duplikuj sekcję" aria-label="Duplikuj sekcję" onClick={()=>action(selected.id,"duplicate")}><Copy size={17}/></button>}</div>
+    {selected?<><div className="home-builder-prop-intro"><p>{SECTION_DESCRIPTIONS[selected.type].about}</p></div>
+     {hero&&<div className="home-builder-tabs" role="tablist" aria-label="Slajdy banera">{slideLabels.map((label,i)=><button key={label} role="tab" aria-selected={slideTab===i+1} className={slideTab===i+1?"on":""} onClick={()=>setSlideTab(i+1)}>{label}</button>)}</div>}
+     <div className="home-builder-fields">{hero?EDIT_FIELDS.hero.filter(f=>slideTab===1?!f.key.startsWith("slide_"):f.key.startsWith(`slide_${slideTab}_`)).map(field):EDIT_FIELDS[selected.type].map(field)}</div>
      <div className="home-builder-prop-footer"><button onClick={()=>action(selected.id,"toggle")}>{selected.enabled?<EyeOff size={15}/>:<Eye size={15}/>} {selected.enabled?"Ukryj sekcję":"Pokaż sekcję"}</button><button className="danger" onClick={()=>action(selected.id,"delete")}><Trash2 size={16}/> Usuń</button></div>
-    </>:<p className="home-builder-placeholder">Wybierz sekcję po lewej.</p>}
+    </>:<p className="home-builder-placeholder">Wybierz sekcję po lewej albo kliknij ją w podglądzie.</p>}
    </aside>
   </div>
-  {addOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Dodaj sekcję" onClick={()=>setAddOpen(false)}><div className="home-builder-dialog" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><span>BIBLIOTEKA SEKCJI</span><h3>Dodaj element strony</h3></div><button onClick={()=>setAddOpen(false)}><X size={21}/></button></div><div className="home-builder-types">{TYPES.map(type=><button key={type} onClick={()=>add(type)}><span className="home-builder-type-icon"><Plus size={20}/></span><span><strong>{SECTION_DESCRIPTIONS[type].name}</strong><small>{SECTION_DESCRIPTIONS[type].about}</small></span></button>)}</div></div></div>}
-  {libraryOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Biblioteka zdjęć" onClick={()=>setLibraryOpen(false)}><div className="home-builder-dialog" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><span>MEDIA LIBRARY</span><h3>Zdjęcia i grafiki</h3></div><button onClick={()=>setLibraryOpen(false)}><X size={21}/></button></div>
+  {addOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Dodaj sekcję" onClick={()=>setAddOpen(false)}><div className="home-builder-dialog" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><h3>Dodaj sekcję</h3><p>Nowa sekcja trafia na koniec strony, przesuniesz ją w panelu po lewej.</p></div><button aria-label="Zamknij" onClick={()=>setAddOpen(false)}><X size={21}/></button></div><div className="home-builder-types">{TYPES.map(type=><button key={type} onClick={()=>add(type)}><span className="home-builder-type-icon"><Plus size={20}/></span><span><strong>{SECTION_DESCRIPTIONS[type].name}</strong><small>{SECTION_DESCRIPTIONS[type].about}</small></span></button>)}</div></div></div>}
+  {libraryOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Biblioteka zdjęć" onClick={()=>setLibraryOpen(false)}><div className="home-builder-dialog" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><h3>Zdjęcia i grafiki</h3></div><button aria-label="Zamknij" onClick={()=>setLibraryOpen(false)}><X size={21}/></button></div>
    <label className="home-builder-upload"><ImagePlus size={26}/><strong>{uploading?"Wysyłanie zdjęcia...":"Prześlij nowe zdjęcie"}</strong><small>JPG, PNG lub WebP do 25 MB · automatyczne dopasowanie zdjęcia</small><input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={e=>{if(e.target.files?.[0])void upload(e.target.files[0],imageTarget)}}/></label>
    <div className="home-builder-media-grid">{[...media,...catalogueImages.map(img=>({...img,bytes:0})),...store.products.filter(p=>p.verified).flatMap(p=>productImages(p).map(img=>({url:img.url,name:p.name+" · "+(img.alt||img.role)+(img.illustrative?" · Materiał poglądowy":""),bytes:0})))].filter((item,index,items)=>items.findIndex(other=>other.url===item.url)===index).map(item=><button key={item.url} onClick={()=>{selectImage(item.url)}}><img src={item.url} alt={item.name}/><span>{item.name}</span></button>)}</div>
   </div></div>}
-  {versionsOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Historia strony" onClick={()=>setVersionsOpen(false)}><div className="home-builder-dialog home-builder-history" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><span>HISTORIA / ROLLBACK</span><h3>Poprzednie wersje</h3></div><button onClick={()=>setVersionsOpen(false)}><X size={21}/></button></div><p>Przywracanie nie publikuje zmian — zapisuje wskazaną wersję do szkicu.</p><div>{revisions.map(rev=><div className="home-builder-version" key={rev.id}><span><strong>Wersja {rev.revision}</strong><small>{FORMAT.format(new Date(rev.created))} · {rev.action==="published"?"Opublikowana":rev.action==="draft"?"Szkic":"Pierwotna"}</small></span><button disabled={busy} onClick={()=>void restore(rev.id)}><RefreshCw size={15}/> Przywróć</button></div>)}</div></div></div>}
+  {versionsOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Historia strony" onClick={()=>setVersionsOpen(false)}><div className="home-builder-dialog home-builder-history" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><h3>Poprzednie wersje</h3></div><button aria-label="Zamknij" onClick={()=>setVersionsOpen(false)}><X size={21}/></button></div><p>Przywracanie nie publikuje zmian — zapisuje wskazaną wersję do szkicu.</p><div>{revisions.map(rev=><div className="home-builder-version" key={rev.id}><span><strong>Wersja {rev.revision}</strong><small>{FORMAT.format(new Date(rev.created))} · {rev.action==="published"?"Opublikowana":rev.action==="draft"?"Szkic":"Pierwotna"}</small></span><button disabled={busy} onClick={()=>void restore(rev.id)}><RefreshCw size={15}/> Przywróć</button></div>)}</div></div></div>}
+  {publishOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Publikacja strony głównej" onClick={()=>!busy&&setPublishOpen(false)}><div className="home-builder-dialog home-builder-publish-dialog" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><h3>Opublikować stronę główną?</h3><p>Klienci zobaczą nowy układ od razu.</p></div><button aria-label="Zamknij" disabled={busy} onClick={()=>setPublishOpen(false)}><X size={21}/></button></div>
+   {publishedFailed?<p className="home-builder-note">Nie udało się pobrać opublikowanej wersji, więc nie pokażemy listy zmian. Możesz opublikować mimo to.</p>
+    :!diff?<p className="home-builder-note">Porównuję z opublikowaną stroną…</p>
+    :diff.total===0?<p className="home-builder-note">Brak zmian względem opublikowanej strony.</p>
+    :<ul className="home-builder-changes">{describeDiff(diff).map(line=><li key={line}><Check size={15}/>{line}</li>)}</ul>}
+   <div className="home-builder-dialog-foot"><button disabled={busy} onClick={()=>setPublishOpen(false)}>Wróć do edycji</button><button className="primary" disabled={busy||(!publishedFailed&&(!diff||diff.total===0))} onClick={()=>void publish()}><Send size={16}/> {busy?"Publikowanie…":"Opublikuj teraz"}</button></div>
+  </div></div>}
  </section>;
 }

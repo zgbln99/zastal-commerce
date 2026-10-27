@@ -34,6 +34,7 @@ commerce_mailtheme.py     # wersja HTML każdego e-maila w barwach sklepu, podgl
 commerce_email.py         # kolejka wiadomości (outbox) i treści
 commerce_reports.py, commerce_digest.py, commerce_returns.py, commerce_dpd.py, commerce_cms.py, commerce_pages.py, commerce_media.py, commerce_pricing.py, commerce_launch.py
 storefront/app/           # strony: /, /sklep, /kategoria/[slug], /szukaj, /produkt/[handle], /koszyk, /zamowienie, /konto, /pomoc, /kontakt, /newsletter, /zawodnicy, /zawodnicy/[slug], /karta-podarunkowa, /informacje/[slug], /admin (podglad/kod = plakat QR kodu rabatowego); feed/produkty.xml (Google Merchant / Meta, tylko w trybie live)
+storefront/app/admin/       # HomeEditor.tsx (edytor strony głównej), home-pickers.tsx (wybór produktów i kategorii), podglad/ (podgląd w iframe)
 storefront/components/    # StoreShell (nagłówek, koszyk, stopka), HomeCanvas (sekcje CMS), ProductCard, PurchaseControls, CompetitionLogos, search/SearchBox, PromoField, NewsletterForm
 storefront/components/templates/essentials/ui/texture-button.tsx   # przycisk z zestawu kairoui, bez zmian
 storefront/lib/           # commerce.mjs (koszyk, filtry, productPath), money.ts, json-ld.tsx, site.ts, catalog-paths.ts, home-layout.ts
@@ -62,6 +63,7 @@ docs/                     # runbook wdrożenia, raport wydania, szablon opisu pr
 - Karta produktu pokazuje drugie zdjęcie z galerii po najechaniu (CSS, bez JS); tylko produkty z co najmniej dwoma zdjęciami w galerii, bez zdjęć zastępczych.
 - Hero na stronie głównej zmienia slajdy samo; zatrzymuje je tylko przycisk Pauza, nawigacja klawiaturą, ukryta karta i otwarte okna (nie hover i nie „ogranicz ruch”).
 - Nagłówek to jeden szklany pasek (`glass-header`: `bg-background/70`, `backdrop-blur-xl`) 64 px, nawigacja od szerokości `xl`, poniżej szuflada; offsety stron `pt-16` (`pt-24` z paskiem informacji).
+- Edytor strony głównej: podgląd to prawdziwa strona `/admin/podglad` (StoreShell + `HomeCanvas editing`) w iframe 1440 px albo 390 px, skalowana do wolnego miejsca; protokół `postMessage`: edytor wysyła `zastal:home:preview` i `zastal:home:select`, podgląd odpowiada `zastal:home:ready` i `zastal:home:picked` (klik w sekcję zaznacza ją, linki i formularze w podglądzie są zablokowane, autoplay hero wyłączony). Niezapisany szkic trzyma `localStorage` (klucz z wersją bazową), publikacja przechodzi przez okno z listą zmian z `lib/home-diff.mjs`; skróty Ctrl/Cmd+S, Z, Y.
 - Nic fikcyjnego: brak atrap integracji, numerów przesyłek czy dokumentów poza izolowanym środowiskiem testowym.
 
 ## Validation checklist

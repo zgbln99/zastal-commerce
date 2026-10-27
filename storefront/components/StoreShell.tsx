@@ -137,7 +137,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
     return () => window.clearTimeout(timer);
   }, [params]);
   // The header is a single fixed glass bar of 64 px, plus 32 px for the pre-launch notice.
-  const offset = pathname === "/" ? "" : notice ? "pt-24" : "pt-16";
+  const offset = pathname === "/" || pathname === "/admin/podglad" ? "" : notice ? "pt-24" : "pt-16";
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => { const onScroll = () => setScrolled(window.scrollY > 8); onScroll(); window.addEventListener("scroll", onScroll, { passive: true }); return () => window.removeEventListener("scroll", onScroll); }, []);
   const menuLink = "inline-flex h-10 items-center gap-1 whitespace-nowrap rounded-full px-3 text-sm font-medium text-foreground/70 transition-colors hover:text-foreground xl:px-3.5";
