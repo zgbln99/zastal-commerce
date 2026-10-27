@@ -1,8 +1,8 @@
-"""Zastal Store v0.5 – accounts and transactional demo commerce API.
+"""Zastal Store commerce API.
 
-No live payments or carrier integrations. Real customer accounts use built-in
-SQLite with explicit transactions, variant stock ledger, purchased DTF transfers,
-production workflow and audit events. Keep behind HTTPS reverse proxy.
+Accounts, stock, fulfillment and gated live checkout use SQLite transactions.
+DPD tracking is read from a local cache refreshed by a separate worker.
+Keep behind an HTTPS reverse proxy.
 """
 import datetime as dt
 import hashlib
@@ -10,9 +10,12 @@ import json
 import os
 import re
 import secrets
+import shutil
 import sqlite3
+import sys
 import threading
 import time
+import traceback
 from collections import defaultdict, deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -24,19 +27,30 @@ import commerce_cms as cms
 import commerce_media as media
 import commerce_ops as ops
 import commerce_email as mail
+import commerce_sales as sales
+import commerce_payments as payments
+import commerce_returns as returns
+import commerce_withdrawal as withdrawal
+import commerce_pages as pages
+import commerce_pricing as pricing
+import commerce_merch as merch
+import commerce_giftcards as giftcards
+import commerce_engage as engage
+import commerce_retention as retention
+import commerce_brand as brand
+import commerce_reports as reports
+import commerce_digest as digest
+import commerce_dpd as dpd
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Path(os.environ.get("ZASTAL_DB", str(ROOT / "zastal.sqlite3")))
 TOKEN = os.environ.get("ZASTAL_ADMIN_TOKEN", "")
-VALID_STATUS = (
-    "nowe", "potwierdzone", "do_kompletacji", "nanoszenie_dtf",
-    "kontrola_jakosci", "spakowane", "wyslane_demo", "anulowane", "wydane",
-)
+VALID_STATUS = sales.STATUSES
+# Transitions owned by dedicated workflows (fulfillment, payments, shipments, returns).
+WORKFLOW_STATUS = ("spakowane", "wyslane_demo", "wydane", "wyslane", "oplacone", "zwrot")
 PRINT_STATUS = ("oczekuje", "przygotowanie", "nanoszenie", "kontrola", "gotowe", "odrzucone")
 LIMITS = defaultdict(deque)
 RATE_LOCK = threading.Lock()
-SHIPPING = {"odbior": 0, "paczkomat": 1299, "kurier": 1499}
-FREE_SHIPPING = 25000
 
 def stamp():
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
@@ -47,6 +61,29 @@ def connect():
     c.execute("PRAGMA foreign_keys=ON")
     c.execute("PRAGMA busy_timeout=20000")
     return c
+
+def ownership_hint():
+    """Who runs the API and who owns the database file and its folder: the usual reason for a read-only database."""
+    try:
+        return f" (API działa jako uid {os.geteuid()}, plik bazy należy do uid {DATABASE.stat().st_uid}, katalog do uid {DATABASE.parent.stat().st_uid}; wszystkie trzy muszą być takie same)"
+    except (OSError, AttributeError):
+        return ""
+
+def storage_state():
+    """Can the API write to its database, and how much room is left on that volume? (reads work long after writes stop)"""
+    free=shutil.disk_usage(DATABASE.parent).free//1048576
+    try:
+        c=connect()
+        try:
+            c.execute("PRAGMA busy_timeout=1500")
+            # A real page write (the schema version rewritten with its own value): it needs the journal file, so a folder
+            # or file owned by someone else, a read-only mount or a full disk all fail here just as they do for orders.
+            version=c.execute("PRAGMA user_version").fetchone()[0]
+            c.execute("BEGIN IMMEDIATE");c.execute(f"PRAGMA user_version={int(version)}");c.commit()
+        finally:c.close()
+        return {"db_writable":True,"disk_free_mb":free}
+    except sqlite3.Error as ex:
+        return {"db_writable":False,"disk_free_mb":free,"db_error":(f"{type(ex).__name__}: {ex}"+(ownership_hint() if "readonly" in str(ex).lower() else ""))[:400]}
 
 def ean13(identifier):
     """Prefix 200 = internal restricted circulation; not externally assigned GS1 GTIN."""
@@ -104,6 +141,18 @@ def init():
         cms.init_schema(c)
         media.init_schema(c)
         ops.init_schema(c)
+        sales.init_schema(c)
+        dpd.init_schema(c)
+        payments.init_schema(c)
+        returns.init_schema(c)
+        withdrawal.init_schema(c)
+        pages.init_schema(c)
+        pricing.init_schema(c)
+        merch.init_schema(c)
+        giftcards.init_schema(c)
+        engage.init_schema(c)
+        retention.init_schema(c)
+        brand.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
         c.execute('CREATE INDEX IF NOT EXISTS receipts_customer ON order_receipts(customer_id)')
@@ -135,7 +184,9 @@ def compatible_products(c):
     for product in products:
         product.update(personalization.product_options(c, product['id']))
         product.update(media.public_gallery(c, product))
+        product['price_reduction'] = pricing.reduction(c, product['id'])
         product['sizes'] = [v['size'] for v in c.execute('SELECT size FROM product_variants WHERE product_id=? ORDER BY id', (product['id'],))]
+    merch.annotate(c, products)
     return products
 
 def catalog(c):
@@ -143,18 +194,59 @@ def catalog(c):
     variants = [dict(x) for x in c.execute("SELECT id,product_id,size,sku,ean,stock FROM product_variants ORDER BY id")]
     by_product=defaultdict(list)
     for v in variants:by_product[v["product_id"]].append(v)
-    for p in products:p["variants"]=by_product[p["id"]]
+    for p in products:
+        p["variants"]=by_product[p["id"]]
+        if p.get('gift_card'):
+            for v in p['variants']:v['stock']=9999  # digital product: never runs out
     return products
 
 class Invalid(Exception): pass
+
+def public_config(c,state):
+    """Store status config; in live mode it also carries the PayU channels (BLIK, card, wallets) PayU has enabled."""
+    cfg=sales.public_config(c,mail.configuration()['configured'],payments.ready(),state['mode'])
+    if state['mode']=='live' and any(p['id']=='payu' for p in cfg['payment_methods']):
+        cfg['payu_methods']=payments.pay_methods()
+        if any(m['value']=='jp' for m in cfg['payu_methods']):cfg['google_pay']=payments.google_pay_config()
+    return cfg
+
+def readiness(c):
+    return sales.readiness(c,mail.configuration()['configured'],payments.ready())
 
 def order_detail(c,receipt):
     o=asdict(c.execute('SELECT * FROM orders WHERE id=?',(receipt['order_id'],)).fetchone())
     o['items']=json.loads(o['items'])
     o.update({key:receipt[key] for key in ('fulfillment','shipping_fee','subtotal')})
     o['events']=[dict(x) for x in c.execute('SELECT created,status FROM events WHERE order_id=? ORDER BY id',(o['id'],))]
-    o['demo']=True
+    detail=sales.details(c,o['id'])
+    o['details']=sales.public_details(detail)
+    o['demo']=not detail or detail['mode']!='live'
+    o['status_label']=sales.STATUS_LABELS.get(o['status'],o['status'])
+    if detail and detail['payment_method']=='transfer' and detail['payment_status']!='paid':
+        o['transfer']=sales.transfer_instructions(c,o['id'],o['total'])
+    if detail and detail['payment_method']=='payu':
+        o['payment']=payments.public_payment(c,o['id'])
+    o['returns']=returns.public_for_order(c,o['id'])
+    o['gift_cards']=giftcards.order_cards(c,o['id']) if detail and detail['payment_status'] in ('paid','partially_refunded') else []
+    o['can_return']=bool(detail and detail['mode']=='live' and o['status'] in ('wydane','wyslane') and not any(r['status'] in ('zgloszony','przyjety') for r in o['returns']))
     return o
+
+def checkout_reply(c,oid,total,token):
+    reply={"id":oid,"total":total,"tracking_token":token}
+    order=c.execute('SELECT status FROM orders WHERE id=?',(oid,)).fetchone()
+    detail=sales.details(c,oid)
+    reply['status']=order['status'] if order else 'nowe'
+    reply['mode']=detail['mode'] if detail else 'test'
+    reply['discount']=detail.get('discount',0) if detail else 0
+    reply['promo_code']=detail.get('promo_code','') if detail else ''
+    reply['gift_card_amount']=detail.get('gift_card_amount',0) if detail else 0
+    if detail and detail['payment_method']=='payu':
+        reply['payment']={'method':'payu',**payments.public_payment(c,oid)}
+    elif detail:
+        reply['payment']={'method':detail['payment_method'],'status':detail['payment_status']}
+    if detail and detail['payment_method']=='transfer':
+        reply['transfer']=sales.transfer_instructions(c,oid,total)
+    return reply
 
 def account_orders(c,uid):
     return [order_detail(c,r) for r in c.execute('SELECT * FROM order_receipts WHERE customer_id=? ORDER BY order_id DESC',(uid,))]
@@ -186,11 +278,19 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(value)
 
-    def body(self):
+    def raw_body(self,limit=35000):
         length=int(self.headers.get("Content-Length","0"))
-        if length<1 or length>(1_900_000 if self.path=="/api/admin/home/media" else 35000):raise Invalid("Nieprawidłowy rozmiar żądania")
+        if length<1 or length>limit:raise Invalid("Nieprawidłowy rozmiar żądania")
+        return self.rfile.read(length)
+
+    def client_ip(self):
+        return self.headers.get("X-Real-IP") or self.client_address[0]
+
+    def body(self):
+        # The "expire unpaid" action carries no parameters: an empty body is fine there.
+        if self.path=='/api/admin/orders/expire-unpaid' and int(self.headers.get("Content-Length","0") or 0)<1:return {}
         try:
-            data=json.loads(self.rfile.read(length))
+            data=json.loads(self.raw_body(1_900_000 if self.path=="/api/admin/home/media" else 35000))
             if not isinstance(data,dict):raise Invalid("Oczekiwano obiektu")
             return data
         except (ValueError,UnicodeError):raise Invalid("Nieprawidłowy JSON")
@@ -199,7 +299,7 @@ class Handler(BaseHTTPRequestHandler):
         self.response_headers=[]
         try:
             with connect() as c:auth.session(self,c)
-            if path.startswith('/api/admin/'):auth.require_user(self,'admin')
+            if path.startswith('/api/admin/'):auth.require_staff(self,auth.capability_for(self.command,path))
             elif path.startswith('/api/account/'):auth.require_user(self)
             if self.command in ('POST','PATCH'):
                 auth.check_origin(self)
@@ -209,37 +309,114 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(ex.status,{'error':str(ex),'code':ex.code})
             return False
 
+    def db_failure(self,message,log_only=False):
+        # Database errors (locked file, read-only volume, full disk, schema drift) must reach the journal with their cause.
+        sys.stderr.write(f"[db] {self.command} {self.path.split('?')[0]} failed: {sys.exc_info()[0].__name__}: {sys.exc_info()[1]}\n")
+        traceback.print_exc(file=sys.stderr);sys.stderr.flush()
+        if log_only:return None
+        reply={"error":message}
+        if self.path.startswith(("/api/admin/","/api/staff/")):
+            # Staff-facing routes say what the database refused (locked, read-only, disk full) so the owner can act without the journal.
+            reply["detail"]=(f"{sys.exc_info()[0].__name__}: {sys.exc_info()[1]}"+(ownership_hint() if "readonly" in str(sys.exc_info()[1]).lower() else ""))[:400]
+        return self.respond(500,reply)
+
     def error(self,ex):
         self.respond(400,{"error":str(ex)})
 
     def do_GET(self):
         path=urlparse(self.path).path
-        if path=="/health":return self.respond(200,{"ok":True,"version":"0.10","sales_phase":"prelaunch","accounts":True,"cms":True,"pos":True,"email":True})
+        if path=="/health":
+            storage=storage_state()
+            try:
+                with connect() as c:phase=readiness(c)['mode']
+            except sqlite3.Error:self.db_failure("database",log_only=True);return self.respond(503,{"ok":False,"error":"database",**storage})
+            if not storage["db_writable"] or storage["disk_free_mb"]<200:return self.respond(503,{"ok":False,"error":"storage",**storage})
+            return self.respond(200,{"ok":True,"version":"0.11","sales_phase":phase,"accounts":True,"cms":True,"pos":True,"email":True,"payments":payments.configuration()['configured'],**storage})
         if path.startswith("/api/store/media/"):
             data=cms.load_media(path.rsplit("/",1)[-1]);return self.respond(200,data,"image/webp") if data is not None else self.respond(404,{"error":"Nie znaleziono zdjęcia"})
         if not self.access(path):return
         try:
             with connect() as c:
                 if auth.dispatch(self,path,c):return
+                if auth.staff_dispatch(self,path,c):return
                 if mail.dispatch(self,path,c):return
                 if path=='/api/admin/fulfillment':return self.respond(200,ops.queue(c))
                 operation_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)',path)
                 if operation_route:return self.respond(200,ops.detail(c,int(operation_route.group(1))))
-                if path=='/api/store/status':return self.respond(200,launch.snapshot(c,public=True))
-                if path=='/api/store/home':return self.respond(200,cms.get(c))
+                if path=='/api/store/status':
+                    state=readiness(c)
+                    return self.respond(200,{**launch.snapshot(c,public=True,readiness=state),'config':{**public_config(c,state),'pages':pages.listing(c),'brand':brand.public(c)}})
+                if path=='/api/store/pages':return self.respond(200,pages.listing(c))
+                page_route=re.fullmatch(r'/api/store/pages/([a-z0-9-]{1,60})',path)
+                if page_route:return self.respond(200,pages.public_page(c,page_route.group(1)))
+                if path=='/api/admin/pages':return self.respond(200,pages.listing(c,admin=True))
+                admin_page_route=re.fullmatch(r'/api/admin/pages/([a-z0-9-]{1,60})',path)
+                if admin_page_route:return self.respond(200,pages.admin_page(c,admin_page_route.group(1)))
+                if path=='/api/admin/settings':
+                    state=readiness(c)
+                    config=payments.configuration()
+                    return self.respond(200,{'settings':sales.settings(c),'shipping_methods':sales.shipping_methods(c),'readiness':state,
+                        'payu':{'configured':config['configured'],'environment':config['environment'],'pos_id':config['pos_id'],'missing':config['missing']},
+                        'email':mail.configuration()['configured']})
+                if path=='/api/admin/shipping':return self.respond(200,sales.shipping_methods(c))
+                if path=='/api/admin/shifts':
+                    return self.respond(200,{**ops.shifts(c),'mode':readiness(c)['mode'],'can_discount':'discounts' in auth.capabilities(self.request_user)})
+                shift_route=re.fullmatch(r'/api/admin/shifts/([1-9][0-9]*)',path)
+                if shift_route:
+                    row=c.execute('SELECT * FROM pos_shifts WHERE id=?',(int(shift_route.group(1)),)).fetchone()
+                    if not row:return self.respond(404,{'error':'Nie znaleziono zmiany'})
+                    return self.respond(200,{**ops.shift_summary(c,row),'sales':ops.shift_sales(c,row['id'])})
+                if path=='/api/store/home':
+                    cms.run_due(c)
+                    return self.respond(200,cms.get(c))
                 if path=='/api/admin/home':return self.respond(200,cms.get(c,admin=True))
                 if path=='/api/admin/home/revisions':return self.respond(200,cms.history(c))
                 if path=='/api/admin/home/media':return self.respond(200,cms.list_media())
-                if path=='/api/admin/launch':return self.respond(200,launch.snapshot(c))
+                if path=='/api/admin/launch':return self.respond(200,launch.snapshot(c,readiness=readiness(c)))
                 if path=='/api/account/orders':
                     auth.require_user(self,'customer')
                     return self.respond(200,account_orders(c,self.request_user['id']))
+                if path=='/api/account/giftcards':
+                    auth.require_user(self,'customer')
+                    return self.respond(200,giftcards.account_cards(c,self.request_user['id']))
+                if path=='/api/account/favorites':
+                    auth.require_user(self,'customer')
+                    return self.respond(200,{'ids':retention.favorites(c,self.request_user['id'])})
+                draft_route=re.fullmatch(r'/api/cart/draft/([A-Za-z0-9_-]{20,64})',path)
+                if draft_route:
+                    try:return self.respond(200,retention.draft_by_token(c,draft_route.group(1)))
+                    except retention.RetentionError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                if path=='/api/admin/pos/quick':
+                    pinned=[row['product_id'] for row in c.execute('SELECT product_id FROM product_options WHERE pos_quick=1 ORDER BY product_id')]
+                    best=[pid for pid in merch.bestsellers(c,days=60,limit=12,minimum=1) if pid not in pinned]
+                    return self.respond(200,{'pinned':pinned,'ids':(pinned+best)[:12]})
+                if path in ('/api/admin/reports/sales','/api/admin/reports/sales.csv'):
+                    query=parse_qs(urlparse(self.path).query)
+                    scope='test' if query.get('scope',[''])[0]=='test' else 'live'
+                    try:report=reports.sales(c,query.get('from',[''])[0],query.get('to',[''])[0],scope)
+                    except reports.ReportError as ex:return self.respond(400,{'error':str(ex)})
+                    if path.endswith('.csv'):
+                        kind=query.get('by',['day'])[0]
+                        self.response_headers.append(('Content-Disposition',f'attachment; filename="zastal-sprzedaz-{report["from"]}-{report["to"]}-{kind}.csv"'))
+                        return self.respond(200,reports.csv_export(report,kind),'text/csv')
+                    return self.respond(200,report)
                 if path.startswith('/api/account/orders/'):
                     auth.require_user(self,'customer')
                     oid=int(path.rsplit('/',1)[1])
                     receipt=c.execute('SELECT * FROM order_receipts WHERE order_id=? AND customer_id=?',(oid,self.request_user['id'])).fetchone()
                     return self.respond(200,order_detail(c,receipt)) if receipt else self.respond(404,{'error':'Nie znaleziono zamówienia'})
                 if path=='/api/admin/products':return self.respond(200,catalog(c))
+                if path=='/api/admin/promo':return self.respond(200,merch.list_codes(c))
+                if path=='/api/admin/giftcards':return self.respond(200,giftcards.admin_list(c))
+                if path=='/api/admin/digest':return self.respond(200,digest.build(c))
+                gift_route=re.fullmatch(r'/api/admin/giftcards/([1-9][0-9]*)',path)
+                if gift_route:
+                    try:return self.respond(200,giftcards.admin_card(c,int(gift_route.group(1))))
+                    except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                if path=='/api/admin/stock-alerts':return self.respond(200,merch.pending_alerts(c))
+                if path=='/api/admin/price-alerts':return self.respond(200,retention.pending_price_alerts(c))
+                price_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/prices',path)
+                if price_route:return self.respond(200,{'history':pricing.history(c,int(price_route.group(1))),'reduction':pricing.reduction(c,int(price_route.group(1)))})
                 gallery_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/gallery',path)
                 if gallery_route:
                     try:return self.respond(200,media.get(c,int(gallery_route.group(1))))
@@ -253,9 +430,18 @@ class Handler(BaseHTTPRequestHandler):
                 if path=="/api/products":return self.respond(200,compatible_products(c))
                 if path=="/api/catalog":return self.respond(200,catalog(c))
                 if path.startswith("/api/catalog/"):
-                    pid=int(path.rsplit("/",1)[1])
-                    p=next((x for x in catalog(c) if x["id"]==pid),None)
+                    handle=path.rsplit("/",1)[1]
+                    pid=int(handle) if re.fullmatch(r'[1-9][0-9]{0,8}',handle) else None
+                    p=next((x for x in catalog(c) if x["id"]==pid or (pid is None and x.get("slug")==handle)),None)
                     return self.respond(200,p) if p else self.respond(404,{"error":"Produkt nie istnieje"})
+                if path in ('/api/admin/subscribers','/api/admin/subscribers.csv'):
+                    rows=engage.admin_subscribers(c,parse_qs(urlparse(self.path).query).get('status',[''])[0])
+                    if path.endswith('.csv'):
+                        self.response_headers=[('Content-Disposition','attachment; filename="newsletter.csv"')]
+                        return self.respond(200,engage.subscribers_csv(rows),'text/csv; charset=utf-8')
+                    return self.respond(200,rows)
+                if path=='/api/admin/contact':return self.respond(200,engage.admin_messages(c,parse_qs(urlparse(self.path).query).get('status',[''])[0]))
+                if path=='/api/admin/brand':return self.respond(200,brand.get(c))
                 if path.startswith("/api/orders/"):
                     try:oid=int(path.rsplit("/",1)[1])
                     except ValueError:return self.respond(404,{"error":"Nie znaleziono zamówienia"})
@@ -263,14 +449,10 @@ class Handler(BaseHTTPRequestHandler):
                     receipt=c.execute("SELECT * FROM order_receipts WHERE order_id=?",(oid,)).fetchone()
                     if not receipt or not secrets.compare_digest(receipt["tracking_token"],token):
                         return self.respond(404,{"error":"Nie znaleziono zamówienia"})
-                    o=asdict(c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone())
-                    o["items"]=json.loads(o["items"])
-                    o.update({key:receipt[key] for key in ("fulfillment","shipping_fee","subtotal")})
-                    o["events"]=[dict(x) for x in c.execute("SELECT created,status FROM events WHERE order_id=? ORDER BY id",(oid,))]
-                    o["demo"]=True
-                    return self.respond(200,o)
+                    return self.respond(200,order_detail(c,receipt))
                 if path=="/api/admin/orders":
-                    return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM orders ORDER BY id DESC LIMIT 300")])
+                    return self.respond(200,[dict(x) for x in c.execute("""SELECT o.*,d.mode,d.payment_status,d.payment_method,d.customer_email,d.customer_name,d.shipping_code,d.shipping_name,d.tracking_number
+                        FROM orders o LEFT JOIN order_details d ON d.order_id=o.id ORDER BY o.id DESC LIMIT 300""")])
                 if path.startswith("/api/admin/orders/"):
                     oid=int(path.rsplit("/",1)[1]);o=asdict(c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone())
                     if not o:return self.respond(404,{"error":"Nie znaleziono zamówienia"})
@@ -281,7 +463,18 @@ class Handler(BaseHTTPRequestHandler):
                     if receipt:o.update(dict(receipt))
                     customer=c.execute('SELECT u.id,u.identifier,u.name FROM users u JOIN order_receipts r ON r.customer_id=u.id WHERE r.order_id=?',(oid,)).fetchone()
                     if customer:o['customer']=dict(customer)
+                    detail=sales.details(c,oid)
+                    o['details']=detail
+                    o['demo']=not detail or detail['mode']!='live'
+                    o['payments']=payments.order_payments(c,oid)
+                    o['returns']=returns.for_order(c,oid)
+                    o['printed_lines']=[dict(x) for x in c.execute('SELECT line_index,printed_qty FROM fulfillment_lines WHERE order_id=? AND printed_qty>0',(oid,))]
+                    if detail and detail['payment_method']=='transfer':o['transfer']=sales.transfer_instructions(c,oid,o['total'])
                     return self.respond(200,o)
+                if path=='/api/admin/withdrawals':
+                    return self.respond(200,{'withdrawals':withdrawal.listing(c,open_only=parse_qs(urlparse(self.path).query).get('all',['0'])[0]!='1')})
+                if path=='/api/admin/returns':
+                    return self.respond(200,{'returns':returns.listing(c,open_only=parse_qs(urlparse(self.path).query).get('all',['0'])[0]!='1'),'reasons':returns.REASONS})
                 if path=="/api/admin/inventory":
                     q="""SELECT v.id,v.product_id,v.size,v.sku,v.ean,v.stock,
                      p.name,p.category,p.price FROM product_variants v
@@ -301,14 +494,16 @@ class Handler(BaseHTTPRequestHandler):
                         line=json.loads(task.pop('order_items'))[task['line_index']]
                         task.update(product_name=line.get('name','Produkt'),size=line.get('size') or 'UNI',qty=line.get('qty',1))
                         if line.get('personalization') is not None:task['personalization']=line['personalization']
+                        for key_ in ('decoration_method','print_layout','preorder'):
+                            if line.get(key_) is not None:task[key_]=line[key_]
                         tasks.append(task)
                     return self.respond(200,tasks)
                 if path=="/api/admin/activity":
                     return self.respond(200,[dict(x) for x in c.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 80")])
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError,pages.PageError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (ValueError,TypeError):return self.respond(400,{"error":"Nieprawidłowy identyfikator"})
-        except sqlite3.Error:return self.respond(500,{"error":"Błąd bazy danych"})
+        except sqlite3.Error:return self.db_failure("Błąd bazy danych")
 
     def public_rate(self):
         ip=self.headers.get("X-Real-IP") or self.client_address[0]
@@ -316,33 +511,185 @@ class Handler(BaseHTTPRequestHandler):
         with RATE_LOCK:
             q=LIMITS[ip]
             while q and q[0]<now-600:q.popleft()
-            if len(q)>=6:return False
+            if len(q)>=20:return False
             q.append(now);return True
 
     def do_POST(self):
         path=urlparse(self.path).path
+        if path=='/api/payments/payu/notify':
+            # Server-to-server webhook: authenticated by the provider signature, never by cookies.
+            try:raw=self.raw_body(200000)
+            except Invalid as ex:return self.error(ex)
+            try:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    status,result=payments.handle_notification(c,raw,self.headers.get('OpenPayu-Signature',''))
+                    if status==200 and result in ('completed',):mail.enqueue_order(c,int(c.execute('SELECT order_id FROM payments WHERE ext_order_id=?',(json.loads(raw)['order']['extOrderId'],)).fetchone()[0]),'order_paid')
+            except sqlite3.Error:return self.db_failure("Błąd zapisu danych")
+            except Exception as ex:
+                # A notification must always get an answer; PayU retries on 5xx and the failure is visible in the log.
+                print(f'[payu] notify failed: {type(ex).__name__}: {ex}',flush=True)
+                return self.respond(500,{"error":"Nie udało się przetworzyć powiadomienia"})
+            return self.respond(status,{'ok':status==200,'result':result})
         if not self.access(path):return
         try:
-            if path == '/api/orders' and not launch.isolated_test_workflow(DATABASE):
-                return self.respond(503,{'error':'Sprzedaż online zostanie uruchomiona po skonfigurowaniu usług sklepu. Konto klienta możesz już założyć.','code':'store_prelaunch'})
+            if path == '/api/orders':
+                with connect() as c:live=readiness(c)['mode']=='live'
+                if not live and not launch.isolated_test_workflow(DATABASE):
+                    return self.respond(503,{'error':'Sprzedaż online zostanie uruchomiona po skonfigurowaniu usług sklepu. Konto klienta możesz już założyć.','code':'store_prelaunch'})
+            if path=='/api/giftcards/check':
+                data=self.body()
+                if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                try:
+                    with connect() as c:row=giftcards.lookup(c,data.get('code'))
+                except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,giftcards.public_view(row))
+            if path in ('/api/store/newsletter','/api/store/contact','/api/store/newsletter/confirm','/api/store/newsletter/unsubscribe'):
+                data=self.body()
+                if path in ('/api/store/newsletter','/api/store/contact') and not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        if path=='/api/store/newsletter':result=engage.subscribe(c,data)
+                        elif path=='/api/store/contact':result=engage.submit_contact(c,data)
+                        elif path=='/api/store/newsletter/confirm':result=engage.confirm(c,data.get('token'))
+                        else:result=engage.unsubscribe(c,data.get('token'))
+                except engage.EngageError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,result)
+            if path=='/api/store/withdrawal':
+                data=self.body()
+                if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    result=withdrawal.submit(c,data)
+                return self.respond(200,result)
+            if path=='/api/admin/digest/send':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    address=digest.enqueue(c)
+                    if address:audit(c,'digest',0,f'Wysłano podsumowanie dnia na {address}')
+                return self.respond(200 if address else 400,{'queued':bool(address),'recipient':address,**({} if address else {'error':'Włącz podsumowanie i podaj adres e-mail w Sprzedaży i dostawach (albo e-mail kontaktowy w Uruchomieniu sklepu).'})})
+            if path=='/api/admin/giftcards':
+                data=self.body()
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        card=giftcards.issue(c,data.get('value'),self.request_user['id'],data.get('recipient_email',''),data.get('message',''),data.get('expires_at',''),None,data.get('note',''))
+                        if data.get('send_email') is True and card['recipient_email']:mail.enqueue_guest(c,'gift_card_issued',card['recipient_email'],f"gift_card:{card['id']}")
+                        audit(c,'giftcard',card['id'],f"Wydano kartę {giftcards.mask(card['code'])} o wartości {card['initial_value']/100:.2f} PLN")
+                except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(201,card)
+            if path=='/api/promo/check':
+                data=self.body()
+                if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                subtotal=data.get('subtotal',0)
+                if isinstance(subtotal,bool) or not isinstance(subtotal,int) or subtotal<0:raise Invalid('Nieprawidłowa wartość koszyka')
+                try:
+                    with connect() as c:row,discount=merch.find_code(c,data.get('code'),subtotal)
+                except merch.MerchError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,merch.public_code(row,discount))
+            if path in ('/api/price-alerts','/api/cart/draft'):
+                data=self.body()
+                if data.get('website'):return self.respond(200,{'ok':True})  # honeypot
+                if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        result=retention.subscribe_price(c,data.get('product_id'),data.get('email')) if path=='/api/price-alerts' else retention.save_draft(c,data)
+                except retention.RetentionError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,result)
+            if path=='/api/stock-alerts':
+                data=self.body()
+                if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        result=merch.subscribe(c,data.get('product_id'),data.get('size'),data.get('email'))
+                except merch.MerchError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,result)
+            if path=='/api/admin/promo':
+                data=self.body()
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        result=merch.save_code(c,data)
+                        audit(c,'promo',result['id'],f"Utworzono kod {result['code']}")
+                except merch.MerchError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(201,result)
+            if path=='/api/admin/stock-alerts/notify':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    queued=merch.notify_available(c)
+                return self.respond(200,{'queued':queued})
+            if path=='/api/orders/lookup':
+                data=self.body()
+                number=data.get('order');email=data.get('email')
+                if isinstance(number,str):number=number.strip().upper().removeprefix('ZS-').lstrip('0') or '0'
+                try:oid=int(number)
+                except (TypeError,ValueError):raise Invalid('Podaj numer zamówienia (np. ZS-00012)')
+                email=auth.identifier_value(email,email=True)
+                if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele prób. Spróbuj później."})
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    detail=sales.details(c,oid)
+                    owner=c.execute('SELECT u.identifier FROM order_receipts r JOIN users u ON u.id=r.customer_id WHERE r.order_id=?',(oid,)).fetchone()
+                    known={(detail['customer_email'] if detail else ''),(owner['identifier'] if owner else '')}-{''}
+                    if email in known:
+                        mail.enqueue_order(c,oid,'order_created',resend=True)
+                        audit(c,'order',oid,'Ponownie wysłano link do zamówienia na adres klienta')
+                return self.respond(200,{'ok':True,'message':'Jeśli zamówienie istnieje i adres się zgadza, wyślemy link do jego podglądu e-mailem.'})
+            return_route=re.fullmatch(r'/api/orders/([1-9][0-9]*)/returns',path)
+            if return_route:
+                data=self.body();token=data.get('tracking_token')
+                if not isinstance(token,str) or len(token)>128:raise Invalid('Nieprawidłowe zamówienie')
+                if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele prób. Spróbuj później."})
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    oid=int(return_route.group(1))
+                    receipt=c.execute('SELECT * FROM order_receipts WHERE order_id=?',(oid,)).fetchone()
+                    if not receipt or not secrets.compare_digest(receipt['tracking_token'],token):return self.respond(404,{'error':'Nie znaleziono zamówienia'})
+                    created=returns.register(c,oid,data,'customer')
+                    mail.enqueue_order(c,oid,'return_update',f"{created['id']}:{created['status']}")
+                return self.respond(201,{'ok':True,'return':{key_:created[key_] for key_ in ('id','kind','status','reason_label','created')}})
+            retry_route=re.fullmatch(r'/api/orders/([1-9][0-9]*)/payment/retry',path)
+            if retry_route:
+                data=self.body();token=data.get('tracking_token')
+                if not isinstance(token,str) or len(token)>128:raise Invalid('Nieprawidłowe zamówienie')
+                if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele prób. Spróbuj później."})
+                with connect() as c:
+                    oid=int(retry_route.group(1))
+                    receipt=c.execute('SELECT * FROM order_receipts WHERE order_id=?',(oid,)).fetchone()
+                    if not receipt or not secrets.compare_digest(receipt['tracking_token'],token):return self.respond(404,{'error':'Nie znaleziono zamówienia'})
+                    order=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone();detail=sales.details(c,oid)
+                    if readiness(c)['mode']!='live' or not detail or detail['mode']!='live' or detail['payment_method']!='payu':return self.respond(409,{'error':'To zamówienie nie korzysta z płatności online','code':'payment_not_applicable'})
+                    if order['status']!='oczekuje_platnosci' or detail['payment_status']=='paid':return self.respond(409,{'error':'Zamówienie nie oczekuje już na płatność','code':'payment_not_pending'})
+                    channel=payments.parse_channel(data.get('payment_channel'))
+                    open_attempt=None if channel else payments.open_attempt(c,oid)
+                    if open_attempt:return self.respond(200,{'redirect_url':open_attempt['redirect_url'],'ext_order_id':open_attempt['ext_order_id'],'resumed':True})
+                    row=payments.create_order(c,order,{**detail,'tracking_token':receipt['tracking_token'],'shipping_fee':receipt['shipping_fee']},self.client_ip(),json.loads(order['items']),channel=channel)
+                return self.respond(200,{'redirect_url':row['redirect_url'],'ext_order_id':row['ext_order_id'],'awaiting_confirmation':not row['redirect_url'],'pay_method':row['pay_method']})
             with connect() as c:
                 if auth.dispatch(self,path,c):return
+                if auth.staff_dispatch(self,path,c):return
                 if mail.dispatch(self,path,c):return
             data=self.body()
             if path=='/api/admin/pos/sales':
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
-                    user=auth.require_user(self,'admin')
-                    result=ops.create_sale(c,data,user['id'])
+                    result=ops.create_sale(c,data,self.request_user['id'],live=readiness(c)['mode']=='live',can_discount='discounts' in auth.capabilities(self.request_user))
+                    result['gift_cards']=giftcards.order_cards(c,result['id'])
                     if not result['replayed']:mail.enqueue_order(c,result['id'])
                 return self.respond(200 if result['replayed'] else 201,result)
             completion_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)/complete',path)
             if completion_route:
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
-                    result=ops.complete(c,int(completion_route.group(1)),data,auth.require_user(self,'admin')['id'])
+                    result=ops.complete(c,int(completion_route.group(1)),data,self.request_user['id'])
                     mail.enqueue_order(c,result['id'],'order_status_changed')
                 return self.respond(200,result)
+            if path=='/api/admin/brand/logo':
+                try:return self.respond(201,{'url':brand.write_logo(data)})
+                except brand.BrandError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
             if path=='/api/admin/home/media':
                 try:return self.respond(201,{'url':cms.write_media(data)})
                 except ValueError as ex:return self.error(ex)
@@ -355,6 +702,22 @@ class Handler(BaseHTTPRequestHandler):
                         result=cms.get(c,admin=True)
                     return self.respond(200,result)
                 except RuntimeError as ex:return self.respond(409,{'error':str(ex)})
+            if path=='/api/admin/home/schedule':
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        at=cms.schedule(c,data.get('revision'),data.get('at'))
+                        audit(c,'homepage','scheduled','Zaplanowano publikację strony głównej na '+at)
+                        result=cms.get(c,admin=True)
+                    return self.respond(200,result)
+                except RuntimeError as ex:return self.respond(409,{'error':str(ex)})
+            if path=='/api/admin/home/schedule/cancel':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    cms.cancel_schedule(c)
+                    audit(c,'homepage','schedule_cancelled','Anulowano zaplanowaną publikację strony głównej')
+                    result=cms.get(c,admin=True)
+                return self.respond(200,result)
             if path=='/api/admin/home/restore':
                 try:
                     with connect() as c:
@@ -394,11 +757,38 @@ class Handler(BaseHTTPRequestHandler):
                                       (variant['id'],delta,reason.strip(),stamp(),'inventory-import'))
                             changes.append({'sku':sku,'old':variant['stock'],'new':stock,'delta':delta})
                             affected.add(variant['product_id'])
+                    merch.notify_available(c)
                     for product_id in affected:
                         c.execute('UPDATE products SET stock=(SELECT COALESCE(SUM(stock),0) FROM product_variants WHERE product_id=?) WHERE id=?',
                                   (product_id,product_id))
                     audit(c,'stock-import','bulk',f"Zaktualizowano {len(changes)} wariantów, import: {reason.strip()[:120]}")
                 return self.respond(200,{'ok':True,'rows':len(rows),'changed':len(changes),'changes':changes})
+            account_return=re.fullmatch(r'/api/account/orders/([1-9][0-9]*)/returns',path)
+            if account_return:
+                user=auth.require_user(self,'customer')
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    oid=int(account_return.group(1))
+                    if not c.execute('SELECT 1 FROM order_receipts WHERE order_id=? AND customer_id=?',(oid,user['id'])).fetchone():return self.respond(404,{'error':'Nie znaleziono zamówienia'})
+                    created=returns.register(c,oid,data,'customer')
+                    mail.enqueue_order(c,oid,'return_update',f"{created['id']}:{created['status']}")
+                return self.respond(201,{'ok':True,'return':{key_:created[key_] for key_ in ('id','kind','status','reason_label','created')}})
+            if path=='/api/account/giftcards':
+                user=auth.require_user(self,'customer')
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        card=giftcards.attach(c,data.get('code'),user['id'])
+                except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,card)
+            if path=='/api/account/favorites':
+                user=auth.require_user(self,'customer')
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        ids=retention.merge_favorites(c,user['id'],data.get('ids'),replace=data.get('replace') is True)
+                except retention.RetentionError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,{'ids':ids})
             if path=='/api/account/orders/claim':
                 user=auth.require_user(self,'customer')
                 oid=data.get('id');token=data.get('tracking_token')
@@ -421,11 +811,9 @@ class Handler(BaseHTTPRequestHandler):
                     elif not user:raise auth.AuthError(401,'Zaloguj się na konto użyte do tego zamówienia.','checkout_account_required')
                     elif requested!=owner:raise auth.AuthError(409,'To zamówienie rozpoczęto na innym koncie.','checkout_account_required')
                 if owner:auth.require_csrf(self)
-                if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele zamówień testowych. Spróbuj później."})
+                if not self.public_rate():return self.respond(429,{"error":"Zbyt wiele zamówień. Spróbuj później."})
                 lines=data.get("items")
                 if not isinstance(lines,list) or not 1<=len(lines)<=20:raise Invalid("Pusty lub nieprawidłowy koszyk")
-                fulfillment=data.get("fulfillment","odbior")
-                if not isinstance(fulfillment,str) or fulfillment not in SHIPPING:raise Invalid("Nieprawidłowa metoda dostawy")
                 key=data.get("idempotency_key")
                 if key is not None and (not isinstance(key,str) or not re.fullmatch(r"[A-Za-z0-9_-]{16,128}",key)):raise Invalid("Nieprawidłowy identyfikator zamówienia")
                 normalized=[]
@@ -439,48 +827,193 @@ class Handler(BaseHTTPRequestHandler):
                     if 'personalization' in line:
                         item['personalization'] = personalization.normalize_request(line['personalization'])
                     normalized.append(item)
-                # Retain v0.4 fingerprints for old guest attempts; identity is checked separately.
-                fingerprint=hashlib.sha256(json.dumps({"items":normalized,"fulfillment":fulfillment},sort_keys=True).encode()).hexdigest()
+                extended=any(key_ in data for key_ in ('customer','shipping','payment','invoice','consents'))
+                try:channel=payments.parse_channel(data.get('payment_channel'))
+                except payments.PaymentError as ex:raise Invalid(str(ex))
                 result=[]
                 with connect() as c:
                     c.execute("BEGIN IMMEDIATE")
+                    state=readiness(c);live=state['mode']=='live';mode='live' if live else 'test'
+                    config=sales.settings(c)
+                    gift_products={row['product_id'] for row in c.execute('SELECT product_id FROM product_options WHERE gift_card=1')}
+                    digital_only=all(line['id'] in gift_products for line in normalized)
+                    available_methods=[dict(sales.EMAIL_METHOD)] if digital_only else sales.shipping_methods(c,enabled_only=live)
+                    checkout=sales.validate_checkout(data,available_methods,sales.payment_options(c,config,payments.ready()),config,live)
+                    if digital_only and checkout['payment']=='pickup':raise Invalid('Kartę podarunkową wysyłamy e-mailem, wybierz płatność online albo przelew')
+                    gift_input=data.get('gift_card') if isinstance(data.get('gift_card'),str) and data.get('gift_card').strip() else None
+                    gift_meta=data.get('gift') if isinstance(data.get('gift'),dict) else {}
+                    method=checkout['method']
+                    identity={"items":normalized,"fulfillment":method['code']}
+                    if extended:identity['checkout']={key_:checkout[key_] for key_ in ('customer','address','locker_code','payment','invoice','consents')}
+                    promo_input=data.get('promo_code') if isinstance(data.get('promo_code'),str) and data.get('promo_code').strip() else None
+                    if promo_input:identity['promo']=promo_input.strip().upper()
+                    if gift_input:identity['gift']=gift_input.strip().upper()
+                    # Retain v0.4 fingerprints for old guest attempts; identity is checked separately.
+                    fingerprint=hashlib.sha256(json.dumps(identity,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
                     if key:
                         previous=c.execute("SELECT r.*,o.total FROM order_receipts r JOIN orders o ON o.id=r.order_id WHERE idempotency_key=?",(key,)).fetchone()
                         if previous:
                             if previous['customer_id']!=owner:return self.respond(409,{'error':'Zaloguj się na konto użyte do tego zamówienia.','code':'checkout_account_required'})
                             if previous["fingerprint"]!=fingerprint:return self.respond(409,{"error":"Ten identyfikator jest już przypisany do innego koszyka. Odśwież zamówienie."})
-                            return self.respond(200,{"id":previous["order_id"],"total":previous["total"],"tracking_token":previous["tracking_token"]})
+                            return self.respond(200,checkout_reply(c,previous["order_id"],previous["total"],previous["tracking_token"]))
                     total=0
                     for line in normalized:
-                        if not isinstance(line,dict):raise Invalid("Nieprawidłowy produkt")
-                        pid=int(line.get("id",0));qty=int(line.get("quantity",0))
-                        size=str(line.get("size") or "UNI").strip().upper()
-                        if qty<1 or qty>20 or len(size)>10:raise Invalid("Nieprawidłowy rozmiar lub ilość")
+                        pid=line["id"];qty=line["quantity"];size=line["size"]
                         p=c.execute("SELECT * FROM products WHERE id=?",(pid,)).fetchone()
                         v=c.execute("SELECT * FROM product_variants WHERE product_id=? AND size=?",(pid,size)).fetchone()
                         if not p or not v:raise Invalid("Wybierz poprawny wariant produktu")
-                        if v["stock"]<qty:raise Invalid("Niewystarczająca dostępność wariantu "+size)
-                        c.execute("UPDATE product_variants SET stock=stock-? WHERE id=?",(qty,v["id"]))
-                        c.execute("UPDATE products SET stock=stock-? WHERE id=?",(qty,pid))
-                        c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(v["id"],-qty,"zamówienie testowe",stamp(),"checkout"))
+                        gift_line=pid in gift_products
+                        release=personalization.product_options(c,pid)['release_at']
+                        if merch.unreleased({'release_at':release}):raise Invalid(f"{p['name']}: premiera {merch.release_label(release)}. Do tego czasu produkt nie jest sprzedawany online.")
+                        if not gift_line:
+                            if v["stock"]<qty:raise Invalid("Niewystarczająca dostępność wariantu "+size)
+                            c.execute("UPDATE product_variants SET stock=stock-? WHERE id=?",(qty,v["id"]))
+                            c.execute("UPDATE products SET stock=stock-? WHERE id=?",(qty,pid))
+                            c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(v["id"],-qty,"zamówienie" if live else "zamówienie testowe",stamp(),"checkout"))
                         printed,fee=personalization.snapshot(c,pid,line.get('personalization'))
                         unit_price=p['price']+fee
                         total+=unit_price*qty
-                        item={"sku":p["sku"],"variant_sku":v["sku"],"name":p["name"],"size":size,"qty":qty,
+                        item={"sku":p["sku"],"variant_sku":v["sku"],"ean":v["ean"],"name":p["name"],"size":size,"qty":qty,
                               "base_unit_price":p['price'],"personalization_fee":fee,"unit_price":unit_price}
                         if printed is not None:item['personalization']=printed
+                        extras=personalization.line_extras(c,pid)
+                        if printed is not None:item.update({key_:extras[key_] for key_ in ('decoration_method','print_layout') if key_ in extras})
+                        if 'preorder' in extras:item['preorder']=extras['preorder']
+                        if gift_line:item['gift_card']=True
                         result.append(item)
                     now=stamp()
                     subtotal=total
-                    shipping=0 if subtotal>=FREE_SHIPPING else SHIPPING[fulfillment]
-                    total+=shipping
-                    cur=c.execute("INSERT INTO orders(created,items,total,status) VALUES(?,?,?,?)",(now,json.dumps(result,ensure_ascii=False),total,"nowe"))
+                    promo=None;discount=0
+                    if promo_input:
+                        promo_subtotal=sum(item['unit_price']*item['qty'] for item in result if not giftcards.is_gift_line(item))
+                        if promo_subtotal<=0:raise Invalid('Kod rabatowy nie obejmuje kart podarunkowych')
+                        try:promo,discount=merch.find_code(c,promo_input,promo_subtotal)
+                        except merch.MerchError as ex:raise Invalid(str(ex))
+                    # Free-shipping thresholds apply to what the customer actually pays for the goods, i.e. after the discount.
+                    shipping=sales.shipping_cost(method,subtotal-discount)
+                    total+=shipping-discount
+                    gift_applied=0
+                    if gift_input:
+                        try:_,gift_applied=giftcards.preview(c,gift_input,total)
+                        except giftcards.GiftError as ex:raise Invalid(str(ex))
+                    total-=gift_applied
+                    if total<=0 and checkout['payment']=='payu' and not gift_applied:raise Invalid('Zamówienie o wartości 0 zł nie wymaga płatności online. Wybierz inną płatność.')
+                    status=sales.initial_status(checkout['payment'],mode)
+                    cur=c.execute("INSERT INTO orders(created,items,total,status) VALUES(?,?,?,?)",(now,json.dumps(result,ensure_ascii=False),total,status))
+                    oid=cur.lastrowid
                     tracking=secrets.token_urlsafe(32)
-                    c.execute("INSERT INTO order_receipts(order_id,tracking_token,fulfillment,shipping_fee,subtotal,idempotency_key,fingerprint,customer_id) VALUES(?,?,?,?,?,?,?,?)",(cur.lastrowid,tracking,fulfillment,shipping,subtotal,key,fingerprint,owner))
-                    c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(cur.lastrowid,now,"nowe"))
-                    audit(c,"order",cur.lastrowid,"Utworzono zamówienie demonstracyjne")
-                    mail.enqueue_order(c,cur.lastrowid)
-                return self.respond(201,{"id":cur.lastrowid,"total":total,"tracking_token":tracking})
+                    c.execute("INSERT INTO order_receipts(order_id,tracking_token,fulfillment,shipping_fee,subtotal,idempotency_key,fingerprint,customer_id) VALUES(?,?,?,?,?,?,?,?)",(oid,tracking,method['code'],shipping,subtotal,key,fingerprint,owner))
+                    c.execute("INSERT INTO events(order_id,created,status) VALUES(?,?,?)",(oid,now,status))
+                    gift_record=None
+                    if gift_applied:
+                        card,gift_applied=giftcards.redeem(c,gift_input,total+gift_applied,oid,f'zamówienie {oid}')
+                        gift_record={'code':card['code'],'amount':gift_applied}
+                    if any(line['id'] in gift_products for line in normalized):
+                        try:gift_record={**(gift_record or {}),'email':giftcards._email(gift_meta.get('email','')),'message':giftcards._text(gift_meta.get('message',''),'wiadomość',300)}
+                        except giftcards.GiftError as ex:raise Invalid(str(ex))
+                    sales.save_details(c,oid,checkout,mode,{'code':promo['code'],'discount':discount} if promo else None,gift_record)
+                    if live and checkout['consents'].get('marketing') and checkout['customer'].get('email'):engage.subscribe_quietly(c,checkout['customer']['email'],'checkout')
+                    if checkout['customer'].get('email'):retention.convert_draft(c,checkout['customer']['email'])
+                    if gift_applied and total==0:
+                        c.execute('UPDATE order_details SET payment_method=? WHERE order_id=?',('giftcard',oid))
+                        sales.mark_paid(c,oid,gift_applied,'Karta podarunkowa',giftcards.mask(gift_record['code']))
+                    elif total==0 and live:
+                        sales.mark_paid(c,oid,0,'Rabat',f"kod {promo['code']}" if promo else 'zamówienie bez płatności')
+                    if promo:merch.consume(c,promo['id']);audit(c,'order',oid,f"Kod rabatowy {promo['code']}: -{discount/100:.2f} PLN")
+                    audit(c,"order",oid,"Utworzono zamówienie" if live else "Utworzono zamówienie demonstracyjne")
+                    start_payu=live and checkout['payment']=='payu' and total>0
+                    mail.enqueue_order(c,oid)
+                # The PayU round-trip happens after the order is committed: the write lock is never held across network I/O.
+                if start_payu:
+                    with connect() as c:
+                        order_row=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
+                        try:payments.create_order(c,order_row,{**sales.details(c,oid),'tracking_token':tracking,'shipping_fee':shipping},self.client_ip(),result,channel=channel)
+                        except payments.PaymentError as ex:
+                            sales.mark_payment(c,oid,'failed','PayU: '+ex.code)
+                            audit(c,'payment',oid,'Nie udało się rozpocząć płatności online: '+ex.code)
+                with connect() as c:reply=checkout_reply(c,oid,total,tracking)
+                return self.respond(201,reply)
+            if path in ('/api/admin/shifts/open','/api/admin/shifts/close'):
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    helper=ops.start_shift if path.endswith('/open') else ops.close_shift
+                    result=helper(c,data,self.request_user['id'])
+                return self.respond(201 if path.endswith('/open') else 200,result)
+            if path=='/api/admin/shipping':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    method=sales.save_shipping(c,data)
+                    audit(c,'settings','shipping',f"Dodano metodę dostawy {method['code']}")
+                return self.respond(201,method)
+            payment_route=re.fullmatch(r'/api/admin/orders/([1-9][0-9]*)/payment',path)
+            if payment_route:
+                oid=int(payment_route.group(1));action=data.get('action');note=str(data.get('note','')).strip()[:200]
+                actor=self.request_user['id']
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    order=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone();detail=sales.details(c,oid)
+                    if not order or not detail:return self.respond(404,{'error':'Nie znaleziono zamówienia'})
+                    if action=='confirm':
+                        if detail['payment_method']=='payu':raise Invalid('Płatności PayU potwierdza operator; użyj ręcznego potwierdzenia tylko dla przelewu lub odbioru')
+                        changed=sales.mark_paid(c,oid,order['total'],'Ręcznie',f'administrator {actor}: {note}')
+                        audit(c,'payment',oid,f'Administrator {actor}: potwierdzono wpłatę ({detail["payment_method"]}) {note}')
+                        if changed:mail.enqueue_order(c,oid,'order_paid')
+                    elif action=='refund':
+                        amount=data.get('amount',order['total'])
+                        if detail['payment_method']=='payu':
+                            refund=payments.request_refund(c,oid,amount,note,actor)
+                        else:
+                            if isinstance(amount,bool) or not isinstance(amount,int) or not 1<=amount<=order['total']:raise Invalid('Nieprawidłowa kwota zwrotu')
+                            if detail['payment_status'] not in ('paid','partially_refunded'):raise Invalid('Zwrot można zarejestrować tylko dla opłaconego zamówienia')
+                            sales.mark_payment(c,oid,'refunded' if amount>=order['total'] else 'partially_refunded',f'Zwrot ręczny {amount/100:.2f} PLN: {note}')
+                            audit(c,'payment',oid,f'Administrator {actor}: zarejestrowano zwrot {amount/100:.2f} PLN ({detail["payment_method"]}) {note}')
+                    elif action=='note':
+                        sales.mark_payment(c,oid,detail['payment_status'],note)
+                        audit(c,'payment',oid,f'Administrator {actor}: notatka płatności: {note}')
+                    else:raise Invalid('Wybierz działanie: confirm, refund lub note')
+                    reply={'ok':True,'details':sales.details(c,oid),'payments':payments.order_payments(c,oid),'status':c.execute('SELECT status FROM orders WHERE id=?',(oid,)).fetchone()['status']}
+                return self.respond(200,reply)
+            shipment_route=re.fullmatch(r'/api/admin/orders/([1-9][0-9]*)/shipment',path)
+            if shipment_route:
+                oid=int(shipment_route.group(1))
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    detail=sales.record_shipment(c,oid,data)
+                    audit(c,'order',oid,f"Administrator {self.request_user['id']}: nadano przesyłkę {detail['carrier']} {detail['tracking_number']}")
+                    mail.enqueue_order(c,oid,'order_status_changed')
+                return self.respond(200,{'ok':True,'details':detail,'status':'wyslane'})
+            page_action=re.fullmatch(r'/api/admin/pages/([a-z0-9-]{1,60})/(publish|unpublish)',path)
+            if page_action:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    slug,action=page_action.groups()
+                    result=pages.publish(c,slug,data) if action=='publish' else pages.unpublish(c,slug)
+                    audit(c,'pages',slug,f"Administrator {self.request_user['id']}: {'opublikowano' if action=='publish' else 'wycofano'} stronę {slug}")
+                return self.respond(200,result)
+            if path=='/api/admin/returns':
+                oid=data.get('order_id')
+                if isinstance(oid,bool) or not isinstance(oid,int) or oid<1:raise Invalid('Podaj numer zamówienia')
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    created=returns.register(c,oid,data,'staff',self.request_user['id'])
+                    mail.enqueue_order(c,oid,'return_update',f"{created['id']}:{created['status']}")
+                return self.respond(201,created)
+            cancel_route=re.fullmatch(r'/api/admin/orders/([1-9][0-9]*)/cancel',path)
+            if cancel_route:
+                auth.require_staff(self,'returns')
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    oid=int(cancel_route.group(1))
+                    result=returns.cancel_after_personalization(c,oid,self.request_user['id'],data.get('reason'))
+                    giftcards.release(c,oid,'anulowanie zamówienia')
+                    mail.enqueue_order(c,oid,'order_status_changed')
+                return self.respond(200,result)
+            if path=='/api/admin/orders/expire-unpaid':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    cancelled=sales.expire_unpaid(c)
+                    for oid in cancelled:mail.enqueue_order(c,oid,'order_status_changed')
+                return self.respond(200,{'ok':True,'cancelled':cancelled})
             if path=='/api/admin/products':
                 product=personalization.validate_product(data)
                 with connect() as c:
@@ -488,7 +1021,9 @@ class Handler(BaseHTTPRequestHandler):
                     cur=c.execute('INSERT INTO products(name,sku,category,price,stock) VALUES(?,?,?,?,?)',
                                   tuple(product[key] for key in ('name','sku','category','price','stock')))
                     pid=cur.lastrowid
+                    product['created_at']=stamp()
                     personalization.save_options(c,pid,product)
+                    pricing.record(c,pid,product['price'],self.request_user['id'])
                     sizes=sizes_for(product)
                     base,rem=divmod(product['stock'],len(sizes))
                     for index,size in enumerate(sizes):
@@ -498,11 +1033,16 @@ class Handler(BaseHTTPRequestHandler):
                     result=next(p for p in catalog(c) if p['id']==pid)
                     c.commit()
                     return self.respond(201,result)
+            if path=='/api/admin/players/photo':
+                try:return self.respond(201,{'url':brand.write_image(data,kind='photo')})
+                except brand.BrandError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
             if path=='/api/admin/players':
                 player=personalization.player_value(data)
                 with connect() as c:
-                    cur=c.execute('INSERT INTO players(name,print_name,number,active) VALUES(?,?,?,?)',
-                                  tuple(player[key] for key in ('name','print_name','number','active')))
+                    c.execute('BEGIN IMMEDIATE')
+                    cur=c.execute('INSERT INTO players(name,print_name,number,active,position,photo) VALUES(?,?,?,?,?,?)',
+                                  tuple(player[key] for key in ('name','print_name','number','active','position','photo')))
+                    c.execute('UPDATE players SET slug=? WHERE id=?',(personalization.player_slug(c,player['name'],cur.lastrowid),cur.lastrowid))
                     audit(c,'player',cur.lastrowid,'Dodano zawodnika do listy nadruków')
                     result=personalization.player_public(c.execute('SELECT * FROM players WHERE id=?',(cur.lastrowid,)).fetchone(),True)
                     c.commit()
@@ -534,10 +1074,10 @@ class Handler(BaseHTTPRequestHandler):
                     audit(c,"production",cur.lastrowid,f"Rezerwacja {count} transferów, zlecenie {oid}, poz. {idx+1}")
                     return self.respond(201,{"id":cur.lastrowid})
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError,pages.PageError,giftcards.GiftError,merch.MerchError,engage.EngageError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError,sqlite3.IntegrityError) as ex:
             return self.error(ex)
-        except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
+        except sqlite3.Error:return self.db_failure("Błąd zapisu danych")
 
     def do_PATCH(self):
         path=urlparse(self.path).path
@@ -545,12 +1085,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             with connect() as c:
                 if auth.dispatch(self,path,c):return
+                if auth.staff_dispatch(self,path,c):return
             data=self.body()
             operation_route=re.fullmatch(r'/api/admin/fulfillment/([1-9][0-9]*)',path)
             if operation_route:
                 with connect() as c:
                     c.execute('BEGIN IMMEDIATE')
-                    result=ops.update_line(c,int(operation_route.group(1)),data,auth.require_user(self,'admin')['id'])
+                    result=ops.update_line(c,int(operation_route.group(1)),data,self.request_user['id'])
                     mail.enqueue_order(c,result['id'],'order_status_changed')
                 return self.respond(200,result)
             if path=='/api/admin/home':
@@ -567,9 +1108,44 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute('BEGIN IMMEDIATE')
                     changed=launch.update(c,data)
                     audit(c,'launch','settings','Zmieniono konfigurację uruchomienia: '+','.join(changed.keys()))
-                    result=launch.snapshot(c)
+                    result=launch.snapshot(c,readiness=readiness(c))
                     c.commit()
                     return self.respond(200,result)
+            page_route=re.fullmatch(r'/api/admin/pages/([a-z0-9-]{1,60})',path)
+            if page_route:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    result=pages.save_draft(c,page_route.group(1),data)
+                    audit(c,'pages',page_route.group(1),f"Administrator {self.request_user['id']}: zapisano szkic strony {page_route.group(1)}")
+                return self.respond(200,result)
+            withdrawal_route=re.fullmatch(r'/api/admin/withdrawals/([1-9][0-9]*)',path)
+            if withdrawal_route:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    result=withdrawal.update(c,int(withdrawal_route.group(1)),data)
+                    audit(c,'withdrawal',withdrawal_route.group(1),f"Obsługa {self.request_user['id']}: oświadczenie o odstąpieniu oznaczone jako {result['status']}")
+                return self.respond(200,result)
+            return_route=re.fullmatch(r'/api/admin/returns/([1-9][0-9]*)',path)
+            if return_route:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    result=returns.resolve(c,int(return_route.group(1)),data,self.request_user['id'],payments,lambda conn:ops.open_shift(conn,'Kasa 1'))
+                    mail.enqueue_order(c,result['order_id'],'return_update',f"{result['id']}:{result['status']}")
+                return self.respond(200,result)
+            if path=='/api/admin/settings':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    changed=sales.update_settings(c,data)
+                    audit(c,'settings','store',f"Administrator {self.request_user['id']}: zmieniono ustawienia sprzedaży: "+','.join(changed))
+                    result={'settings':sales.settings(c),'readiness':readiness(c)}
+                return self.respond(200,result)
+            shipping_route=re.fullmatch(r'/api/admin/shipping/([1-9][0-9]*)',path)
+            if shipping_route:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    method=sales.save_shipping(c,data,int(shipping_route.group(1)))
+                    audit(c,'settings','shipping',f"Zmieniono metodę dostawy {method['code']}")
+                return self.respond(200,method)
             gallery_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/gallery',path)
             if gallery_route:
                 pid=int(gallery_route.group(1))
@@ -581,6 +1157,42 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(200,result)
                 except LookupError as ex:return self.respond(404,{'error':str(ex)})
                 except media.Conflict as ex:return self.respond(409,{'error':str(ex)})
+            gift_patch=re.fullmatch(r'/api/admin/giftcards/([1-9][0-9]*)',path)
+            if gift_patch:
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        card=giftcards.set_status(c,int(gift_patch.group(1)),data.get('status'),data.get('note',''))
+                        audit(c,'giftcard',card['id'],f"Karta {giftcards.mask(card['code'])}: {card['status']}")
+                except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,card)
+            if path=='/api/admin/brand':
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        result=brand.save(c,data)
+                        audit(c,'brand','settings','Zmieniono logotypy rozgrywek i podpis sklepu')
+                except brand.BrandError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,result)
+            engage_patch=re.fullmatch(r'/api/admin/(subscribers|contact)/([1-9][0-9]*)',path)
+            if engage_patch:
+                kind,target=engage_patch.group(1),int(engage_patch.group(2))
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        if kind=='subscribers':result=engage.set_subscriber_status(c,target,data.get('status'))
+                        else:result=engage.update_message(c,target,data)
+                except engage.EngageError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,result)
+            promo_patch=re.fullmatch(r'/api/admin/promo/([1-9][0-9]*)',path)
+            if promo_patch:
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        result=merch.save_code(c,data,int(promo_patch.group(1)))
+                        audit(c,'promo',result['id'],f"Zmieniono kod {result['code']}")
+                except merch.MerchError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,result)
             if path.startswith('/api/admin/products/'):
                 pid=int(path.rsplit('/',1)[1])
                 with connect() as c:
@@ -590,6 +1202,8 @@ class Handler(BaseHTTPRequestHandler):
                     product=personalization.validate_product(data,{**dict(row),**personalization.product_options(c,pid)})
                     c.execute('UPDATE products SET name=?,price=? WHERE id=?',(product['name'],product['price'],pid))
                     personalization.save_options(c,pid,product)
+                    if pricing.record(c,pid,product['price'],self.request_user['id']):
+                        audit(c,'product',pid,f"Zmieniono cenę z {row['price']/100:.2f} na {product['price']/100:.2f} PLN")
                     audit(c,'product',pid,'Zmieniono dane produktu i opcje nadruku')
                     result=next(p for p in catalog(c) if p['id']==pid)
                     c.commit()
@@ -601,8 +1215,9 @@ class Handler(BaseHTTPRequestHandler):
                     row=c.execute('SELECT * FROM players WHERE id=?',(pid,)).fetchone()
                     if not row:return self.respond(404,{'error':'Zawodnik nie istnieje'})
                     player=personalization.player_value(data,{**dict(row),'active':bool(row['active'])})
-                    c.execute('UPDATE players SET name=?,print_name=?,number=?,active=? WHERE id=?',
-                              (*tuple(player[key] for key in ('name','print_name','number','active')),pid))
+                    slug=row['slug'] if row['slug'] and player['name']==row['name'] else personalization.player_slug(c,player['name'],pid)
+                    c.execute('UPDATE players SET name=?,print_name=?,number=?,active=?,position=?,photo=?,slug=? WHERE id=?',
+                              (*tuple(player[key] for key in ('name','print_name','number','active','position','photo')),slug,pid))
                     audit(c,'player',pid,'Zmieniono dane zawodnika na liście nadruków')
                     result=personalization.player_public(c.execute('SELECT * FROM players WHERE id=?',(pid,)).fetchone(),True)
                     c.commit()
@@ -624,14 +1239,24 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute("BEGIN IMMEDIATE")
                     old=c.execute("SELECT * FROM orders WHERE id=?",(oid,)).fetchone()
                     if not old:raise Invalid("Nie istnieje takie zamówienie")
-                    if old["status"] in ("wyslane_demo","anulowane","wydane") and old["status"]!=status:raise Invalid("Zamówienie zostało już zamknięte")
-                    if old['status']!=status and status in ('spakowane','wyslane_demo','wydane'):
-                        raise Invalid('Pakowanie i wydanie potwierdź w sekcji Realizacja po kontroli wszystkich sztuk')
+                    if old["status"] in sales.CLOSED and old["status"]!=status:raise Invalid("Zamówienie zostało już zamknięte")
+                    if old['status']!=status and status in WORKFLOW_STATUS:
+                        raise Invalid('Ten status nadają dedykowane kroki: Realizacja (pakowanie, wydanie), Płatności (opłacone), Wysyłka lub Zwroty')
+                    if old['status']=='oczekuje_platnosci' and status not in ('anulowane','potwierdzone'):
+                        raise Invalid('Zamówienie czeka na płatność, potwierdź wpłatę w sekcji płatności')
                     if status=="anulowane" and old["status"]!="anulowane":
-                        if c.execute('SELECT 1 FROM fulfillment_lines WHERE order_id=? AND printed_qty>0',(oid,)).fetchone():raise Invalid('Nadruk wykonany — anulowanie wymaga obsługi ręcznej')
-                        if c.execute("SELECT 1 FROM production_tasks WHERE order_id=? AND status NOT IN ('oczekuje')",(oid,)).fetchone():raise Invalid("Produkcja rozpoczęta — anulowanie wymaga obsługi ręcznej")
+                        detail=sales.details(c,oid)
+                        if old['status']=='wyslane' or (detail and detail.get('shipped_at')):raise Invalid('Przesyłka została nadana, rozlicz to zamówienie przez zwrot lub reklamację')
+                        if detail and detail['payment_status']=='paid':
+                            sales.mark_payment(c,oid,'paid','Anulowano opłacone zamówienie, wymaga zwrotu wpłaty')
+                            audit(c,'payment',oid,'Anulowano opłacone zamówienie: zleć zwrot w sekcji płatności')
+                        if c.execute('SELECT 1 FROM fulfillment_lines WHERE order_id=? AND printed_qty>0',(oid,)).fetchone():raise Invalid('Nadruk wykonany, anulowanie wymaga obsługi ręcznej')
+                        if c.execute("SELECT 1 FROM production_tasks WHERE order_id=? AND status NOT IN ('oczekuje')",(oid,)).fetchone():raise Invalid("Produkcja rozpoczęta, anulowanie wymaga obsługi ręcznej")
                         if c.execute("SELECT 1 FROM production_tasks WHERE order_id=?",(oid,)).fetchone():raise Invalid("Usuń lub rozlicz rezerwacje DTF przed anulowaniem")
+                        giftcards.release(c,oid,'anulowanie zamówienia')
+                        merch.release_code(c,oid)
                         for line in json.loads(old["items"]):
+                            if giftcards.is_gift_line(line):continue
                             sku=line.get("variant_sku") or line.get("sku","")+"-"+(line.get("size") or "UNI")
                             v=c.execute("SELECT * FROM product_variants WHERE sku=?",(sku,)).fetchone()
                             if v:
@@ -656,6 +1281,7 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute("UPDATE products SET stock=stock+? WHERE id=?",(delta,v["product_id"]))
                     c.execute("INSERT INTO stock_events(variant_id,delta,reason,created,source) VALUES(?,?,?,?,?)",(vid,delta,reason,stamp(),"admin"))
                     audit(c,"stock",vid,f"{delta:+} szt. ({reason})")
+                    if delta>0:merch.notify_available(c)
                 return self.respond(200,{"ok":True})
             if path.startswith("/api/admin/transfers/") and path.endswith("/receive"):
                 tid=int(path.split("/")[-2]);qty=int(data.get("quantity",0))
@@ -682,9 +1308,9 @@ class Handler(BaseHTTPRequestHandler):
                         audit(c,"production",tid,"Etap: "+status)
                 return self.respond(200,{"ok":True})
             return self.respond(404,{"error":"Nie znaleziono"})
-        except (auth.AuthError,ops.OpsError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+        except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError,pages.PageError,giftcards.GiftError,merch.MerchError,engage.EngageError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError) as ex:return self.error(ex)
-        except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
+        except sqlite3.Error:return self.db_failure("Błąd zapisu danych")
 
 if __name__=="__main__":
     if not TOKEN:

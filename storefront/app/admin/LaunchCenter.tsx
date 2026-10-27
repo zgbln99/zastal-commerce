@@ -4,11 +4,11 @@ import {AlertCircle,ArrowUpRight,Building2,Check,CheckCircle2,ClipboardCheck,Cre
 import {useAuth} from "../../components/AuthProvider";
 import "./launch.css";
 
-type Field = "seller_name"|"tax_id"|"business_address"|"support_email"|"support_phone"|"returns_address"|"terms_url"|"privacy_url"|"returns_url"|"shipping_url";
+type Field = "seller_name"|"tax_id"|"business_address"|"support_email"|"support_phone"|"returns_address"|"terms_url"|"privacy_url"|"returns_url"|"shipping_url"|"ga4_id"|"meta_pixel_id";
 type Flag="brand_approved"|"catalog_reviewed"|"inventory_counted"|"supplier_confirmed";
 type Settings=Record<Field,string>&Record<Flag,boolean>;
 type CheckItem={id:string;label:string;ok:boolean;automated:boolean};
-type LaunchData={phase:"prelaunch";checkout_enabled:false;sales_live:false;settings:Settings;checks:CheckItem[];completed:number;total:number;blocking:string[]};
+type LaunchData={phase:"prelaunch"|"live";checkout_enabled:boolean;sales_live:boolean;switch_present?:boolean;requested_mode?:string;settings:Settings;checks:CheckItem[];completed:number;total:number;blocking:string[]};
 const sections:{heading:string;intro:string;fields:{key:Field;label:string;placeholder:string}[]}[]=[
  {heading:"Dane sprzedawcy",intro:"Dane identyfikujące podmiot, który będzie formalnie prowadził sprzedaż.",fields:[
   {key:"seller_name",label:"Pełna nazwa podmiotu",placeholder:"Nazwa z rejestru CEIDG / KRS"},
@@ -23,6 +23,10 @@ const sections:{heading:string;intro:string;fields:{key:Field;label:string;place
   {key:"privacy_url",label:"Polityka prywatności",placeholder:"https://.../prywatnosc"},
   {key:"returns_url",label:"Odstąpienie i zwroty",placeholder:"https://.../zwroty"},
   {key:"shipping_url",label:"Warunki dostaw",placeholder:"https://.../dostawa"}
+ ]},
+ {heading:"Pomiar ruchu (opcjonalnie)",intro:"Narzędzia ładują się dopiero po zgodzie odwiedzającego w oknie cookies. Zostaw puste, jeśli sklep ich nie używa. Wtedy baner informuje tylko o niezbędnych plikach.",fields:[
+  {key:"ga4_id",label:"Google Analytics 4 (identyfikator pomiaru)",placeholder:"G-XXXXXXXXXX"},
+  {key:"meta_pixel_id",label:"Piksel Meta (identyfikator)",placeholder:"Same cyfry"}
  ]}
 ];
 const flagInfo:{key:Flag;heading:string;info:string}[]=[
@@ -58,16 +62,16 @@ export default function LaunchCenter(){
  const dirty=Boolean(data&&draft&&JSON.stringify(data.settings)!==JSON.stringify(draft));
  return <div className="launch-center">
   <section className="launch-hero">
-   <div><span className="launch-eyebrow">ZASTAL COMMERCE / LAUNCH MANAGEMENT</span><h2>URUCHOMIENIE<br/><em>SPRZEDAŻY.</em></h2><p>To jest zaplecze docelowego sklepu. Sprzedaż zostanie aktywowana dopiero po weryfikacji danych i podłączeniu rzeczywistych usług.</p><div className="launch-phase"><span className="launch-dot"/> TRYB PRZYGOTOWANIA · CHECKOUT ZABLOKOWANY</div></div>
+   <div><span className="launch-eyebrow">ZASTAL COMMERCE / LAUNCH MANAGEMENT</span><h2>URUCHOMIENIE<br/><em>SPRZEDAŻY.</em></h2><p>To jest zaplecze docelowego sklepu. Sprzedaż zostanie aktywowana dopiero po weryfikacji danych i podłączeniu rzeczywistych usług.</p><div className="launch-phase"><span className="launch-dot"/> {data?.sales_live?"SPRZEDAŻ ONLINE AKTYWNA":data?.switch_present?"PRZEŁĄCZNIK SERWERA USTAWIONY · BRAKUJE WARUNKÓW":"TRYB PRZYGOTOWANIA · CHECKOUT ZABLOKOWANY"}</div></div>
    <div className="launch-score"><small>KONTROLA GOTOWOŚCI</small><strong>{data?data.completed:"—"}<span>/{data?data.total:"10"}</span></strong><p>Zweryfikowane etapy</p><div><span style={{width:data?data.completed/data.total*100+"%":"0%"}}/></div></div>
   </section>
   {error&&<p role="alert" className="launch-alert error"><AlertCircle size={18}/>{error}</p>}
   {success&&<p role="status" className="launch-alert success"><CheckCircle2 size={18}/>{success}</p>}
   {!data||!draft?<div className="launch-wait"><RefreshCw size={22}/> {busy?"Wczytujemy ustawienia…":"Brak danych konfiguracji."}</div>:<>
-   <section className="launch-section"><header><div><span>01 / CONTROLS</span><h3>Lista gotowości</h3><p>Rzeczywisty status wdrożenia. Cztery integracje wymagają działania po stronie dostawców.</p></div></header><div className="launch-checks">{data.checks.map(item=><div key={item.id} className={item.ok?"complete":""}><span className="launch-check-icon">{item.ok?<Check size={17}/>:<XCircle size={18}/>}</span><div><strong>{item.label}</strong><small>{item.automated?"Wymaga integracji technicznej i testów z usługodawcą":"Kontrola dokumentów / zatwierdzenie przez klub"}</small></div><span>{item.ok?"GOTOWE":"NIEGOTOWE"}</span></div>)}</div></section>
+   <section className="launch-section"><header><div><span>01 / CONTROLS</span><h3>Lista gotowości</h3><p>Rzeczywisty status wdrożenia. Płatności, dostawy, SMTP i dokumentowanie sprzedaży konfigurujesz w zakładce „Sprzedaż i dostawy”; sprzedaż włącza dopiero przełącznik serwera ZASTAL_SALES_MODE=live.</p></div></header><div className="launch-checks">{data.checks.map(item=><div key={item.id} className={item.ok?"complete":""}><span className="launch-check-icon">{item.ok?<Check size={17}/>:<XCircle size={18}/>}</span><div><strong>{item.label}</strong><small>{item.automated?"Wymaga integracji technicznej i testów z usługodawcą":"Kontrola dokumentów / zatwierdzenie przez klub"}</small></div><span>{item.ok?"GOTOWE":"NIEGOTOWE"}</span></div>)}</div></section>
    <div className="launch-columns"><div>
     {sections.map((section,i)=><section className="launch-section" key={section.heading}><header><div><span>{"0"+(i+2)} / MERCHANT</span><h3>{section.heading}</h3><p>{section.intro}</p></div>{i===0?<Building2 size={25}/>:<FileText size={25}/>}</header><div className="launch-fields">{section.fields.map(field=><label key={field.key}>{field.label}{field.key==="business_address"||field.key==="returns_address"?<textarea value={draft[field.key]} rows={2} maxLength={350} placeholder={field.placeholder} onChange={e=>change(field.key,e.target.value)}/>:<input type={field.key.endsWith("_url")?"url":field.key==="support_email"?"email":"text"} value={draft[field.key]} maxLength={field.key.endsWith("_url")?400:field.key==="support_email"?254:160} placeholder={field.placeholder} onChange={e=>change(field.key,e.target.value)}/>}</label>)}</div></section>)}
-   </div><section className="launch-section"><header><div><span>04 / APPROVALS</span><h3>Potwierdzenia klubu</h3><p>Zaznacz dopiero po fizycznym lub formalnym sprawdzeniu każdego zakresu.</p></div><ClipboardCheck size={26}/></header><div className="launch-flags">{flagInfo.map(flag=><label key={flag.key} className={draft[flag.key]?"checked":""}><input type="checkbox" checked={draft[flag.key]} onChange={e=>toggle(flag.key,e.target.checked)}/><span><strong>{flag.heading}</strong><small>{flag.info}</small></span></label>)}</div><div className="launch-warning"><ShieldAlert size={25}/><div><strong>Warunek uruchomienia sklepu</strong><p>Nie ma tu przycisku „Włącz sprzedaż”. Operator płatności, kurierskie etykiety, wiadomości transakcyjne i rozliczenia muszą zostać rzeczywiście podłączone i przetestowane. Zaznaczenie listy nie odblokowuje płatności ani checkoutu.</p></div></div></section></div>
+   </div><section className="launch-section"><header><div><span>04 / APPROVALS</span><h3>Potwierdzenia klubu</h3><p>Zaznacz dopiero po fizycznym lub formalnym sprawdzeniu każdego zakresu.</p></div><ClipboardCheck size={26}/></header><div className="launch-flags">{flagInfo.map(flag=><label key={flag.key} className={draft[flag.key]?"checked":""}><input type="checkbox" checked={draft[flag.key]} onChange={e=>toggle(flag.key,e.target.checked)}/><span><strong>{flag.heading}</strong><small>{flag.info}</small></span></label>)}</div><div className="launch-warning"><ShieldAlert size={25}/><div><strong>Warunek uruchomienia sklepu</strong><p>Nie ma tu przycisku „Włącz sprzedaż”. Po skompletowaniu listy osoba z dostępem do serwera ustawia ZASTAL_SALES_MODE=live w .runtime.env i restartuje API; dopiero wtedy, i tylko przy spełnionych warunkach, checkout przyjmuje zamówienia.</p></div></div></section></div>
    <div className="launch-save"><div><strong>{dirty?"Masz niezapisane zmiany":"Konfiguracja jest aktualna"}</strong><small>Zmiany w panelu zapisują się w historii operacyjnej.</small></div><button className="launch-save-button" type="button" onClick={()=>void save()} disabled={!dirty||busy}><Save size={18}/>{busy?"ZAPISYWANIE...":"ZAPISZ USTAWIENIA"}</button></div>
   </>}
  </div>;

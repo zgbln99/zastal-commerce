@@ -5,13 +5,15 @@ export function readCheckoutAttempt(raw, products) {
     const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!value || typeof value.signature !== 'string' || typeof value.key !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(value.key)) return null;
     const payload = JSON.parse(value.signature);
-    if (!['odbior', 'paczkomat', 'kurier'].includes(payload.fulfillment)) return null;
+    if (typeof payload.fulfillment !== 'string' || !/^[a-z0-9_-]{2,32}$/.test(payload.fulfillment)) return null;
     // A saved request may already have succeeded. Its identity cannot depend on
     // today's products, stock, prices, or active players.
     const items = normalizeCart(payload.items).map(({ personalization_display, ...line }) => line);
     if (!items.length || JSON.stringify(items) !== JSON.stringify(payload.items)) return null;
     if ('account_id' in payload && payload.account_id !== null && (!Number.isSafeInteger(payload.account_id) || payload.account_id < 1)) return null;
-    const normalized = { items, fulfillment: payload.fulfillment, ...('account_id' in payload ? { account_id: payload.account_id } : {}) };
+    const details = normalizeCheckoutDetails(payload);
+    if (details === null) return null;
+    const normalized = { items, fulfillment: payload.fulfillment, ...('account_id' in payload ? { account_id: payload.account_id } : {}), ...details };
     const signature = JSON.stringify(normalized);
     if (signature !== value.signature) return null;
     let display;
@@ -27,7 +29,34 @@ export function readCheckoutAttempt(raw, products) {
   } catch { return null; }
 }
 
-export function resolveCheckoutAttempt(cart, fulfillment, pending, products, key, accountId = null) {
+// Live checkout details travel inside the retained attempt so a retry resends the identical request.
+const TEXT = (value, limit) => typeof value === 'string' && value.length <= limit && !/[\p{Cc}]/u.test(value) ? value.trim() : null;
+export function normalizeCheckoutDetails(payload) {
+  const keys = ['customer', 'shipping', 'payment', 'invoice', 'consents'];
+  if (!keys.some(key => key in payload)) return {};
+  const customer = payload.customer && typeof payload.customer === 'object' ? payload.customer : {};
+  const shipping = payload.shipping && typeof payload.shipping === 'object' ? payload.shipping : {};
+  const address = shipping.address && typeof shipping.address === 'object' ? shipping.address : {};
+  const invoice = payload.invoice && typeof payload.invoice === 'object' ? payload.invoice : {};
+  const consents = payload.consents && typeof payload.consents === 'object' ? payload.consents : {};
+  const fields = {
+    customer: { email: TEXT(customer.email ?? '', 254), name: TEXT(customer.name ?? '', 120), phone: TEXT(customer.phone ?? '', 30) },
+    shipping: { method: TEXT(shipping.method ?? payload.fulfillment, 32), address: { line1: TEXT(address.line1 ?? '', 160), line2: TEXT(address.line2 ?? '', 80), postal_code: TEXT(address.postal_code ?? '', 12), city: TEXT(address.city ?? '', 80), country: TEXT(address.country ?? 'PL', 2) }, locker_code: TEXT(shipping.locker_code ?? '', 24) },
+    payment: ['payu', 'transfer', 'pickup'].includes(payload.payment) ? payload.payment : null,
+    invoice: invoice.requested === true ? { requested: true, company: TEXT(invoice.company ?? '', 160), tax_id: TEXT(invoice.tax_id ?? '', 24), address: TEXT(invoice.address ?? '', 300) } : { requested: false },
+    consents: { terms: consents.terms === true, privacy: consents.privacy === true, marketing: consents.marketing === true },
+    ...(typeof payload.promo_code === 'string' && payload.promo_code ? { promo_code: TEXT(payload.promo_code, 24) } : {}),
+    ...(typeof payload.gift_card === 'string' && payload.gift_card ? { gift_card: TEXT(payload.gift_card, 24) } : {}),
+    ...(payload.gift && typeof payload.gift === 'object' ? { gift: { email: TEXT(payload.gift.email ?? '', 254), message: TEXT(payload.gift.message ?? '', 300) } } : {}),
+    ...(payload.payment === 'payu' && payload.payment_channel && typeof payload.payment_channel === 'object' && ['blik', 'c', 'jp'].includes(payload.payment_channel.value)
+      ? { payment_channel: { value: payload.payment_channel.value, authorization_code: typeof payload.payment_channel.authorization_code === 'string' ? payload.payment_channel.authorization_code.slice(0, 4000) : '' } } : {}),
+  };
+  const flat = [fields.customer.email, fields.customer.name, fields.customer.phone, fields.shipping.method, fields.shipping.locker_code, ...Object.values(fields.shipping.address), ...(fields.invoice.requested ? [fields.invoice.company, fields.invoice.tax_id, fields.invoice.address] : [])];
+  if (flat.some(value => value === null) || fields.payment === null || fields.shipping.method !== payload.fulfillment || fields.promo_code === null || fields.gift_card === null || (fields.gift && (fields.gift.email === null || fields.gift.message === null))) return null;
+  return fields;
+}
+
+export function resolveCheckoutAttempt(cart, fulfillment, pending, products, key, accountId = null, details = null) {
   const recovered = readCheckoutAttempt(pending);
   if (recovered) return recovered;
   if (!canCheckout(cart, products)) return null;
@@ -39,5 +68,7 @@ export function resolveCheckoutAttempt(cart, fulfillment, pending, products, key
     const snapshot = print?.mode === 'custom' ? { name: print.name, number: print.number } : line.personalization_display;
     return { ...line, name: product.name, unit_price: lineUnitPrice(product, line), ...(snapshot ? { personalization_display: { ...snapshot, fee: product.personalization_fee || 0 } } : {}) };
   });
-  return readCheckoutAttempt({ signature: JSON.stringify({ items, fulfillment, account_id: accountId }), key, display });
+  const extra = details ? normalizeCheckoutDetails({ ...details, fulfillment }) : {};
+  if (extra === null) return null;
+  return readCheckoutAttempt({ signature: JSON.stringify({ items, fulfillment, account_id: accountId, ...extra }), key, display });
 }

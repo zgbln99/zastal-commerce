@@ -69,6 +69,43 @@ class CMSIntegration(unittest.TestCase):
         _,live=self.outsider.request("GET","/api/store/home")
         self.assertEqual(live["config"]["sections"][0]["settings"]["title"],"Nowa kampania | sezon 2026")
 
+    def test_zz_scheduled_publication_freezes_the_draft(self):
+        import datetime as dt
+        _,state=self.admin.request("GET","/api/admin/home")
+        conf=copy.deepcopy(state["config"])
+        conf["sections"][0]["settings"]["title"]="Zaplanowany baner"
+        _,draft=self.admin.request("PATCH","/api/admin/home",{"config":conf,"revision":state["revision"]})
+        soon=(dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=2)).isoformat(timespec="seconds")
+        status,_=self.admin.request("POST","/api/admin/home/schedule",{"revision":draft["revision"]-1,"at":soon})
+        self.assertEqual(status,409)
+        for bad in ("jutro","2020-01-01T10:00:00Z",(dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=900)).isoformat(),"2030-01-01T10:00"):
+            status,_=self.admin.request("POST","/api/admin/home/schedule",{"revision":draft["revision"],"at":bad})
+            self.assertEqual(status,400,bad)
+        status,planned=self.outsider.request("POST","/api/admin/home/schedule",{"revision":draft["revision"],"at":soon})
+        self.assertIn(status,(401,403))
+        status,planned=self.admin.request("POST","/api/admin/home/schedule",{"revision":draft["revision"],"at":soon})
+        self.assertEqual(status,200)
+        self.assertTrue(planned["scheduled_at"])
+        _,public=self.outsider.request("GET","/api/store/home")
+        self.assertNotEqual(public["config"]["sections"][0]["settings"]["title"],"Zaplanowany baner")
+        self.assertNotIn("scheduled_at",public)
+        # A later edit of the draft must not change what goes live at the scheduled time.
+        conf["sections"][0]["settings"]["title"]="Inna, późniejsza edycja"
+        self.admin.request("PATCH","/api/admin/home",{"config":conf,"revision":draft["revision"]})
+        with api.connect() as c:
+            c.execute("UPDATE site_home SET scheduled_at=? WHERE id=1",("2020-01-01T00:00:00+00:00",))
+        _,live=self.outsider.request("GET","/api/store/home")
+        self.assertEqual(live["config"]["sections"][0]["settings"]["title"],"Zaplanowany baner")
+        _,after=self.admin.request("GET","/api/admin/home")
+        self.assertIsNone(after["scheduled_at"])
+        self.assertTrue(after["draft_changed"])
+        # Cancel path.
+        status,planned=self.admin.request("POST","/api/admin/home/schedule",{"revision":after["revision"],"at":soon})
+        self.assertEqual(status,200)
+        status,cleared=self.admin.request("POST","/api/admin/home/schedule/cancel",{})
+        self.assertEqual(status,200)
+        self.assertIsNone(cleared["scheduled_at"])
+
     def test_03_stale_revision_and_bad_links_fail(self):
         _,state=self.admin.request("GET","/api/admin/home")
         conf=copy.deepcopy(state["config"])
@@ -124,6 +161,17 @@ class CMSIntegration(unittest.TestCase):
         finally:
             if previous is not None:os.environ["ZASTAL_TEST_MODE"]=previous
 
+    def test_zz_ticker_section_is_validated(self):
+        _,state=self.admin.request("GET","/api/admin/home")
+        conf=copy.deepcopy(state["config"])
+        conf["sections"].append({"id":"pasek-hasel","type":"ticker","enabled":True,"settings":{"items":"Nowa kolekcja | Nadruk na zamówienie","background":"#143e2d","text_color":"#ffffff","speed":30}})
+        status,saved=self.admin.request("PATCH","/api/admin/home",{"config":conf,"revision":state["revision"]})
+        self.assertEqual(status,200,saved)
+        for bad in ({"items":"","speed":30},{"items":"|  |","speed":30},{"items":"a | "*13,"speed":30},{"items":"x"*130,"speed":30},{"items":"ok","speed":5},{"items":"ok","speed":500},{"items":"ok","speed":"30"}):
+            broken=copy.deepcopy(conf)
+            broken["sections"][-1]["settings"].update(bad)
+            status,_=self.admin.request("PATCH","/api/admin/home",{"config":broken,"revision":saved["revision"]})
+            self.assertEqual(status,400,bad)
 
 
 def campaign_config(enabled=False, **changes):

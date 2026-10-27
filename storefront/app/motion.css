@@ -1,0 +1,35 @@
+/* Progress of the hero slider: not decorative (it is the slide clock), so it is not tied to the reduced-motion query. */
+@keyframes hero-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* Motion layer. Decorative only and off for visitors who ask for reduced motion.
+   Scroll reveals use CSS scroll-driven animations: no JavaScript, nothing hidden when the browser lacks support. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes reveal-up { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+  @keyframes reveal-card { from { opacity: 0; transform: translateY(16px) scale(.985); } to { opacity: 1; transform: none; } }
+  @keyframes hero-drift { from { transform: scale(1.07); } to { transform: scale(1); } }
+  @keyframes badge-bump { 0% { transform: scale(1); } 35% { transform: scale(1.4); } 100% { transform: scale(1); } }
+  @keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
+  @keyframes ticker-run { from { transform: translateX(0); } to { transform: translateX(-25%); } }
+  @keyframes banner-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+  @supports (animation-timeline: view()) {
+    .store-site .cms-home > :not(.store-hero):not(.home-pick) { animation: reveal-up linear both; animation-timeline: view(); animation-range: entry 0% entry 28%; }
+    .store-site article.group { animation: reveal-card linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
+  }
+  .store-site .store-hero img.object-cover { animation: hero-fade 700ms ease-out, hero-drift 18s cubic-bezier(.22, .61, .36, 1) both; }
+  .store-site .cart-count.bump { animation: badge-bump .4s ease-out; }
+  .store-site .animate-pop { animation: pop-in .16s ease-out; }
+  .cookie-banner { animation: banner-in .35s ease-out .4s both; }
+  .store-site :is(.button, .btn, .icon-btn, button[class*="rounded-full"], a[class*="rounded-full"]):not(:disabled) { transition-property: transform, background-color, color, border-color, opacity; transition-duration: .14s; }
+  .store-site :is(.button, .btn, .icon-btn, button[class*="rounded-full"], a[class*="rounded-full"]):not(:disabled):active { transform: scale(.97); }
+  .store-site .ticker-track { animation: ticker-run var(--ticker-speed, 30s) linear infinite; }
+  .store-site .ticker:hover .ticker-track, .store-site .ticker:focus-within .ticker-track { animation-play-state: paused; }
+}
+/* The ticker is a static, wrapped list when motion is reduced (the duplicate copy stays hidden from assistive technology). */
+@media (prefers-reduced-motion: reduce) {
+  .store-site .ticker-track { flex-wrap: wrap; justify-content: center; row-gap: .5rem; width: auto; }
+  .store-site .ticker-track [aria-hidden="true"] { display: none; }
+}
+.store-site .ticker { overflow: hidden; }
+.store-site .ticker-track { display: flex; width: max-content; }
+.store-site .ticker-group { display: flex; flex-shrink: 0; align-items: center; justify-content: space-around; min-width: 50vw; }

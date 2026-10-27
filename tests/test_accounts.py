@@ -77,10 +77,98 @@ class AccountTests(unittest.TestCase):
         self.assertEqual(self.admin.request('GET', '/api/admin/inventory')[0], 401)
         self.assertEqual(self.admin.request('GET', '/api/admin/inventory', headers={'Authorization': 'Bearer ' + ADMIN_PASSWORD})[0], 401)
         self.assertEqual(self.customer.register()[0], 201)
-        self.assertEqual(self.customer.request('GET', '/api/admin/inventory')[0], 403)
-        self.assertEqual(self.customer.request('PATCH', '/api/admin/products/1', {'name': 'Hijacked', 'price': 1})[0], 403)
+        # A shop-account session is not a panel session: the panel API answers "sign in", not "forbidden".
+        code, refused = self.customer.request('GET', '/api/admin/inventory')
+        self.assertEqual((code, refused['code']), (401, 'session_required'))
+        self.assertEqual(self.customer.request('PATCH', '/api/admin/products/1', {'name': 'Hijacked', 'price': 1})[0], 401)
         self.assertEqual(self.admin.login('admin', ADMIN_PASSWORD)[0], 200)
         self.assertEqual(self.admin.request('GET', '/api/admin/inventory')[0], 200)
+
+    def test_panel_and_shop_sessions_are_independent(self):
+        port = self.server.server_address[1]
+        browser = Client(port)
+        self.assertEqual(browser.register('fan@example.test')[0], 201)
+        shop_cookie = browser.jar['__Host-zastal_session']
+        # Each account type has its own door: staff cannot sign in to the shop, customers cannot sign in to the panel.
+        self.assertEqual(browser.login('admin', ADMIN_PASSWORD, staff=False)[0], 401)
+        outsider = Client(port)
+        self.assertEqual(outsider.login('fan@example.test', 'Customer password 2026', staff=True)[0], 401)
+        self.assertEqual(outsider.request('GET', '/api/admin/inventory')[0], 401)
+        # Signing in to the panel in the same browser leaves the shop login exactly as it was.
+        code, panel = browser.login('admin', ADMIN_PASSWORD)
+        self.assertEqual((code, panel['user']['role']), (200, 'admin'))
+        self.assertEqual(browser.jar['__Host-zastal_session'], shop_cookie)
+        self.assertIn('__Host-zastal_staff', browser.jar)
+        self.assertEqual(browser.session(staff=False)[1]['user']['identifier'], 'fan@example.test')
+        self.assertEqual(browser.session(staff=True)[1]['user']['identifier'], 'admin')
+        self.assertEqual(browser.request('GET', '/api/account/orders')[0], 200)
+        self.assertEqual(browser.request('GET', '/api/admin/inventory')[0], 200)
+        # The panel cookie alone is not a shop account, and the shop cookie alone is not a panel session.
+        staff_only = Client(port)
+        self.assertEqual(staff_only.login('admin', ADMIN_PASSWORD)[0], 200)
+        self.assertIsNone(staff_only.session(staff=False)[1]['user'])
+        self.assertEqual(staff_only.request('GET', '/api/account/orders')[0], 401)
+        # Signing out of the panel does not sign out the shop, and the other way round.
+        self.assertIsNone(browser.request('POST', '/api/staff/auth/logout', {})[1]['user'])
+        self.assertEqual(browser.request('GET', '/api/admin/inventory')[0], 401)
+        self.assertEqual(browser.session(staff=False)[1]['user']['identifier'], 'fan@example.test')
+        self.assertEqual(browser.login('admin', ADMIN_PASSWORD)[0], 200)
+        self.assertIsNone(browser.request('POST', '/api/auth/logout', {})[1]['user'])
+        self.assertEqual(browser.session(staff=True)[1]['user']['identifier'], 'admin')
+        self.assertEqual(browser.request('GET', '/api/admin/inventory')[0], 200)
+        # The panel has no registration route.
+        self.assertEqual(browser.request('POST', '/api/staff/auth/register', {'email': 'x@example.test', 'name': 'X', 'password': 'Another password 2026'})[0], 404)
+
+    def test_sign_out_still_works_when_the_session_table_cannot_be_written(self):
+        import sqlite3
+        from unittest.mock import patch
+        browser = Client(self.server.server_address[1])
+        self.assertEqual(browser.login('admin', ADMIN_PASSWORD)[0], 200)
+        locked = sqlite3.OperationalError('database is locked')
+        for path in ('/api/staff/auth/logout',):
+            with patch.object(api.auth, 'rotate', side_effect=locked):
+                code, reply = browser.request('POST', path, {})
+            self.assertEqual((code, reply['user']), (200, None))
+            cookies = browser.headers.get_all('Set-Cookie')
+            self.assertTrue(any(c.startswith('__Host-zastal_staff=;') and 'Max-Age=0' in c for c in cookies), cookies)
+        # The browser dropped the cookie: the panel API asks to sign in again.
+        browser.jar.pop('__Host-zastal_staff', None)
+        self.assertEqual(browser.request('GET', '/api/admin/inventory')[0], 401)
+        # The customer door behaves the same way.
+        fan = Client(self.server.server_address[1])
+        self.assertEqual(fan.register('lock@example.test')[0], 201)
+        with patch.object(api.auth, 'rotate', side_effect=locked):
+            code, reply = fan.request('POST', '/api/auth/logout', {})
+        self.assertEqual((code, reply['user']), (200, None))
+
+    def test_database_refusals_are_explained_on_staff_routes_and_in_health(self):
+        import sqlite3
+        from unittest.mock import patch
+        port = self.server.server_address[1]
+        browser = Client(port)
+        full = sqlite3.OperationalError('database or disk is full')
+        with patch.object(api.auth, 'rotate', side_effect=full):
+            code, reply = browser.request('GET', '/api/staff/auth/session')
+            shop_code, shop_reply = Client(port).request('GET', '/api/auth/session')
+        self.assertEqual(code, 500)
+        self.assertEqual(reply['error'], 'Błąd bazy danych')
+        self.assertIn('disk is full', reply['detail'])
+        # A read-only database says who runs the API and who owns the file: the usual cause is a root-owned folder.
+        with patch.object(api.auth, 'rotate', side_effect=sqlite3.OperationalError('attempt to write a readonly database')):
+            code, reply = Client(port).request('GET', '/api/staff/auth/session')
+        self.assertEqual(code, 500)
+        self.assertIn('readonly', reply['detail'])
+        self.assertRegex(reply['detail'], r'API działa jako uid \d+, plik bazy należy do uid \d+, katalog do uid \d+')
+        # The public shop does not get internals.
+        self.assertEqual(shop_code, 500)
+        self.assertNotIn('detail', shop_reply)
+        code, health = browser.request('GET', '/health')
+        self.assertEqual((code, health['ok'], health['db_writable']), (200, True, True))
+        self.assertGreater(health['disk_free_mb'], 0)
+        with patch('shutil.disk_usage') as usage:
+            usage.return_value.free = 50 * 1048576
+            code, health = browser.request('GET', '/health')
+        self.assertEqual((code, health['ok'], health['error'], health['disk_free_mb']), (503, False, 'storage', 50))
 
     def test_csrf_and_cross_origin_mutations_fail_without_changing_identity(self):
         self.assertEqual(self.customer.register()[0], 201)
@@ -253,7 +341,7 @@ class AccountTests(unittest.TestCase):
 
     def test_bootstrap_does_not_reset_administrator_password_on_restart(self):
         self.assertEqual(self.admin.login('admin', ADMIN_PASSWORD)[0], 200)
-        self.assertEqual(self.admin.request('POST', '/api/account/password', {'current_password': ADMIN_PASSWORD, 'password': 'Changed admin password 2026'})[0], 200)
+        self.assertEqual(self.admin.request('POST', '/api/staff/auth/password', {'current_password': ADMIN_PASSWORD, 'password': 'Changed admin password 2026'})[0], 200)
         api.init()
         another = Client(self.server.server_address[1])
         self.assertEqual(another.login('admin', ADMIN_PASSWORD)[0], 401)

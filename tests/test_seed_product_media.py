@@ -37,9 +37,9 @@ class SeedSafety(unittest.TestCase):
                 c.executemany('INSERT INTO products VALUES(?,?,?, ?,?,?)',
                               [(pid, 'Existing '+str(pid), sku, 'Akcesoria', 1200+pid, 21+pid)
                                for pid, sku in enumerate(SKUS, 1)])
-                c.execute('INSERT INTO product_options VALUES(1,?, ?,1,1,550)',
+                c.execute('INSERT INTO product_options(product_id,image,subtitle,personalization_enabled,personalization_required,personalization_fee) VALUES(1,?, ?,1,1,550)',
                           ('/assets/photos/product-1.webp', 'Existing subtitle'))
-                c.execute("INSERT INTO product_options VALUES(8,'','Bag subtitle',0,0,0)")
+                c.execute("INSERT INTO product_options(product_id,image,subtitle,personalization_enabled,personalization_required,personalization_fee) VALUES(8,'','Bag subtitle',0,0,0)")
         finally:
             api.DATABASE, api.TOKEN = previous
 

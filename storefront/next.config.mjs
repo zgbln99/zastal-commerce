@@ -1,6 +1,23 @@
 /** @type {import('next').NextConfig} */
+// Security headers applied by the storefront itself; the per-request CSP with a nonce lives in proxy.ts and Nginx adds HSTS at the TLS edge.
+const securityHeaders = [
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(), payment=()' },
+];
 const nextConfig = {
   reactStrictMode: true,
+  poweredByHeader: false,
+  // Product photos: bundled assets and uploads served by the API (through the /api rewrite) are resized and converted on demand.
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    localPatterns: [{ pathname: '/assets/**' }, { pathname: '/api/store/media/**' }],
+    minimumCacheTTL: 86400,
+  },
+  async headers() {
+    return [{ source: '/(.*)', headers: securityHeaders }];
+  },
   async rewrites() {
     return [{ source: '/api/:path*', destination: 'http://127.0.0.1:8880/api/:path*' }];
   },

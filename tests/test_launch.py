@@ -59,7 +59,7 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(status,201,registered)
         self.assertEqual(registered['user']['role'],'customer')
         status,_=customer.request('GET','/api/admin/products')
-        self.assertEqual(status,403)
+        self.assertEqual(status,401)
         status,_=customer.request('POST','/api/orders',{'items':[{'id':1,'size':'L','quantity':1}]})
         self.assertEqual(status,503)
         with api.connect() as c:
@@ -74,7 +74,7 @@ class LaunchTests(unittest.TestCase):
         self.assertFalse(data["can_activate"])
         self.assertEqual(data["completed"],0)
         payload={"seller_name":"Klub Sportowy TEST","tax_id":"5261040828","business_address":"Testowa 1, 00-001 Warszawa",
-                 "support_email":"kontakt@example.org","brand_approved":True}
+                 "support_email":"kontakt@example.org","support_phone":"+48 601 234 567","brand_approved":True}
         status,updated=self.client.request("PATCH","/api/admin/launch",payload)
         self.assertEqual(status,200)
         self.assertTrue(updated["settings"]["brand_approved"])

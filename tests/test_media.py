@@ -58,8 +58,11 @@ class MediaIntegration(unittest.TestCase):
                 for table in tables}
 
     def test_health_reports_release_without_changing_prelaunch_flags(self):
-        self.assertEqual(self.guest.request('GET', '/health'), (200, {
-            'ok': True, 'version': '0.10', 'sales_phase': 'prelaunch', 'accounts': True, 'cms': True, 'pos': True, 'email': True}))
+        code, health = self.guest.request('GET', '/health')
+        free = health.pop('disk_free_mb')
+        self.assertGreater(free, 0)
+        self.assertEqual((code, health), (200, {
+            'ok': True, 'version': '0.11', 'sales_phase': 'prelaunch', 'accounts': True, 'cms': True, 'pos': True, 'email': True, 'payments': False, 'db_writable': True}))
 
     def test_additive_schema_does_not_mutate_existing_records(self):
         with api.connect() as c:
@@ -191,8 +194,8 @@ class MediaIntegration(unittest.TestCase):
             self.assertEqual(self.guest.request(method, path, {'images': [], 'expected_revision': 0} if method == 'PATCH' else None)[0], 401)
         customer = Client(self.server.server_address[1])
         self.assertEqual(customer.register(email='media-customer@example.test')[0], 201)
-        self.assertEqual(customer.request('GET', path)[0], 403)
-        self.assertEqual(customer.request('PATCH', path, {'images': [], 'expected_revision': 0})[0], 403)
+        self.assertEqual(customer.request('GET', path)[0], 401)
+        self.assertEqual(customer.request('PATCH', path, {'images': [], 'expected_revision': 0})[0], 401)
         self.assertEqual(self.admin.request('PATCH', path, {'images': [], 'expected_revision': 0}, csrf=False)[0], 403)
         self.assertEqual(self.admin.request('PATCH', path, {'images': [], 'expected_revision': 0}, headers={'Origin': 'https://evil.test'})[0], 403)
         self.assertEqual(self.admin.request('PATCH', path, {'images': [], 'expected_revision': 0}, headers={'Sec-Fetch-Site': 'cross-site'})[0], 403)

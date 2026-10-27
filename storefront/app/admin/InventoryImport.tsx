@@ -23,7 +23,7 @@ export default function InventoryImport({inventory,onRefresh}:{inventory:Variant
   const text="\uFEFFsku;stan\n"+inventory.map(v=>v.sku+";"+v.stock).join("\n")+"\n";
   const url=URL.createObjectURL(new Blob([text],{type:"text/csv;charset=utf-8"}));
   const a=document.createElement("a");a.href=url;a.download="zastal-stany-magazynowe.csv";a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
  };
  const parse=async(file:File)=>{
   setName(file.name);setResult(null);setParseError("");setApiError("");setRows([]);

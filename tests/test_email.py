@@ -73,10 +73,25 @@ class EmailTests(unittest.TestCase):
         with patch.dict(os.environ,SMTP_ENV),patch('commerce_email.smtplib.SMTP',SMTP):
             self.assertEqual(self.email.process_outbox(self.connect)['sent'],1)
         self.assertIn('testowe',str(SMTP.messages[0]['Subject']))
-        body=SMTP.messages[0].get_content()
+        body=self.email.plain_text(SMTP.messages[0])
         self.assertIn('demonstracyjna',body)
         self.assertIn('niefiskalny',body)
         self.assertIn('nie potwierdza rzeczywistej płatności',body)
+
+    def test_staff_test_message_is_queued_and_smtp_status_is_recorded(self):
+        self.c.execute("UPDATE users SET role='admin' WHERE id=?", (self.user['id'],))
+        self.c.commit()
+        self.h.request_user = self.c.execute('SELECT * FROM users').fetchone()
+        result = self.request('/api/admin/email/test', {'recipient': 'check@example.test'})
+        self.assertEqual(result[0], 200)
+        self.assertEqual(self.c.execute('SELECT status FROM email_outbox').fetchone()[0], 'pending')
+        with patch.dict(os.environ, SMTP_ENV), patch('commerce_email.smtplib.SMTP', SMTP):
+            self.assertEqual(self.email.process_outbox(self.connect)['sent'], 1)
+        self.assertEqual(SMTP.messages[0]['To'], 'check@example.test')
+        self.assertIn('test poczty', str(SMTP.messages[0]['Subject']))
+        self.assertEqual(self.email.admin_status(self.c)['messages'][0]['status'], 'sent')
+        self.h.headers.pop('X-CSRF-Token')
+        self.assertEqual(self.request('/api/admin/email/test', {'recipient': 'check@example.test'})[0], 403)
 
     def setUp(self):
         self.assertIsNotNone(importlib.util.find_spec('commerce_email'), 'email subsystem must exist')
@@ -192,7 +207,7 @@ class EmailTests(unittest.TestCase):
         self.c.commit()
         with patch.dict(os.environ, SMTP_ENV), patch('commerce_email.smtplib.SMTP', SMTP):
             self.assertEqual(self.email.process_outbox(self.connect)['sent'], 1)
-        text = SMTP.messages[0].get_content()
+        text = self.email.plain_text(SMTP.messages[0])
         self.assertIn('https://store.example.test/konto/email?action=verify#token=', text)
         token = text.split('#token=')[1].split()[0]
         self.assertNotIn(token, json.dumps([dict(r) for r in self.c.execute('SELECT * FROM email_outbox')]))
@@ -314,7 +329,7 @@ class EmailTests(unittest.TestCase):
         self.assertEqual(self.c.execute('SELECT COUNT(*) FROM email_outbox').fetchone()[0], 1)
         with patch.dict(os.environ, SMTP_ENV), patch('commerce_email.smtplib.SMTP', SMTP):
             self.assertEqual(self.email.process_outbox(self.connect)['sent'], 1)
-        self.assertIn('150.00 PLN', SMTP.messages[0].get_content())
+        self.assertIn('150.00 PLN', self.email.plain_text(SMTP.messages[0]))
         self.c.execute("UPDATE users SET role='admin'")
         self.assertIsNone(self.email.enqueue_order(self.c, 10, 'order_status_changed'))
         self.c.commit()
@@ -397,7 +412,7 @@ class EmailHTTPTests(unittest.TestCase):
 
     def test_http_verification_and_admin_metadata_enforce_csrf_and_roles(self):
         self.client.register(password=PASSWORD)
-        self.assertEqual(self.client.request('GET', '/api/admin/email')[0], 403)
+        self.assertEqual(self.client.request('GET', '/api/admin/email')[0], 401)
         self.assertEqual(self.client.request('POST', '/api/account/email/verification', {}, csrf=False)[0], 403)
         self.assertEqual(self.client.request('GET', '/api/auth/email/status'), (200, {'configured': False}))
         with self.api.connect() as c:

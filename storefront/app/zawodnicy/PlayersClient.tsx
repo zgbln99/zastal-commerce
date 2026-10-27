@@ -1,0 +1,29 @@
+"use client";
+import { useEffect } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { ArrowRight, ChevronRight } from "lucide-react";
+import { optimizable } from "../../components/ProductCard";
+import { useStore } from "../../components/StoreProvider";
+import { productPath } from "../../lib/commerce.mjs";
+/** Shop by player: every roster entry links to a personalised product with the player preselected. */
+export default function PlayersClient() {
+  const store = useStore();
+  const refreshPlayers = store.refreshPlayers, playersStatus = store.playersStatus;
+  useEffect(() => { if (playersStatus === "error") void refreshPlayers(); }, [refreshPlayers]);
+  const printable = store.products.filter(p => p.personalization_enabled && p.verified && p.released !== false);
+  const primary = printable[0];
+  return <div className="container players-page">
+    <div className="breadcrumbs"><Link href="/">Strona główna</Link><ChevronRight size={11}/><span>Zawodnicy</span></div>
+    <div className="page-heading"><h1>Kadra na koszulce</h1><p>Wybierz zawodnika, a jego nazwisko i numer trafią na koszulkę lub bluzę z nadrukiem.</p></div>
+    {store.playersStatus === "error" && <p className="field-error">Nie udało się pobrać listy zawodników. <button className="inline-link" onClick={() => void store.refreshPlayers()}>Spróbuj ponownie</button></p>}
+    {store.playersStatus === "loading" && <p className="quiet-note">Wczytujemy kadrę…</p>}
+    <div className="players-grid">{store.players.map(player => <article className="player-card" key={player.id}>
+      {player.photo ? <Link href={player.slug ? "/zawodnicy/" + player.slug : "/zawodnicy"} className="player-photo relative mb-3 block aspect-[4/5] overflow-hidden rounded-xl bg-muted"><Image src={player.photo} alt={player.name} fill sizes="(min-width: 1024px) 20vw, (min-width: 640px) 33vw, 50vw" unoptimized={!optimizable(player.photo)} className="object-cover"/></Link> : <span className="player-number" aria-hidden="true">{player.number}</span>}
+      <h2>{player.slug ? <Link href={"/zawodnicy/" + player.slug} className="hover:underline">{player.name}</Link> : player.name}</h2><small>{player.position ? player.position + " · " : ""}Nadruk: {player.print_name} {player.number}</small>
+      {primary ? <Link className="inline-link" href={`${productPath(primary)}?zawodnik=${player.id}`}>{printable.length > 1 ? "Koszulka z nazwiskiem" : primary.name} <ArrowRight size={15}/></Link> : <span className="quiet-note">Produkty z nadrukiem wkrótce.</span>}
+      {printable.length > 1 && <div className="player-more">{printable.slice(1, 3).map(p => <Link key={p.id} href={`${productPath(p)}?zawodnik=${player.id}`}>{p.name}</Link>)}</div>}
+    </article>)}</div>
+    {store.playersStatus === "ready" && !store.players.length && <p className="account-empty">Lista zawodników jest w przygotowaniu.</p>}
+  </div>;
+}

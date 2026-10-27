@@ -1,0 +1,143 @@
+/* Stylesheet entry. Layer order: everything inherited from the earlier storefront sits in `legacy`, below Tailwind's own
+   layers, so the kit's utilities always win while the untouched pages (checkout, account, help…) keep their styling.
+   Preflight stays off: the admin panel and the legacy sheets rely on browser defaults. */
+@layer reset, legacy, theme, base, components, utilities;
+
+@import "./store-reset.css" layer(reset);
+@import "./fonts.css" layer(legacy);
+@import "./globals.css" layer(legacy);
+@import "./storefront-refresh.css" layer(legacy);
+@import "./product-media.css" layer(legacy);
+@import "./typography.css" layer(legacy);
+@import "./produkt/[handle]/product.css" layer(legacy);
+@import "./zamowienie/checkout.css" layer(legacy);
+@import "./konto/account.css" layer(legacy);
+@import "./pomoc/help.css" layer(legacy);
+@import "./zawodnicy/players.css" layer(legacy);
+@import "./karta-podarunkowa/gift.css" layer(legacy);
+@import "../components/print-preview.css" layer(legacy);
+@import "../components/personalization.css" layer(legacy);
+@import "../components/shipment-tracking.css" layer(legacy);
+@import "../components/page-content.css" layer(legacy);
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+@import "./kit.css" layer(components);
+@import "./motion.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(0.985 0.004 145);
+  --foreground: oklch(0.22 0.02 150);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 150);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 150);
+  --primary: oklch(0.40 0.13 145);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0.008 145);
+  --secondary-foreground: oklch(0.30 0.03 150);
+  --muted: oklch(0.955 0.006 145);
+  --muted-foreground: oklch(0.48 0.02 150);
+  --accent: oklch(0.93 0.03 145);
+  --accent-foreground: oklch(0.34 0.11 145);
+  --destructive: oklch(0.58 0.19 28);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.90 0.008 145);
+  --input: oklch(0.92 0.006 145);
+  --ring: oklch(0.40 0.13 145);
+  --brand-orange: oklch(0.70 0.19 55);
+  --chart-1: oklch(0.40 0.13 145);
+  --chart-2: oklch(0.70 0.19 55);
+  --chart-3: oklch(0.48 0.02 150);
+  --chart-4: oklch(0.58 0.19 28);
+  --chart-5: oklch(0.55 0.10 145);
+  --font-sans: "ZT Talk", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-display: "ZT Talk", "Barlow Semi Condensed", Inter, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius: 0.7rem;
+  /* Names the legacy stylesheets still read, pointed at the kit's tokens */
+  --forest: var(--primary);
+  --ink: var(--foreground);
+  --line: var(--border);
+  --paper: var(--muted);
+  --legacy-muted: var(--muted-foreground);
+  --legacy-accent: var(--brand-orange);
+  --legacy-radius: calc(var(--radius) - 2px);
+}
+
+.dark {
+  --background: oklch(0.17 0.02 150);
+  --foreground: oklch(0.95 0.01 145);
+  --card: oklch(0.21 0.02 150);
+  --card-foreground: oklch(0.95 0.01 145);
+  --popover: oklch(0.21 0.02 150);
+  --popover-foreground: oklch(0.95 0.01 145);
+  --primary: oklch(0.80 0.12 145);
+  --primary-foreground: oklch(0.17 0.02 150);
+  --secondary: oklch(0.26 0.02 150);
+  --secondary-foreground: oklch(0.95 0.01 145);
+  --muted: oklch(0.26 0.02 150);
+  --muted-foreground: oklch(0.72 0.02 145);
+  --accent: oklch(0.30 0.05 145);
+  --accent-foreground: oklch(0.92 0.06 145);
+  --destructive: oklch(0.66 0.18 28);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.30 0.02 150);
+  --input: oklch(0.30 0.02 150);
+  --ring: oklch(0.80 0.12 145);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-orange: var(--brand-orange);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 10px);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+}
+
+@layer base {
+  .store-site *, .store-site *::before, .store-site *::after { border-color: var(--border); }
+  body, .store-site { background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
+  .store-site img, .store-site svg { display: block; }
+  .store-site img { max-width: 100%; height: auto; }
+  .store-site button { font: inherit; color: inherit; }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .animate-rise { animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+}

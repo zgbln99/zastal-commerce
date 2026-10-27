@@ -22,7 +22,20 @@ for (const extension of ['.ts', '.tsx']) {
   };
 }
 require.extensions['.css'] = () => {};
+// The storefront imports through the `@/` alias and uses an ESM-only icon package; map both for CommonJS loading.
+const Module = require('module');
+const storefrontDir = new URL('../storefront/', import.meta.url).pathname;
+const resolveFilename = Module._resolveFilename;
+Module._resolveFilename = function (request, ...rest) {
+  if (request.startsWith('@/')) {
+    const base = storefrontDir + request.slice(2);
+    for (const candidate of [base, base + '.ts', base + '.tsx']) { try { return resolveFilename.call(this, candidate, ...rest); } catch {} }
+  }
+  if (request === 'reicon-react') return storefrontDir + 'node_modules/reicon-react/index.js';
+  return resolveFilename.call(this, request, ...rest);
+};
 after(() => {
+  Module._resolveFilename = resolveFilename;
   for (const [extension, loader] of previous) {
     if (loader) require.extensions[extension] = loader;
     else delete require.extensions[extension];
@@ -60,7 +73,7 @@ test('homepage editor can render inside the administrator route', () => {
 });
 test('private homepage preview receives the same catalogue context', () => {
   const html = render('/admin/podglad', h(HomeCanvas, {config: DEFAULT_HOME}));
-  assert.match(html, /W barwach Zastalu/);
+  assert.match(html, /Sklep Zastalu Zielona Góra/);
   assert.match(html, /Kolekcje/);
   assert.doesNotMatch(html, /Otwórz koszyk/);
 });

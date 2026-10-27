@@ -1,0 +1,30 @@
+/* Display face for headlines and prices: a condensed sports grotesk that matches club merchandise.
+   Body copy stays in Inter. Both are self-hosted (SIL Open Font License), no third-party requests. */
+@font-face{font-family:"Barlow Semi Condensed";src:url('/assets/fonts/barlow-semi-condensed-600-latin.woff2') format('woff2');font-weight:600;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Barlow Semi Condensed";src:url('/assets/fonts/barlow-semi-condensed-700-latin.woff2') format('woff2');font-weight:700;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Barlow Semi Condensed";src:url('/assets/fonts/barlow-semi-condensed-600-latin-ext.woff2') format('woff2');font-weight:600;font-style:normal;font-display:swap;unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Barlow Semi Condensed";src:url('/assets/fonts/barlow-semi-condensed-700-latin-ext.woff2') format('woff2');font-weight:700;font-style:normal;font-display:swap;unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+:root{--font-display:"Barlow Semi Condensed",Inter,Arial,sans-serif;--font-body:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+.store-main h1,.store-main h2,.store-main h3,.home-page h1,.home-page h2,.home-page h3,.product-page h1,.catalog-page h1,.help-page h1,.help-page h2,.checkout-page h1,.quick-modal h2,.flagship-hero-content h1{font-family:var(--font-display);font-weight:700;letter-spacing:-.005em}
+.home-page h2,.catalog-page h1,.product-page h1{font-weight:700}
+.flagship-hero-content h1{font-size:clamp(46px,5.6vw,80px);line-height:.98;letter-spacing:-.01em}
+.home-section-heading h2,.editorial-accessories-heading h2,.home-retro-copy h2,.editorial-print-body h2{letter-spacing:-.005em}
+.editorial-accessories-heading h2 em{font-style:normal}
+.quick-price,.product-price-row>div>strong,.product-card-bottom>strong,.editorial-accessory-price,.editorial-print-product-label strong,.cart-item-body>strong,.cart-summary strong,.checkout-summary strong,.order-summary strong{font-family:var(--font-display);font-weight:700;letter-spacing:0;font-variant-numeric:tabular-nums}
+.product-card-bottom>strong{font-size:17px}
+.product-price-row>div>strong{font-size:34px}
+.quick-price{font-size:26px}
+/* Small labels above headings: plain sentence case, no tracking, no numbering. */
+.eyebrow,.section-kicker,.home-kicker,.flagship-overline,.editorial-print-product-label span,.editorial-accessory-info>div>span,.shop-category-label small,.product-detail-top .eyebrow{font-family:var(--font-body);font-size:13px;letter-spacing:0;font-weight:500;text-transform:none;color:var(--legacy-muted)}
+.flagship-overline{color:#cfe0cb;font-size:14px}
+.flagship-overline>span{display:none}
+.page-heading .eyebrow,.product-detail-top .eyebrow{font-size:13px}
+.product-detail-top .eyebrow:hover{color:var(--forest);text-decoration:underline;text-underline-offset:4px}
+.editorial-print-choices span{font-size:14px;font-weight:600;color:#2b4933}
+.editorial-print-choices span svg{color:var(--forest)}
+.editorial-accessories-heading{display:block}
+.editorial-accessories-intro{max-width:520px;margin-top:10px}
+.editorial-accessories-intro p{font-size:15px;line-height:1.65;color:var(--legacy-muted);margin:0 0 12px}
+.shop-category-header h2{font-size:24px;margin:0;font-family:var(--font-display);font-weight:700}
+.shop-category-label small{font-size:12px;font-weight:500;color:var(--legacy-muted)}
+.editorial-print-visual{background:#e4ebe2}

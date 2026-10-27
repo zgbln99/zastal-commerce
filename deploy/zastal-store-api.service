@@ -1,0 +1,21 @@
+[Unit]
+Description=Zastal Store API (Python)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinelx
+WorkingDirectory=/var/lib/sentinelx/uploads/zastal-commerce-app
+EnvironmentFile=/var/lib/sentinelx/uploads/zastal-commerce-app/.runtime.env
+ExecStart=/usr/bin/python3 commerce_api.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full
+ReadWritePaths=/var/lib/sentinelx/uploads/zastal-commerce-app
+
+[Install]
+WantedBy=multi-user.target

@@ -1,18 +1,20 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "./AuthProvider";
 import { catalog } from "../lib/catalog";
-import { extendCartLine, updateCartLine, mergeCatalog, lineUnitPrice, normalizeCart, normalizeFavorites, normalizePersonalization, removePurchased as subtractPurchased, type CartLine, type Product, type Personalization, type Player, type PrintDisplay } from "../lib/commerce.mjs";
+import { extendCartLine, updateCartLine, mergeCatalog, lineUnitPrice, normalizeCart, normalizeFavorites, normalizePersonalization, normalizeStoreStatus, PRELAUNCH_STATUS, removePurchased as subtractPurchased, type CartLine, type Product, type Personalization, type Player, type PrintDisplay, type StoreStatus } from "../lib/commerce.mjs";
 
 type Store = {
   products: Product[]; cart: CartLine[]; favorites: number[]; hydrated: boolean;
   status: "loading" | "ready" | "error"; error: string; storageError: boolean;
-  players: Player[]; playersStatus: "loading" | "ready" | "error"; playersError: string; refreshPlayers: () => Promise<void>;
+  players: Player[]; playersStatus: "loading" | "ready" | "error"; playersError: string; refreshPlayers: (background?: boolean) => Promise<void>;
   refresh: () => Promise<void>; add: (id: number, size: string, quantity?: number, personalization?: Personalization, display?: PrintDisplay) => boolean;
   update: (id: number, size: string, quantity: number, personalization?: Personalization) => void; clear: () => void; removePurchased: (items: CartLine[]) => void;
-  favorite: (id: number) => void; count: number; subtotal: number;
+  favorite: (id: number) => void; restoreLines: (lines: CartLine[]) => number; count: number; subtotal: number;
   dialog: "cart" | "search" | "menu" | null; setDialog: (dialog: Store["dialog"]) => void;
   quickId: number | null; setQuickId: (id: number | null) => void;
   notice: string; setNotice: (text: string) => void;
+  sales: StoreStatus; refreshSales: () => Promise<void>;
 };
 const Context = createContext<Store | null>(null);
 const CART = "zastal_store_cart_v2", FAVORITES = "zastal_store_favs";
@@ -30,6 +32,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [dialog, setDialog] = useState<Store["dialog"]>(null);
   const [quickId, setQuickId] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
+  const [sales, setSales] = useState<StoreStatus>(PRELAUNCH_STATUS);
+  const refreshSales = useCallback(async () => {
+    try {
+      const response = await fetch("/api/store/status", { cache: "no-store", signal: AbortSignal.timeout(12000) });
+      if (!response.ok) throw new Error();
+      setSales(normalizeStoreStatus(await response.json()));
+    } catch { setSales(old => ({ ...old, loaded: true })); }
+  }, []);
+  useEffect(() => { void refreshSales(); }, [refreshSales]);
   useEffect(() => {
     try {
       setCart(normalizeCart(localStorage.getItem(CART)));
@@ -69,20 +80,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("focus", onFocus);
   }, [refresh]);
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(""), 5000); return () => clearTimeout(timer); }, [notice]);
-  const refreshPlayers = useCallback(async () => {
-    setPlayersStatus("loading"); setPlayersError("");
+  const refreshPlayers = useCallback(async (background = false) => {
+    if (!background) { setPlayersStatus("loading"); setPlayersError(""); }
     try {
       const response = await fetch("/api/players", { cache: "no-store", signal: AbortSignal.timeout(12000) });
       if (!response.ok) throw new Error();
       const data = await response.json();
       if (!Array.isArray(data.players)) throw new Error();
-      setPlayers(data.players.filter((p: Player) => Number.isSafeInteger(p.id) && p.id > 0 && typeof p.name === "string" && normalizePersonalization({ mode: "custom", name: p.print_name, number: p.number })));
+      setPlayers(data.players.filter((p: Player) => Number.isSafeInteger(p.id) && p.id > 0 && typeof p.name === "string" && normalizePersonalization({ mode: "custom", name: p.print_name, number: p.number })).map((p: Player) => ({ ...p, slug: typeof p.slug === "string" && /^[a-z0-9][a-z0-9-]{0,79}$/.test(p.slug) ? p.slug : "", photo: typeof p.photo === "string" && /^\/api\/store\/media\/[0-9a-f]{32}\.webp$/.test(p.photo) ? p.photo : "", position: typeof p.position === "string" ? p.position.slice(0, 40) : "" })));
       setPlayersStatus("ready");
-    } catch { setPlayers([]); setPlayersStatus("error"); setPlayersError("Nie można pobrać aktualnej kadry."); }
+    } catch { if (!background) { setPlayers([]); setPlayersStatus("error"); setPlayersError("Nie można pobrać aktualnej kadry."); } }
   }, []);
   useEffect(() => {
     void refreshPlayers();
-    const onFocus = () => { void refreshPlayers(); };
+    const onFocus = () => { void refreshPlayers(true); };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [refreshPlayers]);
@@ -103,9 +114,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setCart(old => updateCartLine(old, id, size, quantity, personalization, products));
   };
   const favorite = (id: number) => { if (hydrated) setFavorites(old => old.includes(id) ? old.filter(x => x !== id) : [...old, id]); };
+  // Favourites live on the account too: the browser list and the account list are merged on login, then every change is saved.
+  const auth = useAuth();
+  const customerId = auth.user?.role === "customer" ? auth.user.id : null;
+  const synced = useRef<number | null>(null);
+  useEffect(() => {
+    if (!hydrated || !customerId || synced.current === customerId) return;
+    let cancelled = false;
+    synced.current = customerId;
+    auth.request<{ ids: number[] }>("/api/account/favorites", { method: "POST", body: JSON.stringify({ ids: favorites }) })
+      .then(data => { if (!cancelled && Array.isArray(data.ids)) setFavorites(data.ids.filter(id => Number.isSafeInteger(id))); })
+      .catch(() => { synced.current = null; });
+    return () => { cancelled = true; };
+  }, [hydrated, customerId, auth, favorites]);
+  useEffect(() => {
+    if (!hydrated || !customerId || synced.current !== customerId) return;
+    const timer = window.setTimeout(() => { void auth.request("/api/account/favorites", { method: "POST", body: JSON.stringify({ ids: favorites, replace: true }) }).catch(() => {}); }, 800);
+    return () => window.clearTimeout(timer);
+  }, [favorites, hydrated, customerId, auth]);
+  useEffect(() => { if (!customerId) synced.current = null; }, [customerId]);
+  /** Lines from a saved cart (reminder e-mail): merged into the current cart; returns how many were added. */
+  const restoreLines = (lines: CartLine[]) => {
+    let added = 0;
+    setCart(old => lines.reduce((acc, line) => { const next = extendCartLine(acc, line, products); if (next) added += 1; return next || acc; }, old));
+    return added;
+  };
   const count = cart.reduce((sum, line) => sum + line.quantity, 0);
   const subtotal = useMemo(() => cart.reduce((sum, line) => sum + lineUnitPrice(products.find(p => p.id === line.id), line) * line.quantity, 0), [cart, products]);
-  return <Context.Provider value={{ products, cart, favorites, hydrated, status, error, storageError, players, playersStatus, playersError, refreshPlayers, refresh: () => refresh(), add, update, clear: () => setCart([]), removePurchased: items => setCart(old => subtractPurchased(old, items)), favorite, count, subtotal, dialog, setDialog, quickId, setQuickId, notice, setNotice }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ products, cart, favorites, hydrated, status, error, storageError, players, playersStatus, playersError, refreshPlayers, refresh: () => refresh(), add, update, restoreLines, clear: () => setCart([]), removePurchased: items => setCart(old => subtractPurchased(old, items)), favorite, count, subtotal, dialog, setDialog, quickId, setQuickId, notice, setNotice, sales, refreshSales }}>{children}</Context.Provider>;
 }
 export function useStore() {
   const context = useContext(Context);

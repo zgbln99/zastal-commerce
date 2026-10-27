@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, ChevronRight } from "lucide-react";
+import { ArrowUpRight, ChevronRight, PenLine, UserRound } from "lucide-react";
 import { fmt } from "../lib/catalog";
 import type { Product } from "../lib/commerce.mjs";
+import { productPath } from "../lib/commerce.mjs";
 import { ProductImage } from "./ProductCard";
 
 /**
@@ -13,28 +14,21 @@ export function PersonalizationEditorial({ product }: { product: Product | undef
   if (!product || !product.personalization_enabled) return null;
   return <section className="editorial-print" aria-labelledby="editorial-print-title">
     <div className="editorial-print-copy">
-      <div className="editorial-serial"><span>02 — PERSONALIZACJA</span><span>SKLEP ZASTALU / NADRUK</span></div>
       <div className="editorial-print-body">
-        <span className="editorial-mini-label">WYBRANE PRODUKTY / NADRUK NA ZAMÓWIENIE</span>
-        <h2 id="editorial-print-title">Twoje nazwisko.<br/>Twój numer.</h2>
-        <p>Wybierz nazwisko zawodnika z aktualnej listy lub wpisz własne. Opcję nadruku znajdziesz podczas konfiguracji produktu.</p>
+        <h2 id="editorial-print-title">Nadruk z Twoim<br/>nazwiskiem</h2>
+        <p>Wybierz zawodnika z listy albo dodaj własne nazwisko i numer przy wybranym produkcie.</p>
         <div className="editorial-print-choices" aria-label="Dostępne opcje personalizacji">
-          <span><b>01</b> Zawodnik z listy</span>
-          <span><b>02</b> Własny napis i numer</span>
+          <span><UserRound size={17} strokeWidth={1.8}/> Zawodnik z listy</span>
+          <span><PenLine size={17} strokeWidth={1.8}/> Własny napis i numer</span>
         </div>
-        <Link className="editorial-print-action" href={"/produkt/" + product.id}>
-          Personalizuj ten produkt <ArrowUpRight size={18}/>
+        <Link className="editorial-print-action" href={productPath(product)}>
+          Dodaj swój nadruk <ArrowUpRight size={18}/>
         </Link>
       </div>
-      <div className="editorial-print-foot"><span>PRODUKT Z OPCJĄ NADRUKU</span><span>{product.sku}</span></div>
     </div>
-    <Link href={"/produkt/" + product.id} className="editorial-print-visual" aria-label={"Zobacz produkt do personalizacji: " + product.name}>
-      <div className="editorial-print-court" aria-hidden="true">
-        <svg viewBox="0 0 450 450" fill="none"><circle cx="225" cy="225" r="178"/><circle cx="225" cy="225" r="57"/><path d="M225 47v356M47 225h356"/><path d="M225 47c-118 117-118 239 0 356M225 47c118 117 118 239 0 356"/></svg>
-      </div>
+    <Link href={productPath(product)} className="editorial-print-visual" aria-label={"Zobacz produkt do personalizacji: " + product.name}>
       <ProductImage product={product}/>
-      <div className="editorial-print-product-label"><div><span>WYBRANY PRODUKT</span><strong>{product.name}</strong></div><div><span>OD</span><strong>{product.verified ? fmt(product.price) : "—"}</strong></div></div>
-      <span className="editorial-print-corner" aria-hidden="true">ZG / 1946</span>
+      <div className="editorial-print-product-label"><div><span>Produkt z nadrukiem</span><strong>{product.name}</strong></div><div><span>Cena od</span><strong>{product.verified ? fmt(product.price) : "…"}</strong></div></div>
     </Link>
   </section>;
 }
@@ -43,13 +37,13 @@ export function AccessoriesEditorial({ products }: { products: Product[] }) {
   if (!products.length) return null;
   return <section className="container editorial-accessories" aria-labelledby="accessories-title">
     <div className="editorial-accessories-heading">
-      <div><span className="home-kicker">05 / DODATKI</span><h2 id="accessories-title">Małe rzeczy.<br/><em>Te same barwy.</em></h2></div>
-      <div className="editorial-accessories-intro"><p>Akcesoria, które możesz zabrać ze sobą nie tylko na mecz.</p><Link href="/sklep?category=Akcesoria">Zobacz akcesoria <ArrowUpRight size={17}/></Link></div>
+      <div><h2 id="accessories-title">Akcesoria Zastalu</h2></div>
+      <div className="editorial-accessories-intro"><p>Klubowe dodatki na mecz i na co dzień.</p><Link href="/sklep?category=Akcesoria">Zobacz akcesoria <ArrowUpRight size={17}/></Link></div>
     </div>
     <div className="editorial-accessories-grid">
-      {products.slice(0, 3).map((product, index) => <Link key={product.id} href={"/produkt/" + product.id} className={"editorial-accessory accessory-" + index}>
-        <div className="editorial-accessory-image"><ProductImage product={product}/><span className="editorial-accessory-index">0{index + 1}</span></div>
-        <div className="editorial-accessory-info"><div><span>AKCESORIA / ZASTAL</span><h3>{product.name}</h3></div><span className="editorial-accessory-price">{product.verified ? fmt(product.price) : "—"}</span><ChevronRight size={18}/></div>
+      {products.slice(0, 3).map((product, index) => <Link key={product.id} href={productPath(product)} className={"editorial-accessory accessory-" + index}>
+        <div className="editorial-accessory-image"><ProductImage product={product}/></div>
+        <div className="editorial-accessory-info"><div><span>Akcesoria</span><h3>{product.name}</h3></div><span className="editorial-accessory-price">{product.verified ? fmt(product.price) : "…"}</span><ChevronRight size={18}/></div>
       </Link>)}
     </div>
   </section>;

@@ -1,0 +1,14 @@
+/* Normalize browser defaults only inside the storefront. Legacy page rules and
+   Tailwind utilities keep precedence; the staff panel is deliberately outside. */
+.store-site :where(h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd) {
+  margin: 0;
+}
+.store-site :where(button, input, select, textarea) {
+  font-family: inherit;
+}
+.store-site :where(button, input, select) {
+  line-height: 1.5;
+}
+.store-site :where(button) {
+  padding: 0;
+}

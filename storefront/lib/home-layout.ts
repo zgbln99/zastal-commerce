@@ -1,8 +1,8 @@
-export type SectionKind="hero"|"categories"|"products"|"personalization"|"retro"|"accessories"|"banner"|"text"|"services"|"campaign";
+export type SectionKind="hero"|"categories"|"products"|"personalization"|"retro"|"accessories"|"banner"|"text"|"services"|"campaign"|"ticker";
 export type SectionSettings=Record<string,string|number|boolean>;
 export type HomeSection={id:string;type:SectionKind;enabled:boolean;settings:SectionSettings};
 export type HomeConfig={version:1;sections:HomeSection[]};
-export type HomeResponse={config:HomeConfig;revision:number;published_revision:number;draft_changed:boolean;updated:string};
+export type HomeResponse={config:HomeConfig;revision:number;published_revision:number;draft_changed:boolean;updated:string;scheduled_at?:string|null;scheduled_revision?:number|null};
 export type Field={key:string;label:string;type:"short"|"long"|"image"|"url"|"number"|"select"|"toggle"|"color"|"product";min?:number;max?:number;options?:{value:string|number;label:string}[];hint?:string;defaultValue?:string|number|boolean};
 const opts=(values:string[])=>values.map(v=>({value:v,label:v}));
 export const categories=["Wszystko","Koszulki","Bluzy","Akcesoria","Dzieci"];
@@ -16,6 +16,7 @@ export const SECTION_DESCRIPTIONS:Record<SectionKind,{name:string;about:string}>
  accessories:{name:"Akcesoria",about:"Kafelki produktów z kategorii Akcesoria"},
  banner:{name:"Baner kampanii",about:"Zdjęcie, kolor, przycisk i historia klubu"},
  text:{name:"Sekcja tekstowa",about:"Nagłówek i opis do dowolnej sekcji"},
+ ticker:{name:"Pasek z hasłami",about:"Przewijany pasek krótkich haseł, np. nowa kolekcja albo termin meczu"},
  services:{name:"Informacje",about:"Trzy linki pomocy na dole strony"}
 };
 const productField:Field={key:"product_id",label:"Produkt z katalogu",type:"product"};
@@ -50,7 +51,7 @@ export const EDIT_FIELDS:Record<SectionKind,Field[]>={
    {key:"height",label:"Wysokość banera (px)",type:"number",min:400,max:850},
    {key:"overlay",label:"Przyciemnienie zdjęcia (%)",type:"number",min:0,max:95},align,
    {key:"slides_enabled",label:"Dodatkowe slajdy kolekcji",type:"toggle",defaultValue:true,hint:"Wyłącz, aby zachować tylko pierwszy baner."},
-   {key:"autoplay",label:"Automatyczna zmiana slajdów",type:"toggle",defaultValue:true,hint:"Zatrzymuje się podczas czytania, obsługi okien sklepu i przy ograniczonym ruchu."},
+   {key:"autoplay",label:"Automatyczna zmiana slajdów",type:"toggle",defaultValue:true,hint:"Slajdy zmieniają się same. Zatrzymuje je przycisk Pauza, nawigacja klawiaturą i otwarte okna sklepu."},
    {key:"interval_ms",label:"Czas slajdu (ms)",type:"number",min:3000,max:15000,defaultValue:6000,hint:"6000 ms = 6 sekund. Zakres od 3 do 15 sekund."},
    ...slideFields(2),...slideFields(3)],
  categories:[eyebrow,heading,{key:"cta_text",label:"Tekst linku",type:"short"},
@@ -65,17 +66,18 @@ export const EDIT_FIELDS:Record<SectionKind,Field[]>={
  banner:[eyebrow,heading,desc,image,cta,{key:"cta_url",label:"Link",type:"url"},
    {key:"background",label:"Kolor tła",type:"color"},{key:"text_color",label:"Kolor tekstu",type:"color"},align],
  text:[eyebrow,heading,desc,align,{key:"background",label:"Tło",type:"color"},{key:"text_color",label:"Tekst",type:"color"}],
+ ticker:[{key:"items",label:"Hasła (oddziel znakiem |)",type:"long",hint:"Do 12 haseł. Pasek przewija się sam i zatrzymuje po najechaniu."},{key:"background",label:"Tło",type:"color"},{key:"text_color",label:"Tekst",type:"color"},{key:"speed",label:"Czas jednego przejścia (s)",type:"number",min:10,max:90}],
  services:[heading,{key:"first_title",label:"Kafelek 1 · tytuł",type:"short"},{key:"first_text",label:"Kafelek 1 · opis",type:"short"},
    {key:"second_title",label:"Kafelek 2 · tytuł",type:"short"},{key:"second_text",label:"Kafelek 2 · opis",type:"short"},
    {key:"third_title",label:"Kafelek 3 · tytuł",type:"short"},{key:"third_text",label:"Kafelek 3 · opis",type:"short"}]
 };
 export const DEFAULT_HOME:HomeConfig={version:1,sections:[
-{id:"hero-main",type:"hero",enabled:true,settings:{eyebrow:"KLUBOWA KOLEKCJA",title:"W barwach Zastalu.",description:"Koszulki, bluzy i dodatki dla kibiców z Zielonej Góry.",image:"/assets/photos/fans.webp",cta_text:"Przejdź do sklepu",cta_url:"/sklep",secondary_text:"Zobacz koszulki",secondary_url:"/sklep?category=Koszulki",height:620,overlay:72,alignment:"left"}},
-{id:"shop-categories",type:"categories",enabled:true,settings:{eyebrow:"01 / KATEGORIE",title:"Kolekcje",cta_text:"Cały sklep",categories:"Koszulki,Bluzy,Dzieci,Akcesoria",columns:4}},
-{id:"print-studio",type:"personalization",enabled:true,settings:{eyebrow:"02 / PERSONALIZACJA",title:"Twoje nazwisko. Twój numer.",description:"Wybierz zawodnika z listy lub wpisz własne nazwisko i numer.",button_text:"Personalizuj ten produkt",product_id:1}},
-{id:"merch-grid",type:"products",enabled:true,settings:{eyebrow:"03 / PRODUKTY",title:"W klubowym sklepie",category:"Wszystko",count:8,columns:4,show_filters:true,cta_text:"Wszystkie produkty",product_ids:""}},
-{id:"retro-feature",type:"retro",enabled:true,settings:{eyebrow:"04 / ZASTAL RETRO",title:"Klasyczny znak. Klubowa bluza.",description:"Retro logo Zastalu na zielonej bluzie.",button_text:"Zobacz kolekcję",product_id:2,image:""}},
-{id:"accessories-edit",type:"accessories",enabled:true,settings:{eyebrow:"05 / DODATKI",title:"Małe rzeczy. Te same barwy.",description:"Akcesoria, które możesz zabrać ze sobą nie tylko na mecz.",count:3}},
+{id:"hero-main",type:"hero",enabled:true,settings:{eyebrow:"Klubowa kolekcja",title:"Sklep Zastalu Zielona Góra",description:"Koszulki, bluzy i akcesoria z klubowej kolekcji.",image:"/assets/photos/fans.webp",cta_text:"Zobacz produkty",cta_url:"/sklep",secondary_text:"Zobacz koszulki",secondary_url:"/sklep?category=Koszulki",height:620,overlay:72,alignment:"left"}},
+{id:"shop-categories",type:"categories",enabled:true,settings:{eyebrow:"",title:"Kolekcje",cta_text:"Cały sklep",categories:"Koszulki,Bluzy,Dzieci,Akcesoria",columns:4}},
+{id:"merch-grid",type:"products",enabled:true,settings:{eyebrow:"",title:"W klubowym sklepie",category:"Wszystko",count:8,columns:4,show_filters:true,cta_text:"Wszystkie produkty",product_ids:""}},
+{id:"print-studio",type:"personalization",enabled:true,settings:{eyebrow:"",title:"Twoje nazwisko. Twój numer.",description:"Wybierz zawodnika z listy lub wpisz własne nazwisko i numer.",button_text:"Personalizuj ten produkt",product_id:1}},
+{id:"retro-feature",type:"retro",enabled:true,settings:{eyebrow:"Zastal Retro",title:"Klasyczny znak. Klubowa bluza.",description:"Retro logo Zastalu na zielonej bluzie.",button_text:"Zobacz kolekcję",product_id:2,image:""}},
+{id:"accessories-edit",type:"accessories",enabled:true,settings:{eyebrow:"",title:"Małe rzeczy. Te same barwy.",description:"Akcesoria, które możesz zabrać ze sobą nie tylko na mecz.",count:3}},
 {id:"shop-services",type:"services",enabled:true,settings:{title:"Informacje o sklepie",first_title:"Dostawa i odbiór",first_text:"Warunki po uruchomieniu sprzedaży",second_title:"Twoje konto",second_text:"Zamówienia i ustawienia w jednym miejscu",third_title:"Dobierz rozmiar",third_text:"Informacje przed zakupem"}}
 ]};
 export const titleLines=(value:string)=>value.split("|").map(s=>s.trim()).filter(Boolean);
@@ -86,9 +88,13 @@ export const copyConfig=(config:HomeConfig):HomeConfig=>JSON.parse(JSON.stringif
 export function makeSection(type:SectionKind):HomeSection{
  const defaults=DEFAULT_HOME.sections.find(s=>s.type===type);
  const custom:Record<string,SectionSettings>={
- campaign:{eyebrow:"ZASTAL / KOLEKCJA",title:"W barwach Zastalu",description:"",image:"",image_alt:"",image_role:"model",image_illustrative:true,product_ids:"",cta_text:"Zobacz kolekcję",cta_url:"/sklep",alignment:"left"},
+ campaign:{eyebrow:"Kolekcja",title:"W barwach Zastalu",description:"",image:"",image_alt:"",image_role:"model",image_illustrative:true,product_ids:"",cta_text:"Zobacz kolekcję",cta_url:"/sklep",alignment:"left"},
  banner:{eyebrow:"KOLEKCJA",title:"Nowa kolekcja",description:"",image:"/assets/photos/fans.webp",cta_text:"Zobacz więcej",cta_url:"/sklep",background:"#143e2d",text_color:"#ffffff",alignment:"left"},
- text:{eyebrow:"ZASTAL ZIELONA GÓRA",title:"Historia naszego klubu",description:"",alignment:"left",background:"#f4f5f1",text_color:"#173c2b"}
+ ticker:{items:"Oficjalny sklep Zastalu Zielona Góra | Nadruk z nazwiskiem i numerem | Koszulki, bluzy i akcesoria",background:"#143e2d",text_color:"#ffffff",speed:30},
+ text:{eyebrow:"Zastal Zielona Góra",title:"Historia naszego klubu",description:"",alignment:"left",background:"#f4f5f1",text_color:"#173c2b"}
  };
  return {id:"section-"+crypto.randomUUID().slice(0,8),type,enabled:type!=="campaign",settings:{...(defaults?.settings??custom[type]??{})}};
 }
+
+/** Small label above a heading: drops legacy "01 / " numbering and shouted caps so saved CMS values stay readable. */
+export function kicker(value:string):string{const t=(value||"").replace(/^\d+\s*[\/|·\-]+\s*/,"").trim();if(!t)return "";const letters=t.replace(/[^\p{L}]/gu,"");if(letters.length>3&&letters===letters.toUpperCase()){const low=t.toLowerCase();return low.charAt(0).toUpperCase()+low.slice(1);}return t;}

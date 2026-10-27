@@ -1,10 +1,51 @@
 import { productImages, safeImageUrl } from './product-media.mjs';
-const METHODS = { odbior: 0, paczkomat: 1299, kurier: 1499 };
-export const FREE_SHIPPING = 25000;
+// Delivery prices come only from the published store configuration; nothing is hardcoded.
 export function shippingCost(method, subtotal) {
-  if (!Object.hasOwn(METHODS, method)) throw new Error('Nieprawidłowa metoda dostawy');
-  return subtotal >= FREE_SHIPPING ? 0 : METHODS[method];
+  if (!method || typeof method !== 'object' || !Number.isSafeInteger(method.price) || method.price < 0) throw new Error('Nieprawidłowa metoda dostawy');
+  if (Number.isSafeInteger(method.free_from) && method.free_from >= 0 && subtotal >= method.free_from) return 0;
+  return method.price;
 }
+export function normalizeStoreStatus(raw) {
+  const value = raw && typeof raw === 'object' ? raw : {};
+  const config = value.config && typeof value.config === 'object' ? value.config : {};
+  const text = (input, limit = 400) => typeof input === 'string' ? input.slice(0, limit) : '';
+  const shipping = Array.isArray(config.shipping_methods) ? config.shipping_methods.filter(m => m && typeof m.code === 'string' && /^[a-z0-9_-]{2,32}$/.test(m.code) && Number.isSafeInteger(m.price) && m.price >= 0 && ['pickup', 'locker', 'courier'].includes(m.kind)).map(m => ({ code: m.code, name: text(m.name, 80) || m.code, kind: m.kind, price: m.price, free_from: Number.isSafeInteger(m.free_from) && m.free_from >= 0 ? m.free_from : null, requires_address: m.requires_address === true, carrier: text(m.carrier, 80), note: text(m.note, 300) })) : [];
+  const payments = Array.isArray(config.payment_methods) ? config.payment_methods.filter(p => p && ['payu', 'transfer', 'pickup'].includes(p.id)).map(p => ({ id: p.id, name: text(p.name, 80) || p.id, description: text(p.description, 200), pickup_only: p.pickup_only === true })) : [];
+  const legal = config.legal && typeof config.legal === 'object' ? config.legal : {};
+  const tracking = config.tracking && typeof config.tracking === 'object' ? config.tracking : {};
+  const seller = config.seller && typeof config.seller === 'object' ? config.seller : {};
+  const payuMethods = Array.isArray(config.payu_methods) ? config.payu_methods.filter(m => m && ['blik', 'c', 'jp', 'ap'].includes(m.value)).map(m => ({ value: m.value, name: text(m.name, 40) || m.value })) : [];
+  const gp = config.google_pay && typeof config.google_pay === 'object' ? config.google_pay : null;
+  const googlePay = gp && /^[0-9]{1,32}$/.test(String(gp.gateway_merchant_id || '')) ? { environment: gp.environment === 'PRODUCTION' ? 'PRODUCTION' : 'TEST', gateway_merchant_id: String(gp.gateway_merchant_id), merchant_id: /^[A-Z0-9]{1,32}$/i.test(String(gp.merchant_id || '')) ? String(gp.merchant_id) : '', merchant_name: text(gp.merchant_name, 60) || 'Zastal Store' } : null;
+  const https = input => typeof input === 'string' && /^https:\/\/[^\s]{1,390}$/.test(input) ? input : '';
+  return {
+    loaded: true,
+    checkoutEnabled: value.checkout_enabled === true && shipping.length > 0 && payments.length > 0,
+    phase: value.phase === 'live' ? 'live' : 'prelaunch',
+    notice: text(value.notice, 300),
+    shipping, payments, payuMethods, googlePay,
+    pickupAddress: text(config.pickup_address, 350), pickupHours: text(config.pickup_hours, 200),
+    invoiceEnabled: config.invoice_enabled !== false, orderNote: text(config.order_note, 400),
+    legal: { terms: https(legal.terms_url), privacy: https(legal.privacy_url), returns: https(legal.returns_url), shipping: https(legal.shipping_url) },
+    tracking: { ga4: /^G-[A-Z0-9]{6,14}$/.test(String(tracking.ga4 || '')) ? String(tracking.ga4) : '', metaPixel: /^[0-9]{8,20}$/.test(String(tracking.meta_pixel || '')) ? String(tracking.meta_pixel) : '' },
+    seller: { name: text(seller.name, 160), email: text(seller.support_email, 254), phone: text(seller.support_phone, 40) },
+    brand: normalizeBrand(config.brand),
+    pages: Array.isArray(config.pages) ? config.pages.filter(p => p && typeof p.slug === 'string' && /^[a-z0-9][a-z0-9-]{0,59}$/.test(p.slug)).map(p => ({ slug: p.slug, title: text(p.published_title || p.title, 120) || p.slug })) : [],
+  };
+}
+/** Competition logotypes and the tagline edited in the admin panel; only shop-served images and https links pass. */
+export function normalizeBrand(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const text = (input, limit) => typeof input === 'string' ? input.trim().slice(0, limit) : '';
+  const competitions = Array.isArray(source.competitions) ? source.competitions.filter(c => c && typeof c === 'object' && typeof c.name === 'string' && c.name.trim()).slice(0, 6).map((c, index) => ({
+    key: typeof c.key === 'string' && /^[a-z0-9-]{1,30}$/.test(c.key) ? c.key : 'rozgrywki-' + (index + 1),
+    name: text(c.name, 60),
+    url: typeof c.url === 'string' && /^https:\/\/[^\s<>"']+$/.test(c.url) ? c.url : '',
+    image: typeof c.image === 'string' && /^\/api\/store\/media\/[0-9a-f]{32}\.webp$/.test(c.image) ? c.image : '',
+  })) : [];
+  return { tagline: text(source.tagline, 60) || 'Oficjalny sklep klubu', competitions };
+}
+export const PRELAUNCH_STATUS = Object.freeze({ loaded: false, checkoutEnabled: false, phase: 'prelaunch', notice: '', shipping: [], payments: [], payuMethods: [], googlePay: null, pickupAddress: '', pickupHours: '', invoiceEnabled: true, orderNote: '', legal: { terms: '', privacy: '', returns: '', shipping: '' }, tracking: { ga4: '', metaPixel: '' }, seller: { name: '', email: '', phone: '' }, brand: { tagline: 'Oficjalny sklep klubu', competitions: [] }, pages: [] });
 export function normalizePersonalization(value) {
   if (value == null) return undefined;
   if (!value || typeof value !== 'object') return null;
@@ -85,6 +126,20 @@ function validProductPrint(line, product) {
   const print = normalizePersonalization(line.personalization);
   return print !== null && (!print || product.personalization_enabled === true) && (!product.personalization_required || !!print);
 }
+export const DECORATION_LABELS = Object.freeze({ dtf: 'Transfer DTF', haft: 'Haft', haft_3d: 'Haft wypukły (3D)', sitodruk: 'Sitodruk', inne: 'Inna metoda' });
+export function normalizePrintLayout(value) {
+  if (!value || typeof value !== 'object' || !safeImageUrl(value.image, true) || !value.areas || typeof value.areas !== 'object') return null;
+  const areas = {};
+  for (const key of ['name', 'number']) {
+    const box = value.areas[key];
+    if (!box || typeof box !== 'object') continue;
+    const numbers = ['x', 'y', 'w', 'h'].map(axis => Number(box[axis]));
+    if (numbers.some(n => !Number.isFinite(n) || n < 0 || n > 100) || numbers[0] + numbers[2] > 100 || numbers[1] + numbers[3] > 100 || numbers[2] < 2 || numbers[3] < 1) return null;
+    areas[key] = { x: numbers[0], y: numbers[1], w: numbers[2], h: numbers[3] };
+  }
+  if (!Object.keys(areas).length) return null;
+  return { image: value.image, areas, color: typeof value.color === 'string' && /^#[0-9a-f]{6}$/i.test(value.color) ? value.color.toLowerCase() : '#ffffff', font: ['block', 'condensed', 'rounded'].includes(value.font) ? value.font : 'block', calibrated: value.calibrated === true, note: typeof value.note === 'string' ? value.note.slice(0, 200) : '' };
+}
 export function mergeCatalog(rows, fallback = []) {
   if (!Array.isArray(rows)) return [];
   return rows.filter(row => row && Number.isSafeInteger(row.id) && row.id > 0).map(row => {
@@ -96,8 +151,13 @@ export function mergeCatalog(rows, fallback = []) {
     const fallbackImage = safeImageUrl(row.image, true) ? row.image : safeImageUrl(old.image, true) ? old.image : '/assets/product-unavailable.svg';
     const images = productImages({ ...row, image: fallbackImage });
     const image = images[0]?.url || fallbackImage;
-    return { ...old, ...row, name: row.name || old.name || 'Produkt', sku: row.sku || old.sku || '', category: row.category || old.category || 'Akcesoria', subtitle: typeof row.subtitle === 'string' ? row.subtitle : old.subtitle || '', image, images, gallery_revision: Number.isSafeInteger(row.gallery_revision) && row.gallery_revision >= 0 ? row.gallery_revision : 0, ...(sizes.length && !(sizes.length === 1 && sizes[0] === 'UNI') ? { sizes } : { sizes: undefined }), price: valid ? row.price : old.price || 0, variants, stock: variants.reduce((sum, v) => sum + v.stock, 0), verified: valid, personalization_enabled: row.personalization_enabled === true, personalization_required: row.personalization_enabled === true && row.personalization_required === true, personalization_fee: Number.isSafeInteger(row.personalization_fee) && row.personalization_fee >= 0 ? row.personalization_fee : 0 };
+    return { ...old, ...row, name: row.name || old.name || 'Produkt', sku: row.sku || old.sku || '', category: row.category || old.category || 'Akcesoria', subtitle: typeof row.subtitle === 'string' ? row.subtitle : old.subtitle || '', image, images, gallery_revision: Number.isSafeInteger(row.gallery_revision) && row.gallery_revision >= 0 ? row.gallery_revision : 0, ...(sizes.length && !(sizes.length === 1 && sizes[0] === 'UNI') ? { sizes } : { sizes: undefined }), price: valid ? row.price : old.price || 0, variants, stock: variants.reduce((sum, v) => sum + v.stock, 0), verified: valid, personalization_enabled: row.personalization_enabled === true, personalization_required: row.personalization_enabled === true && row.personalization_required === true, personalization_fee: Number.isSafeInteger(row.personalization_fee) && row.personalization_fee >= 0 ? row.personalization_fee : 0, decoration_method: Object.hasOwn(DECORATION_LABELS, row.decoration_method) ? row.decoration_method : 'dtf', decoration_method_label: DECORATION_LABELS[Object.hasOwn(DECORATION_LABELS, row.decoration_method) ? row.decoration_method : 'dtf'], preorder: row.preorder === true, preorder_note: typeof row.preorder_note === 'string' ? row.preorder_note.slice(0, 200) : '', preorder_until: typeof row.preorder_until === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.preorder_until) ? row.preorder_until : '', size_guide: typeof row.size_guide === 'string' ? row.size_guide.slice(0, 2000) : '', description: typeof row.description === 'string' ? row.description.slice(0, 4000) : '', gift_card: row.gift_card === true, badge: typeof row.badge === 'string' ? row.badge.slice(0, 20) : '', badge_info: row.badge_info && typeof row.badge_info === 'object' && typeof row.badge_info.code === 'string' && typeof row.badge_info.label === 'string' ? { code: row.badge_info.code.slice(0, 20), label: row.badge_info.label.slice(0, 40) } : null, release_at: typeof row.release_at === 'string' ? row.release_at.slice(0, 16) : '', release_epoch: Number.isSafeInteger(row.release_epoch) ? row.release_epoch : null, released: row.released !== false, print_layout: normalizePrintLayout(row.print_layout), price_reduction: row.price_reduction && typeof row.price_reduction === 'object' && Number.isSafeInteger(row.price_reduction.previous) && Number.isSafeInteger(row.price_reduction.lowest_30d) && valid && row.price_reduction.previous > row.price ? { previous: row.price_reduction.previous, lowest_30d: row.price_reduction.lowest_30d, since: typeof row.price_reduction.since === 'string' ? row.price_reduction.since : '' } : null };
   });
+}
+/** Public address of a product: the slug when the catalogue has one, otherwise the numeric id (which redirects). */
+export function productPath(product) {
+  const slug = product && typeof product.slug === 'string' && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(product.slug) ? product.slug : '';
+  return '/produkt/' + (slug || String(product?.id ?? ''));
 }
 export function normalizeFavorites(raw, products) {
   try {
