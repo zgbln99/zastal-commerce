@@ -28,7 +28,7 @@ export default function AuthProvider({children,scope="customer"}:{children:React
   const before=generation.current;
   const promise=(async()=>{
    try{const r=await fetch(base+"/session",{cache:"no-store",credentials:"same-origin",signal:AbortSignal.timeout(15000)});const data=await r.json();if(!r.ok||typeof data.csrf_token!=="string")throw new ApiError(data.error||"Nie można odczytać sesji konta.",r.status);if(before===generation.current)apply(data);return current.current;}
-   catch(e){if(before===generation.current)setError(scope==="staff"?"Nie można połączyć się z panelem. Spróbuj ponownie.":"Nie można połączyć się z kontem. Spróbuj ponownie.");throw e;}
+   catch(e){if(before===generation.current){const base=scope==="staff"?"Nie można połączyć się z panelem. Spróbuj ponownie.":"Nie można połączyć się z kontem. Spróbuj ponownie.";setError(e instanceof ApiError&&e.status>=400?base+" Serwer odpowiedział: "+e.message+" ("+e.status+").":base);}throw e;}
    finally{pending.current=null;setLoading(false);}
   })();pending.current=promise;return promise;
  },[apply,base,scope]);

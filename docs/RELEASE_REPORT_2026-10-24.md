@@ -37,7 +37,7 @@ Zachowano: istniejące API i dane, CMS strony głównej, galerie, konta, histori
 
 | Zestaw | Wynik |
 | --- | --- |
-| `ZASTAL_TEST_MODE=isolated-only python3 -m unittest discover -s tests` | **219 / 219 OK** (nowe: `test_retention`, kanały PayU w `test_sales`, strony zawodników w `test_personalization`, `test_merch` z progiem darmowej dostawy po rabacie, `test_sales` z 14-dniowym terminem, `test_merch`, `test_giftcards`, `test_reports`, `test_digest`, rozszerzony `test_personalization`)
+| `ZASTAL_TEST_MODE=isolated-only python3 -m unittest discover -s tests` | **220 / 220 OK** (nowe: `test_retention`, kanały PayU w `test_sales`, strony zawodników w `test_personalization`, `test_merch` z progiem darmowej dostawy po rabacie, `test_sales` z 14-dniowym terminem, `test_merch`, `test_giftcards`, `test_reports`, `test_digest`, rozszerzony `test_personalization`)
 | (było) | 158 / 158 OK (było 136; nowe: `test_staff`, `test_sales` z PayU/POS/zwrotami, `test_pages`, `test_pricing`, rozszerzony `test_personalization`) |
 | `node --test tests/*.test.mjs` | **84 / 84 OK** |
 | `npx tsc --noEmit` | bez błędów |

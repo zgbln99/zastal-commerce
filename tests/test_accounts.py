@@ -119,6 +119,28 @@ class AccountTests(unittest.TestCase):
         # The panel has no registration route.
         self.assertEqual(browser.request('POST', '/api/staff/auth/register', {'email': 'x@example.test', 'name': 'X', 'password': 'Another password 2026'})[0], 404)
 
+    def test_sign_out_still_works_when_the_session_table_cannot_be_written(self):
+        import sqlite3
+        from unittest.mock import patch
+        browser = Client(self.server.server_address[1])
+        self.assertEqual(browser.login('admin', ADMIN_PASSWORD)[0], 200)
+        locked = sqlite3.OperationalError('database is locked')
+        for path in ('/api/staff/auth/logout',):
+            with patch.object(api.auth, 'rotate', side_effect=locked):
+                code, reply = browser.request('POST', path, {})
+            self.assertEqual((code, reply['user']), (200, None))
+            cookies = browser.headers.get_all('Set-Cookie')
+            self.assertTrue(any(c.startswith('__Host-zastal_staff=;') and 'Max-Age=0' in c for c in cookies), cookies)
+        # The browser dropped the cookie: the panel API asks to sign in again.
+        browser.jar.pop('__Host-zastal_staff', None)
+        self.assertEqual(browser.request('GET', '/api/admin/inventory')[0], 401)
+        # The customer door behaves the same way.
+        fan = Client(self.server.server_address[1])
+        self.assertEqual(fan.register('lock@example.test')[0], 201)
+        with patch.object(api.auth, 'rotate', side_effect=locked):
+            code, reply = fan.request('POST', '/api/auth/logout', {})
+        self.assertEqual((code, reply['user']), (200, None))
+
     def test_csrf_and_cross_origin_mutations_fail_without_changing_identity(self):
         self.assertEqual(self.customer.register()[0], 201)
         self.assertEqual(self.customer.request('PATCH', '/api/account/profile', {'name': 'Wrong'}, csrf=False)[0], 403)

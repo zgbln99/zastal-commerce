@@ -3,6 +3,8 @@ import hashlib
 import os
 import re
 import secrets
+import sqlite3
+import sys
 import threading
 import time
 from collections import defaultdict, deque
@@ -281,6 +283,24 @@ def rotate(handler, c, user, revoke_all=False):
     return entry, user
 
 
+def end_session(handler, c):
+    """Sign out. A busy or failing database must never keep someone signed in on screen: after two short attempts the
+    cookie is expired anyway (the stored session then simply runs out on its own) and False is returned."""
+    c.execute('PRAGMA busy_timeout=3000')
+    for attempt in range(2):
+        try:
+            rotate(handler, c, None)
+            return True
+        except sqlite3.Error:
+            c.rollback()
+            time.sleep(0.25)
+    scope = getattr(handler, 'auth_scope', 'customer')
+    handler.response_headers.append(('Set-Cookie', f'{cookie_name(scope)}=; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'))
+    handler.request_session, handler.request_user = {'csrf_token': ''}, None
+    sys.stderr.write(f'[auth] sign-out could not update the session table (scope {scope}); cookie expired instead\n')
+    return False
+
+
 def require_user(handler, role=None):
     user = getattr(handler, 'request_user', None)
     if not user:
@@ -455,7 +475,7 @@ def dispatch(handler, path, c):
             raise AuthError(401, 'Nieprawidłowy login lub hasło.', 'credentials_invalid')
         rotate(handler, c, user)
     elif path == '/api/auth/logout':
-        rotate(handler, c, None)
+        end_session(handler, c)
     elif path == '/api/auth/recover':
         identifier, password = identifier_value(data.get('identifier')), password_value(data)
         rate(handler, 'recover', identifier, count=5)

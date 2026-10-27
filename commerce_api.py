@@ -11,8 +11,10 @@ import os
 import re
 import secrets
 import sqlite3
+import sys
 import threading
 import time
+import traceback
 from collections import defaultdict, deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -281,6 +283,13 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(ex.status,{'error':str(ex),'code':ex.code})
             return False
 
+    def db_failure(self,message,log_only=False):
+        # Database errors (locked file, read-only volume, full disk, schema drift) must reach the journal with their cause.
+        sys.stderr.write(f"[db] {self.command} {self.path.split('?')[0]} failed: {sys.exc_info()[0].__name__}: {sys.exc_info()[1]}\n")
+        traceback.print_exc(file=sys.stderr);sys.stderr.flush()
+        if log_only:return None
+        return self.respond(500,{"error":message})
+
     def error(self,ex):
         self.respond(400,{"error":str(ex)})
 
@@ -289,7 +298,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=="/health":
             try:
                 with connect() as c:phase=readiness(c)['mode']
-            except sqlite3.Error:return self.respond(503,{"ok":False,"error":"database"})
+            except sqlite3.Error:self.db_failure("database",log_only=True);return self.respond(503,{"ok":False,"error":"database"})
             return self.respond(200,{"ok":True,"version":"0.11","sales_phase":phase,"accounts":True,"cms":True,"pos":True,"email":True,"payments":payments.configuration()['configured']})
         if path.startswith("/api/store/media/"):
             data=cms.load_media(path.rsplit("/",1)[-1]);return self.respond(200,data,"image/webp") if data is not None else self.respond(404,{"error":"Nie znaleziono zdjęcia"})
@@ -458,7 +467,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(404,{"error":"Nie znaleziono"})
         except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError,pages.PageError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (ValueError,TypeError):return self.respond(400,{"error":"Nieprawidłowy identyfikator"})
-        except sqlite3.Error:return self.respond(500,{"error":"Błąd bazy danych"})
+        except sqlite3.Error:return self.db_failure("Błąd bazy danych")
 
     def public_rate(self):
         ip=self.headers.get("X-Real-IP") or self.client_address[0]
@@ -480,7 +489,7 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute('BEGIN IMMEDIATE')
                     status,result=payments.handle_notification(c,raw,self.headers.get('OpenPayu-Signature',''))
                     if status==200 and result in ('completed',):mail.enqueue_order(c,int(c.execute('SELECT order_id FROM payments WHERE ext_order_id=?',(json.loads(raw)['order']['extOrderId'],)).fetchone()[0]),'order_paid')
-            except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
+            except sqlite3.Error:return self.db_failure("Błąd zapisu danych")
             except Exception as ex:
                 # A notification must always get an answer; PayU retries on 5xx and the failure is visible in the log.
                 print(f'[payu] notify failed: {type(ex).__name__}: {ex}',flush=True)
@@ -1009,7 +1018,7 @@ class Handler(BaseHTTPRequestHandler):
         except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError,pages.PageError,giftcards.GiftError,merch.MerchError,engage.EngageError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError,sqlite3.IntegrityError) as ex:
             return self.error(ex)
-        except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
+        except sqlite3.Error:return self.db_failure("Błąd zapisu danych")
 
     def do_PATCH(self):
         path=urlparse(self.path).path
@@ -1235,7 +1244,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(404,{"error":"Nie znaleziono"})
         except (auth.AuthError,ops.OpsError,sales.SalesError,payments.PaymentError,returns.ReturnError,pages.PageError,giftcards.GiftError,merch.MerchError,engage.EngageError) as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
         except (Invalid,ValueError,TypeError,KeyError) as ex:return self.error(ex)
-        except sqlite3.Error:return self.respond(500,{"error":"Błąd zapisu danych"})
+        except sqlite3.Error:return self.db_failure("Błąd zapisu danych")
 
 if __name__=="__main__":
     if not TOKEN:
