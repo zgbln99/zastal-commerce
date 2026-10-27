@@ -1,6 +1,7 @@
 /* Home page editor: three panes sized to the window, the preview is a real page scaled to fit. */
 .home-builder{width:100%;min-width:0;color:#213429}
 body.staff-editor .admin-page-heading{display:none}
+body.staff-editor .admin-page{max-width:none;padding:12px 16px 24px}
 .home-builder-bar{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:14px 18px;background:#fff;border:1px solid #e1e8e1;margin-bottom:12px}
 .home-builder-title{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;min-width:0}
 .home-builder-bar h2{font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1.2;margin:0}
@@ -23,7 +24,8 @@ body.staff-editor .admin-page-heading{display:none}
 .home-builder-recover-actions{margin-left:auto;display:flex;gap:6px}
 .home-builder-recover-actions button{font-weight:650;padding:5px 12px;border:1px solid #d5bf8e;background:#fff;border-radius:6px}
 .home-builder-workspace{display:grid;grid-template-columns:248px minmax(0,1fr) 330px;background:#fff;border:1px solid #dce5dc;height:clamp(560px,calc(100dvh - 215px),1200px);max-width:100%}
-.home-builder.fullscreen .home-builder-workspace{height:calc(100dvh - 110px)}
+.home-builder.fullscreen .home-builder-workspace{height:calc(100dvh - 104px)}
+.home-builder.fullscreen .home-builder-bar{padding:10px 16px;margin-bottom:10px}
 .home-builder-outline,.home-builder-properties{min-width:0;min-height:0;overflow:auto;background:#fff}
 .home-builder-outline{border-right:1px solid #e0e9df;display:flex;flex-direction:column}
 .home-builder-properties{border-left:1px solid #e0e9df}

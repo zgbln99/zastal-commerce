@@ -52,6 +52,9 @@ export default function HomeEditor(){
  const [undo,setUndo]=useState<HomeConfig[]>([]),[redo,setRedo]=useState<HomeConfig[]>([]);
  const [slideTab,setSlideTab]=useState(1);
  const [fullscreen,setFullscreen]=useState(false);
+ // The editor opens full-width on large screens (remembered); the panel menu comes back with "Zamknij".
+ useEffect(()=>{try{const saved=localStorage.getItem("zastal:editor-fullscreen");setFullscreen(saved===null?window.innerWidth>=1200:saved==="1")}catch{setFullscreen(window.innerWidth>=1200)}},[]);
+ const toggleFullscreen=()=>setFullscreen(x=>{const next=!x;try{localStorage.setItem("zastal:editor-fullscreen",next?"1":"0")}catch{/* private mode */}return next});
  const [publishOpen,setPublishOpen]=useState(false),[published,setPublished]=useState<HomeConfig|null>(null),[publishedFailed,setPublishedFailed]=useState(false);
  const [mode,setMode]=useState<"now"|"later">("now"),[when,setWhen]=useState("");
  const [recovery,setRecovery]=useState<LocalDraft|null>(null);
@@ -317,7 +320,7 @@ export default function HomeEditor(){
   <header className="home-builder-bar"><div className="home-builder-title"><h2>Edytor strony głównej</h2>{loaded&&<span className={"home-builder-status "+status.tone}>{status.text}</span>}<p>{loaded?"Wersja "+remote?.revision+" · opublikowana "+remote?.published_revision:"Pobieranie strony..."}</p></div>
    <div className="home-builder-toolbar"><button onClick={useUndo} disabled={!undo.length} title="Cofnij (Ctrl+Z)" aria-label="Cofnij"><Undo2 size={17}/></button><button onClick={useRedo} disabled={!redo.length} title="Ponów (Ctrl+Y)" aria-label="Ponów"><Redo2 size={17}/></button>
    <button onClick={()=>void showVersions()} disabled={!loaded}><History size={17}/><span>Historia</span></button>
-   <button onClick={()=>setFullscreen(x=>!x)} title={fullscreen?"Zamknij pełny ekran":"Pełny ekran"} aria-pressed={fullscreen}>{fullscreen?<Minimize2 size={17}/>:<Maximize2 size={17}/>}<span>{fullscreen?"Zamknij":"Pełny ekran"}</span></button>
+   <button onClick={toggleFullscreen} title={fullscreen?"Wróć do menu panelu":"Pełny ekran"} aria-pressed={fullscreen}>{fullscreen?<Minimize2 size={17}/>:<Maximize2 size={17}/>}<span>{fullscreen?"Menu panelu":"Pełny ekran"}</span></button>
    <button className="home-builder-save" onClick={()=>void save()} disabled={!loaded||saving||busy||!isDirty} title="Zapisz szkic (Ctrl+S)"><Save size={17}/><span>Zapisz szkic</span></button>
    <button className="home-builder-publish" onClick={()=>void openPublish()} disabled={!loaded||saving||busy}><Send size={17}/><span>Opublikuj</span></button></div>
   </header>

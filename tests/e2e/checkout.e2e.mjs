@@ -426,6 +426,8 @@ try {
   await d.getByRole('button', { name: 'Anuluj plan' }).click();
   await d.waitForSelector('.home-builder-message.schedule', { state: 'detached' });
   step('editor: a scheduled publication can be cancelled', true);
+  step('editor: opens full width on a large screen and gives the panel menu back on request', (await d.evaluate(() => document.body.classList.contains('staff-fullscreen') && getComputedStyle(document.querySelector('.admin-main')).marginLeft === '0px')));
+  await d.getByRole('button', { name: 'Menu panelu' }).click();
   await d.setViewportSize({ width: 1024, height: 768 });
   await d.locator('.admin-navitem', { hasText: 'Kasa POS' }).first().click();
   await d.waitForSelector('.pos-layout');
