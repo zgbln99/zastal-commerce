@@ -149,7 +149,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
     const timer = window.setTimeout(() => setBump(false), 450); return () => window.clearTimeout(timer);
   }, [store.count, store.hydrated]);
   useEffect(() => { const onScroll = () => setScrolled(window.scrollY > 8); onScroll(); window.addEventListener("scroll", onScroll, { passive: true }); return () => window.removeEventListener("scroll", onScroll); }, []);
-  const menuLink = "inline-flex h-10 items-center gap-1 whitespace-nowrap rounded-full px-3 text-sm font-medium text-foreground/70 transition-colors hover:text-foreground xl:px-3.5";
+  const menuLink = "inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[13px] font-medium text-foreground/70 transition-colors hover:text-foreground 2xl:px-3 2xl:text-sm";
   const menuActive = "bg-foreground/[0.06] text-foreground";
   const coverFor = (category: string) => store.products.find(p => p.category === category);
   return <div className={cn("store-site flex min-h-dvh flex-col bg-background text-foreground", offset)}>
@@ -161,7 +161,8 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
         <Link href="/" className="flex shrink-0 items-center" aria-label="Zastal Store, strona główna">
           <img src="/assets/zastal-logo.svg" alt="Zastal Zielona Góra" className="h-8 w-auto sm:h-9 xl:h-10" width={141} height={40}/>
         </Link>
-        <nav className="hidden h-full min-w-0 flex-1 items-center justify-center gap-0.5 xl:flex" aria-label="Nawigacja główna">
+        {brand.competitions.some(c => c.image) && <div className="hidden shrink-0 items-center border-l border-border/70 pl-3 md:flex xl:pl-4"><CompetitionLogos items={brand.competitions} className="gap-3"/></div>}
+        <nav className="hidden h-full min-w-0 flex-1 items-center justify-center xl:flex" aria-label="Nawigacja główna">
           <div className="relative flex h-full items-center" onMouseEnter={() => setShopOpen(true)}>
             <button type="button" className={cn(menuLink, (shopOpen || pathname === "/sklep" || pathname?.startsWith("/kategoria/")) && menuActive)} aria-expanded={shopOpen} aria-haspopup="true" onClick={() => setShopOpen(open => !open)} onKeyDown={e => { if (e.key === "Escape") setShopOpen(false); }}>Sklep <ChevronDown size={14} className={cn("transition-transform", shopOpen && "rotate-180")}/></button>
             {shopOpen && <div className="absolute left-0 top-full z-50 w-[46rem] max-w-[calc(100vw-2rem)] pt-2" onKeyDown={e => { if (e.key === "Escape") setShopOpen(false); }}>
@@ -178,7 +179,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
           <Link href="/kontakt" className={cn(menuLink, pathname === "/kontakt" && menuActive)} onMouseEnter={() => setShopOpen(false)}>Kontakt</Link>
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-1 xl:ml-0">
-          <button type="button" className="hidden h-10 w-44 items-center gap-2 rounded-full border border-border/70 bg-background/50 px-3.5 text-sm text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground xl:inline-flex" onClick={() => store.setDialog("search")} aria-label="Szukaj produktów"><Search size={17}/><span className="flex-1 text-left">Szukaj…</span><kbd className="rounded border border-border/70 px-1.5 text-[11px] leading-5 text-muted-foreground">Ctrl K</kbd></button>
+          <button type="button" className="hidden h-10 w-10 items-center justify-center rounded-full text-foreground transition-colors hover:bg-foreground/[0.06] xl:inline-flex 2xl:w-44 2xl:justify-start 2xl:gap-2 2xl:border 2xl:border-border/70 2xl:bg-background/50 2xl:px-3.5 2xl:text-sm 2xl:text-muted-foreground 2xl:hover:bg-background/80 2xl:hover:text-foreground" onClick={() => store.setDialog("search")} aria-label="Szukaj produktów"><Search size={19}/><span className="hidden flex-1 text-left 2xl:inline">Szukaj…</span><kbd className="hidden rounded border border-border/70 px-1.5 text-[11px] leading-5 text-muted-foreground 2xl:inline">Ctrl K</kbd></button>
           <button className={cn(glassIcon, "xl:hidden")} aria-label="Szukaj produktów" onClick={() => store.setDialog("search")}><Search size={21}/></button>
           <Link className={cn(glassIcon, "relative hidden sm:inline-flex")} href="/ulubione" aria-label={"Ulubione: " + store.favorites.length}><Heart size={21}/>{store.favorites.length > 0 && <span className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-orange text-[10px] font-semibold text-white">{store.favorites.length}</span>}</Link>
           <Link className={cn(glassIcon, "hidden sm:inline-flex")} href="/konto" aria-label={auth.user ? "Moje konto" : "Konto"} title={auth.user ? "Moje konto" : "Zaloguj się"}><User size={21}/></Link>
