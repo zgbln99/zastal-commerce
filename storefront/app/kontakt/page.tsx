@@ -26,7 +26,7 @@ export default async function ContactPage() {
       <div>
         <h1 className="text-3xl font-medium tracking-tight sm:text-4xl lg:text-5xl">Kontakt</h1>
         <p className="mt-4 max-w-md text-muted-foreground">Pytania o zamówienie, rozmiar, nadruk albo odbiór w klubie. Odpowiadamy e-mailem, zwykle w ciągu jednego dnia roboczego.</p>
-        <ul className="mt-8 space-y-4 text-sm">
+        <ul className="mt-8 list-none space-y-4 p-0 text-sm">
           {info?.email && <li className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary"><At size={18}/></span><a href={"mailto:" + info.email} className="hover:text-primary">{info.email}</a></li>}
           {info?.phone && <li className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary"><Call size={18}/></span><a href={"tel:" + info.phone.replace(/\s+/g, "")} className="hover:text-primary">{info.phone}</a></li>}
           {info?.address && <li className="flex items-start gap-3"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Location size={18}/></span><span>{info.address}</span></li>}

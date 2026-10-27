@@ -18,5 +18,5 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="pl"><body><JsonLdScript data={storeJsonLd()}/><CommerceRoot>{children}</CommerceRoot></body></html>;
+  return <html lang="pl"><head><link rel="preload" href="/assets/fonts/zt-talk-medium.woff2" as="font" type="font/woff2" crossOrigin="anonymous"/></head><body><JsonLdScript data={storeJsonLd()}/><CommerceRoot>{children}</CommerceRoot></body></html>;
 }

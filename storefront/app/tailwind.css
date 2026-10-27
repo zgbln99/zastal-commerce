@@ -1,8 +1,9 @@
 /* Stylesheet entry. Layer order: everything inherited from the earlier storefront sits in `legacy`, below Tailwind's own
    layers, so the kit's utilities always win while the untouched pages (checkout, account, help…) keep their styling.
    Preflight stays off: the admin panel and the legacy sheets rely on browser defaults. */
-@layer legacy, theme, base, components, utilities;
+@layer reset, legacy, theme, base, components, utilities;
 
+@import "./store-reset.css" layer(reset);
 @import "./fonts.css" layer(legacy);
 @import "./globals.css" layer(legacy);
 @import "./storefront-refresh.css" layer(legacy);

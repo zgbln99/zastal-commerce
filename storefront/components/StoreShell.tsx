@@ -183,7 +183,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
           <Link href="/" className="inline-flex"><img src="/assets/zastal-logo.svg" alt="Zastal Zielona Góra" className="h-14 w-auto" width={198} height={56}/></Link>
           <p className="text-sm text-muted-foreground">{brand.tagline}</p>
           {brand.competitions.some(c => c.image) && <CompetitionLogos items={brand.competitions} size="lg" className="pt-1"/>}
-          <ul className="space-y-2 text-sm text-muted-foreground">
+          <ul className="m-0 list-none space-y-2 p-0 text-sm text-muted-foreground">
             {seller.email && <li className="flex items-center gap-2"><At size={16} className="text-primary"/><a href={"mailto:" + seller.email} className="hover:text-foreground">{seller.email}</a></li>}
             {seller.phone && <li className="flex items-center gap-2"><Call size={16} className="text-primary"/><a href={"tel:" + seller.phone.replace(/\s+/g, "")} className="hover:text-foreground">{seller.phone}</a></li>}
             {store.sales.pickupAddress && <li className="flex items-start gap-2"><Location size={16} className="mt-0.5 shrink-0 text-primary"/><span>{store.sales.pickupAddress}{store.sales.pickupHours ? " · " + store.sales.pickupHours : ""}</span></li>}
