@@ -1,3 +1,6 @@
+/* Progress of the hero slider: not decorative (it is the slide clock), so it is not tied to the reduced-motion query. */
+@keyframes hero-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
 /* Motion layer. Decorative only and off for visitors who ask for reduced motion.
    Scroll reveals use CSS scroll-driven animations: no JavaScript, nothing hidden when the browser lacks support. */
 @media (prefers-reduced-motion: no-preference) {

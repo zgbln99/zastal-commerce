@@ -22,6 +22,7 @@ export default function StoreHero({ settings }: { settings?: SectionSettings }) 
   const [visible, setVisible] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const touch = useRef<{ x: number; y: number } | null>(null);
+  const keyboard = useRef(false);
   const headingId = useId();
   const index = Math.max(0, slides.findIndex(slide => slide.id === activeId));
   const slide = slides[index];
@@ -35,9 +36,14 @@ export default function StoreHero({ settings }: { settings?: SectionSettings }) 
     document.addEventListener("visibilitychange", syncVisibility);
     return () => document.removeEventListener("visibilitychange", syncVisibility);
   }, []);
+  // One slide is shown for `interval` ms. The progress bar in the active dot is the clock (it ends -> next slide); a timer a little
+  // later does the same if the animation is unavailable. Both only move on from the slide they were started for, so they never double-skip.
+  const autoplayOn = s.autoplay !== false && !editorPreview && slides.length > 1;
+  const advanceFrom = (id: string) => setActiveId(current => current === id ? slides[nextSlide(slides.findIndex(x => x.id === id), 1, slides.length)].id : current);
   useEffect(() => {
     if (!playing) return;
-    const timer = window.setTimeout(() => setActiveId(slides[nextSlide(index, 1, slides.length)].id), interval);
+    const id = slides[index].id;
+    const timer = window.setTimeout(() => advanceFrom(id), interval + 900);
     return () => window.clearTimeout(timer);
   }, [playing, index, interval, slides]);
   const go = (target: number) => { setActiveId(slides[target].id); setAnnouncement(`Slajd ${target + 1} z ${slides.length}: ${slides[target].title.replaceAll("|", " ")}`); };
@@ -45,7 +51,7 @@ export default function StoreHero({ settings }: { settings?: SectionSettings }) 
   const align = text(s, "alignment");
   const lines = titleLines(slide.title);
   return <section className="store-hero relative flex min-h-svh items-end overflow-hidden bg-foreground text-white" role="region" aria-roledescription="karuzela" aria-label="Kolekcje sklepu Zastal" tabIndex={0}
-    onFocusCapture={event => { if ((event.target as HTMLElement).matches(":focus-visible")) setFocused(true); }} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false); }}
+    onKeyDownCapture={() => { keyboard.current = true; }} onPointerDownCapture={() => { keyboard.current = false; setFocused(false); }} onFocusCapture={event => { if (keyboard.current && (event.target as HTMLElement).matches(":focus-visible")) setFocused(true); }} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false); }}
     onKeyDown={event => { const target = event.target as HTMLElement; const step = carouselKeyStep(event.key, target.tagName, target.isContentEditable); if (step && slides.length > 1 && !event.altKey && !event.ctrlKey && !event.metaKey) { event.preventDefault(); move(step); } }}
     onTouchStart={event => { if (event.touches.length === 1) { const point = event.touches[0]; touch.current = { x: point.clientX, y: point.clientY }; } else touch.current = null; }}
     onTouchCancel={() => { touch.current = null; }}
@@ -63,7 +69,11 @@ export default function StoreHero({ settings }: { settings?: SectionSettings }) 
         </div>
       </div>
       {slides.length > 1 && <div className="mt-10 flex items-center gap-3">
-        <div className="flex items-center gap-2" aria-label="Wybór slajdu">{slides.map((item, i) => <button type="button" key={item.id} className={cn("h-1.5 rounded-full bg-white/40 transition-all", i === index ? "w-8 bg-white" : "w-3 hover:bg-white/70")} aria-label={`Slajd ${i + 1}: ${item.title.replaceAll("|", " ")}`} aria-current={i === index ? "true" : undefined} onClick={() => go(i)}/>)}</div>
+        <div className="flex items-center gap-2" aria-label="Wybór slajdu">{slides.map((item, i) => <button type="button" key={item.id} className={cn("relative h-1.5 overflow-hidden rounded-full bg-white/40 transition-[width,background-color]", i === index ? "w-10" : "w-3 hover:bg-white/70")} aria-label={`Slajd ${i + 1}: ${item.title.replaceAll("|", " ")}`} aria-current={i === index ? "true" : undefined} onClick={() => go(i)}>
+          {i === index && <span key={item.id} className="absolute inset-0 origin-left rounded-full bg-white" data-progress={autoplayOn ? (playing ? "running" : "paused") : "off"}
+            style={autoplayOn ? { animation: `hero-progress ${interval}ms linear both`, animationPlayState: playing ? "running" : "paused" } : undefined}
+            onAnimationEnd={event => { if (event.animationName === "hero-progress" && playing) advanceFrom(item.id); }}/>}
+        </button>)}</div>
         <div className="ml-auto flex items-center gap-2">
           <button type="button" className="flex size-10 items-center justify-center rounded-full border border-white/30 bg-white/10 backdrop-blur-sm hover:bg-white/20" aria-label="Poprzedni slajd" onClick={() => move(-1)}><ChevronLeft size={18}/></button>
           <button type="button" className="flex size-10 items-center justify-center rounded-full border border-white/30 bg-white/10 backdrop-blur-sm hover:bg-white/20" aria-label="Następny slajd" onClick={() => move(1)}><ChevronRight size={18}/></button>

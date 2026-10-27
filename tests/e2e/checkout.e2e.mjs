@@ -486,6 +486,12 @@ try {
   await v.waitForSelector('[role="dialog"][aria-label="Ustawienia cookies"]');
   step('cookies: settings reopen from the footer', true);
   await v.keyboard.press('Escape');
+  await v.goto(WEB + '/', { waitUntil: 'networkidle' });
+  const slideLabel = () => v.locator('.store-hero [aria-current="true"]').getAttribute('aria-label');
+  const firstSlide = await slideLabel();
+  step('slider: the active dot shows a running progress fill', (await v.locator('.store-hero [data-progress="running"]').count()) === 1);
+  await v.waitForTimeout(7500);
+  step('slider: it moves to the next slide on its own', (await slideLabel()) !== firstSlide);
   await v.goto(WEB + '/odstapienie', { waitUntil: 'networkidle' });
   await v.fill('input[placeholder="ZS-00012"]', 'ZS-00001');
   await v.fill('input[type="email"]', 'kibic@example.test');
