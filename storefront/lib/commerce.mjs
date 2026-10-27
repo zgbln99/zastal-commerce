@@ -12,6 +12,7 @@ export function normalizeStoreStatus(raw) {
   const shipping = Array.isArray(config.shipping_methods) ? config.shipping_methods.filter(m => m && typeof m.code === 'string' && /^[a-z0-9_-]{2,32}$/.test(m.code) && Number.isSafeInteger(m.price) && m.price >= 0 && ['pickup', 'locker', 'courier'].includes(m.kind)).map(m => ({ code: m.code, name: text(m.name, 80) || m.code, kind: m.kind, price: m.price, free_from: Number.isSafeInteger(m.free_from) && m.free_from >= 0 ? m.free_from : null, requires_address: m.requires_address === true, carrier: text(m.carrier, 80), note: text(m.note, 300) })) : [];
   const payments = Array.isArray(config.payment_methods) ? config.payment_methods.filter(p => p && ['payu', 'transfer', 'pickup'].includes(p.id)).map(p => ({ id: p.id, name: text(p.name, 80) || p.id, description: text(p.description, 200), pickup_only: p.pickup_only === true })) : [];
   const legal = config.legal && typeof config.legal === 'object' ? config.legal : {};
+  const tracking = config.tracking && typeof config.tracking === 'object' ? config.tracking : {};
   const seller = config.seller && typeof config.seller === 'object' ? config.seller : {};
   const payuMethods = Array.isArray(config.payu_methods) ? config.payu_methods.filter(m => m && ['blik', 'c', 'jp', 'ap'].includes(m.value)).map(m => ({ value: m.value, name: text(m.name, 40) || m.value })) : [];
   const gp = config.google_pay && typeof config.google_pay === 'object' ? config.google_pay : null;
@@ -26,6 +27,7 @@ export function normalizeStoreStatus(raw) {
     pickupAddress: text(config.pickup_address, 350), pickupHours: text(config.pickup_hours, 200),
     invoiceEnabled: config.invoice_enabled !== false, orderNote: text(config.order_note, 400),
     legal: { terms: https(legal.terms_url), privacy: https(legal.privacy_url), returns: https(legal.returns_url), shipping: https(legal.shipping_url) },
+    tracking: { ga4: /^G-[A-Z0-9]{6,14}$/.test(String(tracking.ga4 || '')) ? String(tracking.ga4) : '', metaPixel: /^[0-9]{8,20}$/.test(String(tracking.meta_pixel || '')) ? String(tracking.meta_pixel) : '' },
     seller: { name: text(seller.name, 160), email: text(seller.support_email, 254), phone: text(seller.support_phone, 40) },
     brand: normalizeBrand(config.brand),
     pages: Array.isArray(config.pages) ? config.pages.filter(p => p && typeof p.slug === 'string' && /^[a-z0-9][a-z0-9-]{0,59}$/.test(p.slug)).map(p => ({ slug: p.slug, title: text(p.published_title || p.title, 120) || p.slug })) : [],
@@ -43,7 +45,7 @@ export function normalizeBrand(raw) {
   })) : [];
   return { tagline: text(source.tagline, 60) || 'Oficjalny sklep klubu', competitions };
 }
-export const PRELAUNCH_STATUS = Object.freeze({ loaded: false, checkoutEnabled: false, phase: 'prelaunch', notice: '', shipping: [], payments: [], payuMethods: [], googlePay: null, pickupAddress: '', pickupHours: '', invoiceEnabled: true, orderNote: '', legal: { terms: '', privacy: '', returns: '', shipping: '' }, seller: { name: '', email: '', phone: '' }, brand: { tagline: 'Oficjalny sklep klubu', competitions: [] }, pages: [] });
+export const PRELAUNCH_STATUS = Object.freeze({ loaded: false, checkoutEnabled: false, phase: 'prelaunch', notice: '', shipping: [], payments: [], payuMethods: [], googlePay: null, pickupAddress: '', pickupHours: '', invoiceEnabled: true, orderNote: '', legal: { terms: '', privacy: '', returns: '', shipping: '' }, tracking: { ga4: '', metaPixel: '' }, seller: { name: '', email: '', phone: '' }, brand: { tagline: 'Oficjalny sklep klubu', competitions: [] }, pages: [] });
 export function normalizePersonalization(value) {
   if (value == null) return undefined;
   if (!value || typeof value !== 'object') return null;

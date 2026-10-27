@@ -521,6 +521,42 @@ class SalesTests(unittest.TestCase):
             self.assertEqual(c.execute('SELECT status FROM orders WHERE id=?', (reply['id'],)).fetchone()[0], 'anulowane')
         self.assertEqual(self.admin.request('POST', f"/api/admin/orders/{reply['id']}/cancel", {'reason': 'x'})[1]['code'], 'order_closed')
 
+    # ------------------------------------------------------------ withdrawal statement
+    def test_withdrawal_statement_needs_matching_order_confirmation_and_is_acknowledged(self):
+        self.go_live()
+        code, reply = self.order()
+        self.assertEqual(code, 201, reply)
+        number = f"ZS-{reply['id']:05d}"
+        good = {'order': number, 'email': 'KIBIC@example.test', 'name': 'Jan Kibic', 'scope': 'all', 'confirm': True}
+        self.assertEqual(self.public('POST', '/api/store/withdrawal', {**good, 'confirm': False})[1]['code'], 'not_confirmed')
+        self.assertEqual(self.public('POST', '/api/store/withdrawal', {**good, 'email': 'obcy@example.test'})[1]['code'], 'order_not_found')
+        self.assertEqual(self.public('POST', '/api/store/withdrawal', {**good, 'order': 'ZS-99999'})[1]['code'], 'order_not_found')
+        self.assertEqual(self.public('POST', '/api/store/withdrawal', {**good, 'name': ''})[0], 400)
+        self.assertEqual(self.public('POST', '/api/store/withdrawal', {**good, 'scope': 'part'})[0], 400)
+        with api.connect() as c:
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM withdrawals').fetchone()[0], 0)
+        self.assertEqual(self.public('POST', '/api/store/withdrawal', {**good, 'website': 'http://spam'})[1], {'ok': True})
+        with api.connect() as c:
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM withdrawals').fetchone()[0], 0)
+        code, done = self.public('POST', '/api/store/withdrawal', good)
+        self.assertEqual((code, done['ok']), (200, True), done)
+        with api.connect() as c:
+            kinds = sorted(r[0] for r in c.execute("SELECT kind FROM email_outbox WHERE kind LIKE 'withdrawal_%'"))
+            self.assertEqual(kinds, ['withdrawal_ack', 'withdrawal_received'])
+            import commerce_withdrawal as withdrawal
+            subject, body = withdrawal.message(c, f"withdrawal_ack:{done['id']}", 'https://x.test', 'withdrawal_ack')
+            self.assertIn(number, subject)
+            self.assertIn('Jan Kibic', body)
+        code, listing = self.admin.request('GET', '/api/admin/withdrawals')
+        self.assertEqual((code, len(listing['withdrawals']), listing['withdrawals'][0]['status']), (200, 1, 'zlozone'))
+        self.assertIn(self.public('GET', '/api/admin/withdrawals')[0], (401, 403))
+        code, handled = self.admin.request('PATCH', f"/api/admin/withdrawals/{done['id']}", {'status': 'obsluzone', 'staff_note': 'Nadruk, brak prawa odstąpienia'})
+        self.assertEqual((code, handled['status']), (200, 'obsluzone'))
+        self.assertEqual(self.admin.request('GET', '/api/admin/withdrawals')[1]['withdrawals'], [])
+        for _ in range(2):
+            self.assertEqual(self.public('POST', '/api/store/withdrawal', good)[0], 200)
+        self.assertEqual(self.public('POST', '/api/store/withdrawal', good)[1]['code'], 'withdrawal_limit')
+
 
 if __name__ == '__main__':
     unittest.main()

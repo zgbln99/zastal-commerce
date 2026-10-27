@@ -11,6 +11,7 @@ import re
 
 SLUG = re.compile(r'[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?')
 MAX_PAGES = 20
+FIRST_SEEDS = ('regulamin', 'polityka-prywatnosci', 'zwroty', 'dostawa', 'kontakt')
 MAX_CONTENT = 60000
 SEEDS = {
     'regulamin': ('Regulamin sklepu', '''# Regulamin sklepu internetowego Zastal Store
@@ -73,6 +74,93 @@ Sklep prowadzi: [NAZWA PODMIOTU], [ADRES], NIP [NIP], KRS/CEIDG [NUMER], e-mail:
 - Reklamację wady zgłoś w ten sam sposób, opisując problem i dołączając zdjęcia, jeśli to możliwe.
 - Odpowiadamy w ciągu 14 dni.
 '''),
+    'polityka-cookies': ('Polityka cookies', '''# Polityka cookies
+
+[UZUPEŁNIJ i zatwierdź z prawnikiem. Szkic opisuje pliki, których sklep faktycznie używa; po włączeniu narzędzi pomiarowych w Centrum startu sprawdź sekcję „Za zgodą”.]
+
+## Co zapisujemy na Twoim urządzeniu
+Korzystamy z plików cookies i pamięci przeglądarki (localStorage, sessionStorage). Dzielą się na niezbędne do działania sklepu i opcjonalne, wymagające Twojej zgody (art. 399 ustawy Prawo komunikacji elektronicznej, [ZWERYFIKUJ PODSTAWĘ PRAWNĄ]).
+
+## Niezbędne (bez zgody)
+- __Host-zastal_session: sesja zalogowanego konta klienta (cookie, HttpOnly, wygasa po wylogowaniu lub po upływie ważności sesji).
+- zastal_store_cart_v2: zawartość koszyka (pamięć przeglądarki).
+- zastal_store_favs: ulubione produkty (pamięć przeglądarki).
+- zastal_checkout_attempt oraz dane formularza zamówienia: ochrona przed podwójnym złożeniem zamówienia (pamięć sesji, do zamknięcia karty).
+- zastal_consent: zapamiętanie wyboru dotyczącego cookies (12 miesięcy).
+
+## Za zgodą (tylko jeśli sklep je włączył)
+- Google Analytics 4 (statystyki odwiedzin): [UZUPEŁNIJ: czy włączone, dostawca, okres przechowywania, przekazywanie danych poza EOG].
+- Piksel Meta (pomiar reklam): [UZUPEŁNIJ: czy włączony, dostawca, okres przechowywania].
+Bez Twojej zgody te narzędzia się nie ładują.
+
+## Jak zmienić lub wycofać zgodę
+Kliknij „Ustawienia cookies” w stopce sklepu. Wycofanie zgody jest równie proste jak jej udzielenie. Pliki możesz też usunąć w ustawieniach przeglądarki.
+
+## Kontakt
+[NAZWA PODMIOTU], [E-MAIL]
+'''),
+    'odstapienie-od-umowy': ('Odstąpienie od umowy', '''# Odstąpienie od umowy
+
+[UZUPEŁNIJ dane sprzedawcy i zatwierdź z prawnikiem.]
+
+## Prawo odstąpienia
+Konsument może odstąpić od umowy zawartej na odległość w terminie 14 dni bez podania przyczyny. Termin liczy się od dnia objęcia towaru w posiadanie. Wystarczy wysłać oświadczenie przed jego upływem.
+
+## Jak odstąpić
+- Online: strona Odstąpienie od umowy w stopce sklepu (numer zamówienia i adres e-mail z zamówienia).
+- Pisemnie lub e-mailem na adres: [ADRES SPRZEDAWCY], [E-MAIL].
+- Możesz skorzystać ze wzoru formularza poniżej. Nie jest on obowiązkowy.
+
+## Wyjątek dla nadruków
+Zgodnie z art. 38 pkt 3 ustawy o prawach konsumenta prawo odstąpienia nie przysługuje w odniesieniu do rzeczy nieprefabrykowanych, wykonanych według specyfikacji konsumenta, np. koszulki z wybranym nazwiskiem i numerem. Informujemy o tym przy produkcie i w koszyku.
+
+## Zwrot towaru i pieniędzy
+- Odeślij produkt w ciągu 14 dni od odstąpienia na adres: [ADRES ZWROTÓW]. Koszt odesłania ponosi [KTO PONOSI KOSZT].
+- Zwracamy płatność w ciągu 14 dni od otrzymania oświadczenia, tą samą metodą, którą zapłacono, chyba że uzgodniono inaczej. Możemy wstrzymać zwrot do otrzymania towaru lub dowodu jego odesłania.
+
+## Wzór formularza odstąpienia od umowy
+Adresat: [NAZWA, ADRES I E-MAIL SPRZEDAWCY]
+Ja/My(*) niniejszym informuję/informujemy(*) o moim/naszym odstąpieniu od umowy sprzedaży następujących rzeczy(*): [WYMIEŃ PRODUKTY]
+Data zawarcia umowy(*) / odbioru(*): [DATA]
+Imię i nazwisko konsumenta(-ów): [IMIĘ I NAZWISKO]
+Adres konsumenta(-ów): [ADRES]
+Podpis konsumenta(-ów) (tylko jeżeli formularz jest przesyłany w wersji papierowej): [PODPIS]
+Data: [DATA]
+(*) Niepotrzebne skreślić.
+'''),
+    'dostepnosc': ('Deklaracja dostępności', '''# Deklaracja dostępności
+
+[UZUPEŁNIJ po audycie dostępności. Nie publikuj, dopóki informacje o zgodności nie są potwierdzone.]
+
+## Zakres
+Deklaracja dotyczy sklepu internetowego [ADRES SKLEPU]. Sprzedawca: [NAZWA PODMIOTU].
+
+## Stan zgodności
+[UZUPEŁNIJ: zgodny w całości / częściowo zgodny z wymaganiami (WCAG 2.1 AA, EN 301 549) na podstawie wyników audytu z dnia [DATA].]
+
+## Znane ograniczenia
+- [UZUPEŁNIJ listę elementów niedostępnych i termin ich poprawy]
+
+## Data sporządzenia
+Deklarację sporządzono dnia [DATA]. Ostatnia aktualizacja: [DATA].
+
+## Kontakt i skargi
+Uwagi o dostępności można zgłaszać: [E-MAIL], [TELEFON]. Odpowiadamy w ciągu [LICZBA] dni. Po bezskutecznym zgłoszeniu można złożyć skargę do [ORGAN WŁAŚCIWY, UZUPEŁNIJ].
+'''),
+    'bezpieczenstwo-produktow': ('Bezpieczeństwo produktów', '''# Informacje o bezpieczeństwie produktów
+
+[UZUPEŁNIJ danymi producentów i importerów oraz zatwierdź. Rozporządzenie (UE) 2023/988 (GPSR) wymaga wskazania producenta, jego adresu i danych kontaktowych oraz informacji ostrzegawczych.]
+
+## Producent i podmiot odpowiedzialny
+- Produkty klubowe: [NAZWA I ADRES PRODUCENTA], [E-MAIL KONTAKTOWY].
+- Produkty od innych dostawców (akcesoria): [NAZWA, ADRES, E-MAIL, jeśli producent spoza UE: importer lub osoba odpowiedzialna w UE].
+
+## Oznaczenia i ostrzeżenia
+- [Skład i pielęgnacja, ostrzeżenia, wiek użytkownika, jeśli dotyczy]
+
+## Zgłaszanie zagrożeń
+Zgłoszenia dotyczące bezpieczeństwa produktów: [E-MAIL], [TELEFON].
+'''),
     'dostawa': ('Dostawa i odbiór osobisty', '''# Dostawa i odbiór osobisty
 
 [UZUPEŁNIJ zgodnie z cennikiem w panelu Sprzedaż i dostawy.]
@@ -111,9 +199,16 @@ def init_schema(c):
         slug TEXT PRIMARY KEY, title TEXT NOT NULL, draft TEXT NOT NULL DEFAULT '', published TEXT NOT NULL DEFAULT '',
         published_title TEXT NOT NULL DEFAULT '', revision INTEGER NOT NULL DEFAULT 1, published_revision INTEGER NOT NULL DEFAULT 0,
         updated TEXT NOT NULL, published_at TEXT, sort INTEGER NOT NULL DEFAULT 100)''')
-    if not c.execute('SELECT 1 FROM site_pages LIMIT 1').fetchone():
-        for order, (slug, (title, content)) in enumerate(SEEDS.items(), 1):
-            c.execute('INSERT INTO site_pages(slug,title,draft,updated,sort) VALUES(?,?,?,?,?)', (slug, title, content, stamp(), order * 10))
+    # Seeds ship as private drafts. Each is created once; one a seller deleted is never brought back,
+    # and seeds added in later releases are offered to shops that already have their own pages.
+    c.execute('CREATE TABLE IF NOT EXISTS site_pages_seeded(slug TEXT PRIMARY KEY)')
+    if c.execute('SELECT 1 FROM site_pages LIMIT 1').fetchone() and not c.execute('SELECT 1 FROM site_pages_seeded LIMIT 1').fetchone():
+        c.executemany('INSERT OR IGNORE INTO site_pages_seeded(slug) VALUES(?)', [(slug,) for slug in FIRST_SEEDS])
+    for order, (slug, (title, content)) in enumerate(SEEDS.items(), 1):
+        if c.execute('SELECT 1 FROM site_pages_seeded WHERE slug=?', (slug,)).fetchone():
+            continue
+        c.execute('INSERT OR IGNORE INTO site_pages(slug,title,draft,updated,sort) VALUES(?,?,?,?,?)', (slug, title, content, stamp(), order * 10))
+        c.execute('INSERT INTO site_pages_seeded(slug) VALUES(?)', (slug,))
 
 
 def _slug(value):

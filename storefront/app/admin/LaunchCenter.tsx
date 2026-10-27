@@ -4,7 +4,7 @@ import {AlertCircle,ArrowUpRight,Building2,Check,CheckCircle2,ClipboardCheck,Cre
 import {useAuth} from "../../components/AuthProvider";
 import "./launch.css";
 
-type Field = "seller_name"|"tax_id"|"business_address"|"support_email"|"support_phone"|"returns_address"|"terms_url"|"privacy_url"|"returns_url"|"shipping_url";
+type Field = "seller_name"|"tax_id"|"business_address"|"support_email"|"support_phone"|"returns_address"|"terms_url"|"privacy_url"|"returns_url"|"shipping_url"|"ga4_id"|"meta_pixel_id";
 type Flag="brand_approved"|"catalog_reviewed"|"inventory_counted"|"supplier_confirmed";
 type Settings=Record<Field,string>&Record<Flag,boolean>;
 type CheckItem={id:string;label:string;ok:boolean;automated:boolean};
@@ -23,6 +23,10 @@ const sections:{heading:string;intro:string;fields:{key:Field;label:string;place
   {key:"privacy_url",label:"Polityka prywatności",placeholder:"https://.../prywatnosc"},
   {key:"returns_url",label:"Odstąpienie i zwroty",placeholder:"https://.../zwroty"},
   {key:"shipping_url",label:"Warunki dostaw",placeholder:"https://.../dostawa"}
+ ]},
+ {heading:"Pomiar ruchu (opcjonalnie)",intro:"Narzędzia ładują się dopiero po zgodzie odwiedzającego w oknie cookies. Zostaw puste, jeśli sklep ich nie używa. Wtedy baner informuje tylko o niezbędnych plikach.",fields:[
+  {key:"ga4_id",label:"Google Analytics 4 (identyfikator pomiaru)",placeholder:"G-XXXXXXXXXX"},
+  {key:"meta_pixel_id",label:"Piksel Meta (identyfikator)",placeholder:"Same cyfry"}
  ]}
 ];
 const flagInfo:{key:Flag;heading:string;info:string}[]=[

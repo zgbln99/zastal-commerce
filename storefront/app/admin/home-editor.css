@@ -152,6 +152,14 @@ body.staff-editor .admin-page-heading{display:none}
 .home-builder-version strong{font-size:12px}
 .home-builder-version small{font-size:12px;color:#8ea593}
 .home-builder-version button{display:flex;gap:9px;align-items:center;border:1px solid #bfd9c4;color:#1c774a;padding:11px;font-size:12px}
+.home-builder-message.schedule{background:#e7f0fb;color:#24558f;border:1px solid #c5d9ef}
+.home-builder-message.schedule .home-builder-recover-actions{border:1px solid #9fbddf;background:#fff;border-radius:6px;padding:5px 12px;font-weight:650}
+.home-builder-when{display:inline-flex;gap:4px;padding:3px;border:1px solid #d5e1d6;border-radius:10px;margin-top:18px}
+.home-builder-when button{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;font-size:14px;font-weight:600;color:#5d7a64}
+.home-builder-when button.on{background:#115d3e;color:#fff}
+.home-builder-when-field{display:flex;flex-direction:column;gap:6px;margin-top:14px;font-size:13px;font-weight:650;color:#3a5a43}
+.home-builder-when-field input{border:1px solid #d8e4d8;border-radius:6px;padding:10px 12px;font-size:14px;max-width:260px;text-transform:none}
+.home-builder-when-field small{font-weight:400;color:#6f8574;font-size:12px}
 @media(max-width:1500px){.home-builder-workspace{grid-template-columns:220px minmax(0,1fr) 300px}}
 @media(max-width:1180px){.home-builder-workspace{grid-template-columns:200px minmax(0,1fr)}.home-builder-properties{grid-column:1/3;border-left:0;border-top:1px solid #dde8de;max-height:none}.home-builder-workspace{height:auto}.home-builder-outline{max-height:560px}.home-builder-stage{height:560px}.home-builder-fields{display:grid;grid-template-columns:1fr 1fr;gap:17px}.home-builder-bar{align-items:flex-start;flex-direction:column}}
 @media(max-width:700px){.home-builder-workspace{display:flex;flex-direction:column}.home-builder-outline{max-height:300px;border-right:0;border-bottom:1px solid #dce6da}.home-builder-stage{height:520px}.home-builder-fields{grid-template-columns:1fr}.home-builder-bar{padding:12px}.home-builder-toolbar>button span{display:none}.home-builder-types{grid-template-columns:1fr}.home-builder-media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home-builder-dialog{padding:19px}.home-builder-stage-head>div:first-child{font-size:11px}.home-builder-item-actions button{opacity:1}}

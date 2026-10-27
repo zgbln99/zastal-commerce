@@ -107,3 +107,12 @@ cd storefront && npx tsc --noEmit && npm run build && cd ..
 python3 tests/e2e/serve.py > /tmp/e2e.json &     # izolowany sklep w trybie live z atrapą PayU
 PLAYWRIGHT_ROOT=<ścieżka do globalnego playwright> node tests/e2e/checkout.e2e.mjs "$(cat /tmp/e2e.json)"
 ```
+
+## Zgodność przed otwarciem sprzedaży
+
+- Strony informacyjne w panelu (regulamin, polityka prywatności, polityka cookies, odstąpienie od umowy, zwroty, dostawa, deklaracja dostępności, bezpieczeństwo produktów) są szkicami z polami [UZUPEŁNIJ]. Uzupełnia je sprzedawca z prawnikiem i dopiero wtedy publikuje.
+- Pomiar ruchu: pola GA4 i piksel Meta w Centrum startu zostaw puste, jeśli sklep ich nie używa. Gdy je wpiszesz, napisz o nich w polityce cookies i prywatności.
+- Nginx: po wdrożeniu `deploy/nginx-zastalstore.conf` wykonaj `nginx -t && systemctl reload nginx` (limity zapytań na logowaniu i API, TLS 1.2+).
+- Oświadczenia o odstąpieniu trafiają do panelu Zwroty i na adres obsługi z Centrum startu; ktoś musi je codziennie sprawdzać.
+- Planowanie publikacji strony głównej działa też bez crona; `tools/maintenance.py` dodatkowo publikuje zaległą wersję.
+

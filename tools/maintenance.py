@@ -16,6 +16,7 @@ import commerce_email as mail
 import commerce_merch as merch
 import commerce_retention as retention
 import commerce_digest as digest
+import commerce_cms as cms
 import commerce_sales as sales
 
 
@@ -23,6 +24,7 @@ def main():
     if not api.DATABASE.is_file():
         raise SystemExit('Brak bazy danych; najpierw uruchom API.')
     with api.connect() as c:
+        home_published = cms.run_due(c)
         c.execute('BEGIN IMMEDIATE')
         cancelled = sales.expire_unpaid(c)
         for oid in cancelled:
@@ -34,7 +36,7 @@ def main():
         now = int(time.time())
         sessions = c.execute('DELETE FROM auth_sessions WHERE expires<=?', (now,)).rowcount
         tokens = c.execute('DELETE FROM email_tokens WHERE expires<=? AND consumed IS NULL', (now - 7 * 86400,)).rowcount
-    print(json.dumps({'cancelled_unpaid': cancelled, 'expired_sessions': sessions, 'expired_tokens': tokens, 'restock_alerts': restock_alerts, 'price_alerts': price_alerts, 'cart_reminders': cart_reminders, 'digest_sent_to': digest_sent}))
+    print(json.dumps({'cancelled_unpaid': cancelled, 'expired_sessions': sessions, 'expired_tokens': tokens, 'restock_alerts': restock_alerts, 'price_alerts': price_alerts, 'cart_reminders': cart_reminders, 'digest_sent_to': digest_sent, 'home_published': home_published}))
     return 0
 
 

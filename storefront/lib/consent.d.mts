@@ -1,0 +1,10 @@
+export const CONSENT_KEY: string;
+export const CONSENT_VERSION: number;
+export const CONSENT_MAX_AGE_MS: number;
+export type Consent = { statistics: boolean; marketing: boolean; at: number };
+export type Tracking = { ga4: string; metaPixel: string };
+export function optionalCategories(tracking: Tracking | null | undefined): { statistics: boolean; marketing: boolean };
+export function serializeConsent(choice: { statistics: boolean; marketing: boolean }, now?: number): string;
+export function parseConsent(raw: unknown, now?: number): Consent | null;
+export function allowedTrackers(consent: Consent | null, tracking: Tracking | null | undefined): Tracking;
+export function needsAnswer(stored: Consent | null): boolean;

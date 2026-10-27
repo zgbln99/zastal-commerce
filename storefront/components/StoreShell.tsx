@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, ArrowUpRight, At, Call, Check, ChevronDown, ChevronRight, Heart, Location, Menu2, Minus, Plus, Search, ShoppingCart, Trash, TruckFast, User, X } from "reicon-react";
 import { fmt } from "../lib/catalog";
 import { availableQty, canCheckout, cartLineKey, filterProducts, lineUnitPrice, personalizationLabel, productDisplayPrice, productPath, variantCartQuantity } from "../lib/commerce.mjs";
@@ -139,6 +139,15 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
   // The header is a single fixed glass bar of 64 px, plus 32 px for the pre-launch notice.
   const offset = pathname === "/" || pathname === "/admin/podglad" ? "" : notice ? "pt-24" : "pt-16";
   const [scrolled, setScrolled] = useState(false);
+  // The cart badge pops when the count changes after the cart was loaded, not on the initial load.
+  const [bump, setBump] = useState(false); const lastCount = useRef<number | null>(null);
+  useEffect(() => {
+    if (!store.hydrated) return;
+    if (lastCount.current === null) { lastCount.current = store.count; return; }
+    if (lastCount.current === store.count) return;
+    lastCount.current = store.count; setBump(true);
+    const timer = window.setTimeout(() => setBump(false), 450); return () => window.clearTimeout(timer);
+  }, [store.count, store.hydrated]);
   useEffect(() => { const onScroll = () => setScrolled(window.scrollY > 8); onScroll(); window.addEventListener("scroll", onScroll, { passive: true }); return () => window.removeEventListener("scroll", onScroll); }, []);
   const menuLink = "inline-flex h-10 items-center gap-1 whitespace-nowrap rounded-full px-3 text-sm font-medium text-foreground/70 transition-colors hover:text-foreground xl:px-3.5";
   const menuActive = "bg-foreground/[0.06] text-foreground";
@@ -156,7 +165,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
           <div className="relative flex h-full items-center" onMouseEnter={() => setShopOpen(true)}>
             <button type="button" className={cn(menuLink, (shopOpen || pathname === "/sklep" || pathname?.startsWith("/kategoria/")) && menuActive)} aria-expanded={shopOpen} aria-haspopup="true" onClick={() => setShopOpen(open => !open)} onKeyDown={e => { if (e.key === "Escape") setShopOpen(false); }}>Sklep <ChevronDown size={14} className={cn("transition-transform", shopOpen && "rotate-180")}/></button>
             {shopOpen && <div className="absolute left-0 top-full z-50 w-[46rem] max-w-[calc(100vw-2rem)] pt-2" onKeyDown={e => { if (e.key === "Escape") setShopOpen(false); }}>
-              <div className="rounded-3xl border border-border/70 bg-background/85 p-5 text-foreground shadow-2xl shadow-black/15 backdrop-blur-2xl backdrop-saturate-150 not-supports-[backdrop-filter]:bg-background">
+              <div className="animate-pop rounded-3xl border border-border/70 bg-background/85 p-5 text-foreground shadow-2xl shadow-black/15 backdrop-blur-2xl backdrop-saturate-150 not-supports-[backdrop-filter]:bg-background">
               <div className="grid grid-cols-4 gap-3">{CATEGORIES.map(c => { const cover = coverFor(c); return <Link key={c} href={categoryUrl(c)} className="group rounded-2xl border border-border/60 bg-background/60 p-2 transition-colors hover:border-primary/40 hover:bg-background/90" onClick={() => setShopOpen(false)}><span className="block aspect-square overflow-hidden rounded-xl bg-muted">{cover && <ProductImage product={cover} sizes="220px" className="size-full object-cover transition-transform duration-500 group-hover:scale-105"/>}</span><span className="mt-2 block text-sm font-semibold">{label(c)}</span><span className="block text-xs text-muted-foreground">{store.products.filter(p => p.category === c).length} produktów</span></Link>; })}</div>
               <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-border/60 pt-4 text-sm"><Link href="/sklep" className="inline-flex items-center gap-1 font-semibold text-primary hover:underline" onClick={() => setShopOpen(false)}>Wszystkie produkty <ArrowRight size={14}/></Link><Link href="/sklep?q=retro" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Kolekcja Retro</Link><Link href="/zawodnicy" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Koszulki zawodników</Link><Link href="/karta-podarunkowa" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Karta podarunkowa</Link></div>
               {brand.competitions.some(c => c.image) && <div className="mt-4 border-t border-border/60 pt-4"><CompetitionLogos items={brand.competitions}/></div>}
@@ -173,7 +182,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
           <button className={cn(glassIcon, "xl:hidden")} aria-label="Szukaj produktów" onClick={() => store.setDialog("search")}><Search size={21}/></button>
           <Link className={cn(glassIcon, "relative hidden sm:inline-flex")} href="/ulubione" aria-label={"Ulubione: " + store.favorites.length}><Heart size={21}/>{store.favorites.length > 0 && <span className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-orange text-[10px] font-semibold text-white">{store.favorites.length}</span>}</Link>
           <Link className={cn(glassIcon, "hidden sm:inline-flex")} href="/konto" aria-label={auth.user ? "Moje konto" : "Konto"} title={auth.user ? "Moje konto" : "Zaloguj się"}><User size={21}/></Link>
-          <button className="inline-flex ml-1 h-10 items-center gap-2 rounded-full bg-primary pl-3.5 pr-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90" onClick={() => store.setDialog("cart")} aria-label={"Otwórz koszyk (" + store.count + ")"}><ShoppingCart size={20}/><span className="hidden sm:inline">Koszyk</span><b className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold text-primary">{store.count}</b></button>
+          <button className="inline-flex ml-1 h-10 items-center gap-2 rounded-full bg-primary pl-3.5 pr-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90" onClick={() => store.setDialog("cart")} aria-label={"Otwórz koszyk (" + store.count + ")"}><ShoppingCart size={20}/><span className="hidden sm:inline">Koszyk</span><b className={cn("cart-count flex h-7 min-w-7 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold text-primary", bump && "bump")}>{store.count}</b></button>
         </div>
       </div>
     </header>
@@ -193,11 +202,11 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
           </ul>
         </div>
         <FooterColumn title="Produkty"><Link href="/sklep">Cały sklep</Link>{CATEGORIES.map(c => <Link key={c} href={categoryUrl(c)}>{label(c)}</Link>)}<Link href="/zawodnicy">Koszulki zawodników</Link></FooterColumn>
-        <FooterColumn title="Zakupy i pomoc"><Link href="/pomoc#dostawa">Dostawa i odbiór</Link><Link href="/karta-podarunkowa">Karta podarunkowa</Link><Link href="/pomoc#rozmiary">Wybór rozmiaru</Link><Link href="/pomoc#zamowienia">Zamówienia i płatności</Link><Link href="/konto">Moje konto</Link><Link href="/konto?mode=register">Utwórz konto</Link><Link href="/ulubione">Moje ulubione</Link><Link href="/pomoc#prywatnosc">Konto i prywatność</Link></FooterColumn>
+        <FooterColumn title="Zakupy i pomoc"><Link href="/pomoc#dostawa">Dostawa i odbiór</Link><Link href="/karta-podarunkowa">Karta podarunkowa</Link><Link href="/pomoc#rozmiary">Wybór rozmiaru</Link><Link href="/odstapienie">Odstąpienie od umowy</Link><Link href="/pomoc#zamowienia">Zamówienia i płatności</Link><Link href="/konto">Moje konto</Link><Link href="/konto?mode=register">Utwórz konto</Link><Link href="/ulubione">Moje ulubione</Link><Link href="/pomoc#prywatnosc">Konto i prywatność</Link></FooterColumn>
         <FooterColumn title="Klub"><Link href="/kontakt">Kontakt</Link>{store.sales.pages.map(page => <Link key={page.slug} href={"/informacje/" + page.slug}>{page.title}</Link>)}<a href="https://basketzg.pl/" target="_blank" rel="noreferrer">Strona Zastalu <ArrowUpRight size={13} className="inline"/></a><a href="https://zastal.store/" target="_blank" rel="noreferrer">Aktualny sklep klubowy <ArrowUpRight size={13} className="inline"/></a>{store.sales.checkoutEnabled && store.sales.legal.terms && <a href={store.sales.legal.terms} target="_blank" rel="noreferrer">Regulamin</a>}{store.sales.checkoutEnabled && store.sales.legal.privacy && <a href={store.sales.legal.privacy} target="_blank" rel="noreferrer">Polityka prywatności</a>}{store.sales.checkoutEnabled && store.sales.legal.returns && <a href={store.sales.legal.returns} target="_blank" rel="noreferrer">Zwroty i reklamacje</a>}</FooterColumn>
       </div>
       <div className="border-t border-border"><div className="container grid gap-6 py-10 md:grid-cols-[1fr_minmax(0,26rem)] md:items-center"><div><h3 className="text-base font-medium">Newsletter sklepu</h3><p className="mt-1 text-sm text-muted-foreground">Nowości, premiery i promocje. Piszemy rzadko, tylko gdy jest o czym.</p></div><NewsletterForm source="footer"/></div></div>
-      <div className="border-t border-border"><div className="container flex flex-wrap items-center justify-between gap-3 py-5 text-xs text-muted-foreground"><span>© {year} Zastal Store</span><span>Polska · PLN · ceny brutto</span><Link href="/pomoc" className="hover:text-foreground">Informacje o sklepie</Link></div></div>
+      <div className="border-t border-border"><div className="container flex flex-wrap items-center justify-between gap-3 py-5 text-xs text-muted-foreground"><span>© {year} Zastal Store</span><span>Polska · PLN · ceny brutto</span><button type="button" className="underline underline-offset-4 hover:text-foreground" onClick={() => window.dispatchEvent(new Event("zastal:cookie-settings"))}>Ustawienia cookies</button><Link href="/pomoc" className="hover:text-foreground">Informacje o sklepie</Link></div></div>
     </footer>
     {store.dialog === "menu" && <Modal title="Menu sklepu" onClose={() => store.setDialog(null)} drawer className="max-w-xs">
       <div className="modal-title"><h2>Sklep Zastalu</h2><button className={iconButton} aria-label="Zamknij menu" onClick={() => store.setDialog(null)}><X size={20}/></button></div>

@@ -278,6 +278,8 @@ def public_config(c, email_configured, payu_ready, mode):
         'pickup_address': config['pickup_address'], 'pickup_hours': config['pickup_hours'],
         'invoice_enabled': config['invoice_enabled'], 'order_note': config['order_note'],
         'legal': {key: values[key] for key in ('terms_url', 'privacy_url', 'returns_url', 'shipping_url')},
+        # Optional measurement tools: loaded by the storefront only after the visitor agrees (see CookieConsent).
+        'tracking': {'ga4': values['ga4_id'], 'meta_pixel': values['meta_pixel_id']},
         'seller': {'name': values['seller_name'], 'support_email': values['support_email'], 'support_phone': values['support_phone'] if launch.valid_support_phone(values['support_phone']) else ''},
     }
 

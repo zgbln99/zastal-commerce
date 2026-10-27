@@ -35,6 +35,7 @@ const browser = await chromium.launch();
 try {
   // ---------- Mobile customer journey: product → cart → checkout (transfer) → receipt
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'pl-PL' });
+  await mobile.addInitScript(() => localStorage.setItem('zastal_consent', JSON.stringify({ v: 1, statistics: false, marketing: false, at: Date.now() })));
   const page = await mobile.newPage();
   await page.goto(WEB + '/', { waitUntil: 'networkidle' });
   await shot(page, '01-home-390');
@@ -119,6 +120,7 @@ try {
 
   // ---------- Desktop journey with PayU: redirect, signed notification, paid receipt
   const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'pl-PL' });
+  await desktop.addInitScript(() => localStorage.setItem('zastal_consent', JSON.stringify({ v: 1, statistics: false, marketing: false, at: Date.now() })));
   const d = await desktop.newPage();
   // The fake PayU host answers with a stub page so the redirect can be observed.
   await d.route('https://payu.example.test/**', route => route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>PayU sandbox (stub)</h1>' }));
@@ -405,6 +407,15 @@ try {
   await d.getByRole('button', { name: 'Opublikuj teraz' }).click();
   await d.waitForSelector('.home-builder-message.success:has-text("Opublikowano")');
   step('editor: the original heading is restored', true);
+  await d.getByRole('button', { name: 'Opublikuj' }).click();
+  await d.getByRole('radio', { name: /Zaplanuj/ }).click();
+  await d.getByRole('button', { name: 'Zaplanuj publikację' }).click();
+  await d.waitForSelector('.home-builder-message.schedule');
+  step('editor: a publication can be scheduled for later and shows its time', (await d.locator('.home-builder-message.schedule').innerText()).includes('Zaplanowana publikacja'));
+  await shot(d, '26b-admin-home-editor-scheduled-1440');
+  await d.getByRole('button', { name: 'Anuluj plan' }).click();
+  await d.waitForSelector('.home-builder-message.schedule', { state: 'detached' });
+  step('editor: a scheduled publication can be cancelled', true);
   await d.setViewportSize({ width: 1024, height: 768 });
   await d.locator('.admin-navitem', { hasText: 'Kasa POS' }).first().click();
   await d.waitForSelector('.pos-layout');
@@ -414,6 +425,7 @@ try {
   await desktop.close();
   // ---------- Panel and shop account are separate sessions in the same browser
   const both = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'pl-PL' });
+  await both.addInitScript(() => localStorage.setItem('zastal_consent', JSON.stringify({ v: 1, statistics: false, marketing: false, at: Date.now() })));
   const b = await both.newPage();
   await b.goto(WEB + '/konto?mode=register', { waitUntil: 'networkidle' });
   const registered = await b.evaluate(async () => {
@@ -460,6 +472,28 @@ try {
   await b.goto(WEB + '/konto', { waitUntil: 'networkidle' });
   step('sessions: signing out of the panel keeps the shop account', (await b.locator('.account-heading').count()) === 1);
   await both.close();
+  // Cookie notice and withdrawal form, seen by a first-time visitor.
+  const visitor = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'pl-PL' });
+  const v = await visitor.newPage();
+  await v.goto(WEB + '/', { waitUntil: 'networkidle' });
+  await v.waitForSelector('.cookie-banner');
+  step('cookies: a first visit shows the notice with equal choices when tools are configured or a single acknowledgement when not', (await v.locator('.cookie-banner button').count()) >= 1);
+  await shot(v, '27-cookie-banner-390');
+  await v.locator('.cookie-banner button', { hasText: /Rozumiem|Odrzucam/ }).first().click();
+  await v.reload({ waitUntil: 'networkidle' });
+  step('cookies: the answer is remembered', (await v.locator('.cookie-banner').count()) === 0 && (await v.evaluate(() => localStorage.getItem('zastal_consent'))).includes('"statistics":false'));
+  await v.getByRole('button', { name: 'Ustawienia cookies' }).click();
+  await v.waitForSelector('[role="dialog"][aria-label="Ustawienia cookies"]');
+  step('cookies: settings reopen from the footer', true);
+  await v.keyboard.press('Escape');
+  await v.goto(WEB + '/odstapienie', { waitUntil: 'networkidle' });
+  await v.fill('input[placeholder="ZS-00012"]', 'ZS-00001');
+  await v.fill('input[type="email"]', 'kibic@example.test');
+  await v.locator('input[autocomplete="name"]').fill('Jan Kibic');
+  await v.getByRole('button', { name: /Dalej/ }).click();
+  step('withdrawal: the form asks for confirmation before sending', (await v.getByRole('button', { name: /Potwierdzam odstąpienie/ }).count()) === 1);
+  await shot(v, '28-withdrawal-confirm-390');
+  await visitor.close();
 } finally {
   await browser.close();
 }

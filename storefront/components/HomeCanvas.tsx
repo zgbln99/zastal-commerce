@@ -130,6 +130,13 @@ function Block({ section }: { section: HomeSection }) {
       </div>
     </section>;
   }
+  if (kind === "ticker") {
+    const items = text(s, "items").split("|").map(x => x.trim()).filter(Boolean);
+    const group = (hidden: boolean) => <div className="ticker-group" aria-hidden={hidden || undefined}>{items.map((item, i) => <span key={i} className="flex items-center whitespace-nowrap px-6 text-sm font-medium tracking-wide">{item}<span className="ml-12 inline-block size-1.5 rounded-full bg-current opacity-40" aria-hidden="true"/></span>)}</div>;
+    return <section className="ticker py-3" aria-label="Komunikaty sklepu" style={{ backgroundColor: text(s, "background") || undefined, color: text(s, "text_color") || undefined, ["--ticker-speed" as string]: Math.max(10, num(s, "speed") || 30) + "s" }}>
+      <div className="ticker-track">{group(false)}{group(true)}{group(true)}{group(true)}</div>
+    </section>;
+  }
   if (kind === "text") {
     const alignment = text(s, "alignment");
     return <section className={cn("container py-12", alignment === "center" && "text-center", alignment === "right" && "text-right")} aria-labelledby={section.id}>

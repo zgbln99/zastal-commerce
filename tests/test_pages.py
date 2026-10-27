@@ -35,7 +35,7 @@ class PagesTests(unittest.TestCase):
         self.assertEqual(self.guest.request('GET', '/api/store/pages'), (200, []))
         self.assertEqual(self.guest.request('GET', '/api/store/pages/regulamin')[0], 404)
         code, drafts = self.admin.request('GET', '/api/admin/pages')
-        self.assertEqual([page['slug'] for page in drafts], ['regulamin', 'polityka-prywatnosci', 'zwroty', 'dostawa', 'kontakt'])
+        self.assertEqual([page['slug'] for page in drafts], ['regulamin', 'polityka-prywatnosci', 'zwroty', 'polityka-cookies', 'odstapienie-od-umowy', 'dostepnosc', 'bezpieczenstwo-produktow', 'dostawa', 'kontakt'])
         self.assertGreater(drafts[0]['placeholders'], 0)
         self.assertFalse(drafts[0]['published'])
         code, data = self.admin.request('POST', '/api/admin/pages/regulamin/publish', {})

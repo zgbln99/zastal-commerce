@@ -24,6 +24,7 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "tw-animate-css";
 @import "./kit.css" layer(components);
+@import "./motion.css";
 
 @custom-variant dark (&:is(.dark *));
 

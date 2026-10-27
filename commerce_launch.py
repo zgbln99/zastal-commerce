@@ -20,6 +20,8 @@ FIELDS = {
     "privacy_url": 400,
     "returns_url": 400,
     "shipping_url": 400,
+    "ga4_id": 20,
+    "meta_pixel_id": 20,
 }
 FLAGS = ("brand_approved", "catalog_reviewed", "inventory_counted", "supplier_confirmed")
 LABELS = {
@@ -145,6 +147,10 @@ def validate(data):
             clean = value.strip()
             if key.endswith("_url") and clean and not https_url(clean):
                 raise ValueError("Adres polityki musi używać HTTPS: " + key)
+            if key == "ga4_id" and clean and not re.fullmatch(r"G-[A-Z0-9]{6,14}", clean):
+                raise ValueError("Identyfikator Google Analytics 4 ma postać G-XXXXXXXXXX")
+            if key == "meta_pixel_id" and clean and not re.fullmatch(r"[0-9]{8,20}", clean):
+                raise ValueError("Identyfikator piksela Meta składa się z samych cyfr")
             if key == "tax_id" and clean and not niptax_ok(clean):
                 raise ValueError("Nieprawidłowy NIP (sprawdź cyfrę kontrolną)")
             if key == "support_email" and clean and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", clean):

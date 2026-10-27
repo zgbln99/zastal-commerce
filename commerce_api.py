@@ -30,6 +30,7 @@ import commerce_email as mail
 import commerce_sales as sales
 import commerce_payments as payments
 import commerce_returns as returns
+import commerce_withdrawal as withdrawal
 import commerce_pages as pages
 import commerce_pricing as pricing
 import commerce_merch as merch
@@ -144,6 +145,7 @@ def init():
         dpd.init_schema(c)
         payments.init_schema(c)
         returns.init_schema(c)
+        withdrawal.init_schema(c)
         pages.init_schema(c)
         pricing.init_schema(c)
         merch.init_schema(c)
@@ -364,7 +366,9 @@ class Handler(BaseHTTPRequestHandler):
                     row=c.execute('SELECT * FROM pos_shifts WHERE id=?',(int(shift_route.group(1)),)).fetchone()
                     if not row:return self.respond(404,{'error':'Nie znaleziono zmiany'})
                     return self.respond(200,{**ops.shift_summary(c,row),'sales':ops.shift_sales(c,row['id'])})
-                if path=='/api/store/home':return self.respond(200,cms.get(c))
+                if path=='/api/store/home':
+                    cms.run_due(c)
+                    return self.respond(200,cms.get(c))
                 if path=='/api/admin/home':return self.respond(200,cms.get(c,admin=True))
                 if path=='/api/admin/home/revisions':return self.respond(200,cms.history(c))
                 if path=='/api/admin/home/media':return self.respond(200,cms.list_media())
@@ -467,6 +471,8 @@ class Handler(BaseHTTPRequestHandler):
                     o['printed_lines']=[dict(x) for x in c.execute('SELECT line_index,printed_qty FROM fulfillment_lines WHERE order_id=? AND printed_qty>0',(oid,))]
                     if detail and detail['payment_method']=='transfer':o['transfer']=sales.transfer_instructions(c,oid,o['total'])
                     return self.respond(200,o)
+                if path=='/api/admin/withdrawals':
+                    return self.respond(200,{'withdrawals':withdrawal.listing(c,open_only=parse_qs(urlparse(self.path).query).get('all',['0'])[0]!='1')})
                 if path=='/api/admin/returns':
                     return self.respond(200,{'returns':returns.listing(c,open_only=parse_qs(urlparse(self.path).query).get('all',['0'])[0]!='1'),'reasons':returns.REASONS})
                 if path=="/api/admin/inventory":
@@ -549,6 +555,13 @@ class Handler(BaseHTTPRequestHandler):
                         elif path=='/api/store/newsletter/confirm':result=engage.confirm(c,data.get('token'))
                         else:result=engage.unsubscribe(c,data.get('token'))
                 except engage.EngageError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,result)
+            if path=='/api/store/withdrawal':
+                data=self.body()
+                if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    result=withdrawal.submit(c,data)
                 return self.respond(200,result)
             if path=='/api/admin/digest/send':
                 with connect() as c:
@@ -689,6 +702,22 @@ class Handler(BaseHTTPRequestHandler):
                         result=cms.get(c,admin=True)
                     return self.respond(200,result)
                 except RuntimeError as ex:return self.respond(409,{'error':str(ex)})
+            if path=='/api/admin/home/schedule':
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        at=cms.schedule(c,data.get('revision'),data.get('at'))
+                        audit(c,'homepage','scheduled','Zaplanowano publikację strony głównej na '+at)
+                        result=cms.get(c,admin=True)
+                    return self.respond(200,result)
+                except RuntimeError as ex:return self.respond(409,{'error':str(ex)})
+            if path=='/api/admin/home/schedule/cancel':
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    cms.cancel_schedule(c)
+                    audit(c,'homepage','schedule_cancelled','Anulowano zaplanowaną publikację strony głównej')
+                    result=cms.get(c,admin=True)
+                return self.respond(200,result)
             if path=='/api/admin/home/restore':
                 try:
                     with connect() as c:
@@ -1088,6 +1117,13 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute('BEGIN IMMEDIATE')
                     result=pages.save_draft(c,page_route.group(1),data)
                     audit(c,'pages',page_route.group(1),f"Administrator {self.request_user['id']}: zapisano szkic strony {page_route.group(1)}")
+                return self.respond(200,result)
+            withdrawal_route=re.fullmatch(r'/api/admin/withdrawals/([1-9][0-9]*)',path)
+            if withdrawal_route:
+                with connect() as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    result=withdrawal.update(c,int(withdrawal_route.group(1)),data)
+                    audit(c,'withdrawal',withdrawal_route.group(1),f"Obsługa {self.request_user['id']}: oświadczenie o odstąpieniu oznaczone jako {result['status']}")
                 return self.respond(200,result)
             return_route=re.fullmatch(r'/api/admin/returns/([1-9][0-9]*)',path)
             if return_route:

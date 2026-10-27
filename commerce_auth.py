@@ -47,7 +47,7 @@ ROUTE_CAPABILITIES = (
     ('/api/admin/settings', 'settings', 'settings'), ('/api/admin/shipping', 'settings', 'settings'),
     ('/api/admin/pos', 'pos', 'pos'), ('/api/admin/shifts', 'shifts', 'shifts'),
     ('/api/admin/fulfillment', 'fulfillment', 'fulfillment'), ('/api/admin/email', 'email', 'email'),
-    ('/api/admin/customers', 'customers', 'customers'), ('/api/admin/returns', 'returns', 'returns'),
+    ('/api/admin/customers', 'customers', 'customers'), ('/api/admin/returns', 'returns', 'returns'), ('/api/admin/withdrawals', 'returns', 'returns'),
     ('/api/admin/activity', 'audit', 'audit'), ('/api/admin/promo', 'settings', 'settings'), ('/api/admin/price-alerts', 'settings', 'settings'),
     ('/api/admin/stock-alerts', 'inventory', 'inventory'), ('/api/admin/giftcards', 'settings', 'settings'),
     ('/api/admin/reports', 'settings', 'settings'), ('/api/admin/digest', 'settings', None),

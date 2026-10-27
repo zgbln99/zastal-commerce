@@ -19,7 +19,7 @@ export type PaymentOption = { id: 'payu' | 'transfer' | 'pickup'; name: string; 
 export type PayuMethod = { value: 'blik' | 'c' | 'jp' | 'ap'; name: string };
 export type GooglePayConfig = { environment: 'TEST' | 'PRODUCTION'; gateway_merchant_id: string; merchant_id: string; merchant_name: string };
 export type Competition = { key: string; name: string; url: string; image: string };
-export type StoreStatus = { loaded: boolean; checkoutEnabled: boolean; phase: 'live' | 'prelaunch'; notice: string; shipping: ShippingMethod[]; payments: PaymentOption[]; payuMethods: PayuMethod[]; googlePay: GooglePayConfig | null; pickupAddress: string; pickupHours: string; invoiceEnabled: boolean; orderNote: string; legal: { terms: string; privacy: string; returns: string; shipping: string }; seller: { name: string; email: string; phone: string }; brand: { tagline: string; competitions: Competition[] }; pages: { slug: string; title: string }[] };
+export type StoreStatus = { loaded: boolean; checkoutEnabled: boolean; phase: 'live' | 'prelaunch'; notice: string; shipping: ShippingMethod[]; payments: PaymentOption[]; payuMethods: PayuMethod[]; googlePay: GooglePayConfig | null; pickupAddress: string; pickupHours: string; invoiceEnabled: boolean; orderNote: string; legal: { terms: string; privacy: string; returns: string; shipping: string }; tracking: { ga4: string; metaPixel: string }; seller: { name: string; email: string; phone: string }; brand: { tagline: string; competitions: Competition[] }; pages: { slug: string; title: string }[] };
 export const PRELAUNCH_STATUS: StoreStatus;
 export function normalizeStoreStatus(raw: unknown): StoreStatus;
 export function normalizeBrand(raw: unknown): { tagline: string; competitions: Competition[] };

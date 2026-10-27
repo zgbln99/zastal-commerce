@@ -2,10 +2,11 @@
 import { usePathname } from "next/navigation";
 import { StoreProvider } from "./StoreProvider";
 import StoreShell from "./StoreShell";
+import CookieConsent from "./CookieConsent";
 import AuthProvider from "./AuthProvider";
 export default function CommerceRoot({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return <AuthProvider><StoreProvider>
-    {pathname?.startsWith("/admin")?children:<StoreShell>{children}</StoreShell>}
+    {pathname?.startsWith("/admin")?children:<><StoreShell>{children}</StoreShell><CookieConsent/></>}
   </StoreProvider></AuthProvider>;
 }

@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useMemo,useRef,useState} from "react";
-import {ArrowDown,ArrowUp,Check,CheckCircle2,Copy,Eye,EyeOff,GripVertical,History,ImagePlus,Layers3,Maximize2,Minimize2,Monitor,Plus,RefreshCw,Save,Send,Smartphone,Trash2,X,ExternalLink,AlertCircle,Undo2,Redo2} from "lucide-react";
+import {ArrowDown,ArrowUp,CalendarClock,Check,CheckCircle2,Copy,Eye,EyeOff,GripVertical,History,ImagePlus,Layers3,Maximize2,Minimize2,Monitor,Plus,RefreshCw,Save,Send,Smartphone,Trash2,X,ExternalLink,AlertCircle,Undo2,Redo2} from "lucide-react";
 import {ApiError,can,useAuth} from "../../components/AuthProvider";
 import {useStore} from "../../components/StoreProvider";
 import {DEFAULT_HOME,EDIT_FIELDS,SECTION_DESCRIPTIONS,makeSection,type Field,type HomeConfig,type HomeResponse,type SectionKind} from "../../lib/home-layout";
@@ -11,7 +11,7 @@ import {describeDiff,diffHome} from "../../lib/home-diff.mjs";
 import {CategoryPicker,ProductPicker} from "./home-pickers";
 import "./home-editor.css";
 
-const TYPES:SectionKind[]=["hero","categories","products","personalization","retro","accessories","banner","text","services","campaign"];
+const TYPES:SectionKind[]=["hero","categories","products","personalization","retro","accessories","banner","text","services","campaign","ticker"];
 type Revision={id:number;revision:number;action:string;created:string};
 type Media={url:string;name:string;bytes:number};
 type LocalDraft={base:number;config:HomeConfig;at:number};
@@ -40,6 +40,7 @@ export default function HomeEditor(){
  const [slideTab,setSlideTab]=useState(1);
  const [fullscreen,setFullscreen]=useState(false);
  const [publishOpen,setPublishOpen]=useState(false),[published,setPublished]=useState<HomeConfig|null>(null),[publishedFailed,setPublishedFailed]=useState(false);
+ const [mode,setMode]=useState<"now"|"later">("now"),[when,setWhen]=useState("");
  const [recovery,setRecovery]=useState<LocalDraft|null>(null);
  const [box,setBox]=useState({width:0,height:0});
  const preview=useRef<HTMLIFrameElement|null>(null),stage=useRef<HTMLDivElement|null>(null);
@@ -154,7 +155,7 @@ export default function HomeEditor(){
  };
  const openPublish=async()=>{
   if(!remote||saving||busy)return;
-  setPublishOpen(true);setPublished(null);setPublishedFailed(false);
+  setPublishOpen(true);setPublished(null);setPublishedFailed(false);setMode("now");
   try{
    const res=await fetch("/api/store/home",{cache:"no-store"});
    const body=await res.json();
@@ -174,6 +175,30 @@ export default function HomeEditor(){
    setRemote(out);setDraft(clone(out.config));setUndo([]);setRedo([]);setPublishOpen(false);
    setMessage("Opublikowano stronę główną. Nowy układ jest widoczny dla klientów.");
   }catch(ex){setPublishOpen(false);setError((ex instanceof Error?ex.message:"Nie udało się opublikować strony.")+(ex instanceof ApiError&&ex.status===409?" Pobrano aktualną wersję z serwera.":""));if(ex instanceof ApiError&&ex.status===409)void load();}
+  finally{setBusy(false)}
+ };
+ const schedule=async()=>{
+  if(!remote||saving||busy)return;
+  const moment=new Date(when);
+  if(!when||Number.isNaN(moment.getTime())||moment.getTime()<Date.now()+120000){setError("Wybierz termin co najmniej kilka minut w przyszłości.");return}
+  setBusy(true);setMessage("");setError("");
+  try{
+   let version=remote;
+   if(isDirty){
+    version=await auth.request<HomeResponse>("/api/admin/home",{method:"PATCH",body:JSON.stringify({config:draft,revision:remote.revision})});
+    setRemote(version);setDraft(clone(version.config));
+   }
+   const out=await auth.request<HomeResponse>("/api/admin/home/schedule",{method:"POST",body:JSON.stringify({revision:version.revision,at:moment.toISOString()})});
+   setRemote(out);setDraft(clone(out.config));setUndo([]);setRedo([]);setPublishOpen(false);
+   setMessage("Zaplanowano publikację na "+FORMAT.format(moment)+". Klienci zobaczą stronę dokładnie w tej wersji.");
+  }catch(ex){setPublishOpen(false);setError((ex instanceof Error?ex.message:"Nie udało się zaplanować publikacji.")+(ex instanceof ApiError&&ex.status===409?" Pobrano aktualną wersję z serwera.":""));if(ex instanceof ApiError&&ex.status===409)void load();}
+  finally{setBusy(false)}
+ };
+ const cancelSchedule=async()=>{
+  if(!remote||busy||!window.confirm("Anulować zaplanowaną publikację? Strona dla klientów pozostanie bez zmian."))return;
+  setBusy(true);setError("");
+  try{const out=await auth.request<HomeResponse>("/api/admin/home/schedule/cancel",{method:"POST",body:"{}"});setRemote(out);setMessage("Anulowano zaplanowaną publikację.")}
+  catch(ex){setError(ex instanceof Error?ex.message:"Nie udało się anulować planu.")}
   finally{setBusy(false)}
  };
  const showVersions=async()=>{
@@ -286,6 +311,7 @@ export default function HomeEditor(){
   {error&&<div className="home-builder-message error" role="alert"><AlertCircle size={18}/>{error}<button aria-label="Zamknij komunikat" onClick={()=>setError("")}><X size={17}/></button></div>}
   {message&&<div className="home-builder-message success" role="status"><CheckCircle2 size={18}/>{message}<button aria-label="Zamknij komunikat" onClick={()=>setMessage("")}><X size={17}/></button></div>}
   {recovery&&<div className="home-builder-message recover" role="status"><AlertCircle size={18}/><span>Znaleziono niezapisane zmiany z {FORMAT.format(new Date(recovery.at))}.</span><span className="home-builder-recover-actions"><button onClick={restoreLocal}>Przywróć</button><button onClick={discardLocal}>Odrzuć</button></span></div>}
+  {remote?.scheduled_at&&<div className="home-builder-message schedule" role="status"><CalendarClock size={18}/><span>Zaplanowana publikacja: <b>{FORMAT.format(new Date(remote.scheduled_at))}</b> · wersja {remote.scheduled_revision}. Późniejsze zmiany szkicu nie wejdą do tej publikacji.</span><button className="home-builder-recover-actions" disabled={busy} onClick={()=>void cancelSchedule()}>Anuluj plan</button></div>}
   <div className="home-builder-workspace">
    <aside className="home-builder-outline"><div className="home-builder-side-head"><div><Layers3 size={17}/> Sekcje <b>{draft.sections.length}</b></div><small>{enabled} aktywnych</small></div>
     <div className="home-builder-list">{draft.sections.map((sec,index)=><div key={sec.id} className={"home-builder-item "+(sec.id===selection?"active":"")+(sec.enabled?"":" disabled")+(dragging===sec.id?" dragging":"")} draggable onDragStart={e=>{setDragging(sec.id);e.dataTransfer.effectAllowed="move"}} onDragEnd={()=>setDragging(null)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(dragging&&dragging!==sec.id)reorder(dragging,sec.id);setDragging(null)}}>
@@ -318,12 +344,14 @@ export default function HomeEditor(){
    <div className="home-builder-media-grid">{[...media,...catalogueImages.map(img=>({...img,bytes:0})),...store.products.filter(p=>p.verified).flatMap(p=>productImages(p).map(img=>({url:img.url,name:p.name+" · "+(img.alt||img.role)+(img.illustrative?" · Materiał poglądowy":""),bytes:0})))].filter((item,index,items)=>items.findIndex(other=>other.url===item.url)===index).map(item=><button key={item.url} onClick={()=>{selectImage(item.url)}}><img src={item.url} alt={item.name}/><span>{item.name}</span></button>)}</div>
   </div></div>}
   {versionsOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Historia strony" onClick={()=>setVersionsOpen(false)}><div className="home-builder-dialog home-builder-history" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><h3>Poprzednie wersje</h3></div><button aria-label="Zamknij" onClick={()=>setVersionsOpen(false)}><X size={21}/></button></div><p>Przywracanie nie publikuje zmian — zapisuje wskazaną wersję do szkicu.</p><div>{revisions.map(rev=><div className="home-builder-version" key={rev.id}><span><strong>Wersja {rev.revision}</strong><small>{FORMAT.format(new Date(rev.created))} · {rev.action==="published"?"Opublikowana":rev.action==="draft"?"Szkic":"Pierwotna"}</small></span><button disabled={busy} onClick={()=>void restore(rev.id)}><RefreshCw size={15}/> Przywróć</button></div>)}</div></div></div>}
-  {publishOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Publikacja strony głównej" onClick={()=>!busy&&setPublishOpen(false)}><div className="home-builder-dialog home-builder-publish-dialog" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><h3>Opublikować stronę główną?</h3><p>Klienci zobaczą nowy układ od razu.</p></div><button aria-label="Zamknij" disabled={busy} onClick={()=>setPublishOpen(false)}><X size={21}/></button></div>
+  {publishOpen&&<div className="home-builder-overlay" role="dialog" aria-modal="true" aria-label="Publikacja strony głównej" onClick={()=>!busy&&setPublishOpen(false)}><div className="home-builder-dialog home-builder-publish-dialog" onClick={e=>e.stopPropagation()}><div className="home-builder-dialog-head"><div><h3>Opublikować stronę główną?</h3><p>Wybierz, czy klienci mają zobaczyć zmiany od razu, czy o ustalonej godzinie.</p></div><button aria-label="Zamknij" disabled={busy} onClick={()=>setPublishOpen(false)}><X size={21}/></button></div>
    {publishedFailed?<p className="home-builder-note">Nie udało się pobrać opublikowanej wersji, więc nie pokażemy listy zmian. Możesz opublikować mimo to.</p>
     :!diff?<p className="home-builder-note">Porównuję z opublikowaną stroną…</p>
     :diff.total===0?<p className="home-builder-note">Brak zmian względem opublikowanej strony.</p>
     :<ul className="home-builder-changes">{describeDiff(diff).map(line=><li key={line}><Check size={15}/>{line}</li>)}</ul>}
-   <div className="home-builder-dialog-foot"><button disabled={busy} onClick={()=>setPublishOpen(false)}>Wróć do edycji</button><button className="primary" disabled={busy||(!publishedFailed&&(!diff||diff.total===0))} onClick={()=>void publish()}><Send size={16}/> {busy?"Publikowanie…":"Opublikuj teraz"}</button></div>
+   <div className="home-builder-when" role="radiogroup" aria-label="Kiedy opublikować"><button role="radio" aria-checked={mode==="now"} className={mode==="now"?"on":""} onClick={()=>setMode("now")}>Teraz</button><button role="radio" aria-checked={mode==="later"} className={mode==="later"?"on":""} onClick={()=>{setMode("later");if(!when){const t=new Date(Date.now()+7200000);t.setMinutes(0,0,0);setWhen(new Date(t.getTime()-t.getTimezoneOffset()*60000).toISOString().slice(0,16))}}}><CalendarClock size={15}/> Zaplanuj</button></div>
+   {mode==="later"&&<label className="home-builder-when-field">Data i godzina publikacji<input type="datetime-local" value={when} min={new Date(Date.now()-new Date().getTimezoneOffset()*60000+300000).toISOString().slice(0,16)} onChange={e=>setWhen(e.target.value)}/><small>Strona zmieni się sama w tym momencie, bez udziału panelu. Publikowana jest wersja zapisana teraz.</small></label>}
+   <div className="home-builder-dialog-foot"><button disabled={busy} onClick={()=>setPublishOpen(false)}>Wróć do edycji</button>{mode==="now"?<button className="primary" disabled={busy||(!publishedFailed&&(!diff||diff.total===0))} onClick={()=>void publish()}><Send size={16}/> {busy?"Publikowanie…":"Opublikuj teraz"}</button>:<button className="primary" disabled={busy||!when} onClick={()=>void schedule()}><CalendarClock size={16}/> {busy?"Zapisywanie…":"Zaplanuj publikację"}</button>}</div>
   </div></div>}
  </section>;
 }
