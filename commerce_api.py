@@ -61,6 +61,13 @@ def connect():
     c.execute("PRAGMA busy_timeout=20000")
     return c
 
+def ownership_hint():
+    """Who runs the API and who owns the database file and its folder: the usual reason for a read-only database."""
+    try:
+        return f" (API działa jako uid {os.geteuid()}, plik bazy należy do uid {DATABASE.stat().st_uid}, katalog do uid {DATABASE.parent.stat().st_uid}; wszystkie trzy muszą być takie same)"
+    except (OSError, AttributeError):
+        return ""
+
 def storage_state():
     """Can the API write to its database, and how much room is left on that volume? (reads work long after writes stop)"""
     free=shutil.disk_usage(DATABASE.parent).free//1048576
@@ -68,11 +75,14 @@ def storage_state():
         c=connect()
         try:
             c.execute("PRAGMA busy_timeout=1500")
-            c.execute("BEGIN IMMEDIATE");c.rollback()
+            # A real page write (the schema version rewritten with its own value): it needs the journal file, so a folder
+            # or file owned by someone else, a read-only mount or a full disk all fail here just as they do for orders.
+            version=c.execute("PRAGMA user_version").fetchone()[0]
+            c.execute("BEGIN IMMEDIATE");c.execute(f"PRAGMA user_version={int(version)}");c.commit()
         finally:c.close()
         return {"db_writable":True,"disk_free_mb":free}
     except sqlite3.Error as ex:
-        return {"db_writable":False,"disk_free_mb":free,"db_error":f"{type(ex).__name__}: {ex}"[:160]}
+        return {"db_writable":False,"disk_free_mb":free,"db_error":(f"{type(ex).__name__}: {ex}"+(ownership_hint() if "readonly" in str(ex).lower() else ""))[:400]}
 
 def ean13(identifier):
     """Prefix 200 = internal restricted circulation; not externally assigned GS1 GTIN."""
@@ -305,7 +315,7 @@ class Handler(BaseHTTPRequestHandler):
         reply={"error":message}
         if self.path.startswith(("/api/admin/","/api/staff/")):
             # Staff-facing routes say what the database refused (locked, read-only, disk full) so the owner can act without the journal.
-            reply["detail"]=f"{sys.exc_info()[0].__name__}: {sys.exc_info()[1]}"[:160]
+            reply["detail"]=(f"{sys.exc_info()[0].__name__}: {sys.exc_info()[1]}"+(ownership_hint() if "readonly" in str(sys.exc_info()[1]).lower() else ""))[:400]
         return self.respond(500,reply)
 
     def error(self,ex):

@@ -153,6 +153,12 @@ class AccountTests(unittest.TestCase):
         self.assertEqual(code, 500)
         self.assertEqual(reply['error'], 'Błąd bazy danych')
         self.assertIn('disk is full', reply['detail'])
+        # A read-only database says who runs the API and who owns the file: the usual cause is a root-owned folder.
+        with patch.object(api.auth, 'rotate', side_effect=sqlite3.OperationalError('attempt to write a readonly database')):
+            code, reply = Client(port).request('GET', '/api/staff/auth/session')
+        self.assertEqual(code, 500)
+        self.assertIn('readonly', reply['detail'])
+        self.assertRegex(reply['detail'], r'API działa jako uid \d+, plik bazy należy do uid \d+, katalog do uid \d+')
         # The public shop does not get internals.
         self.assertEqual(shop_code, 500)
         self.assertNotIn('detail', shop_reply)
