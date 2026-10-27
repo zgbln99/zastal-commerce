@@ -61,6 +61,9 @@ try {
   const manifest = await (await fetch(WEB + '/manifest.webmanifest')).json();
   const sitemap = await (await fetch(WEB + '/sitemap.xml')).text();
   step('seo: llms.txt, manifest and sitemap list slugs and categories', llms.includes('/produkt/' + kidsShirt.slug) && manifest.icons.length >= 2 && sitemap.includes('/kategoria/dzieci') && sitemap.includes('/produkt/' + kidsShirt.slug) && !sitemap.includes('/produkt/9<'));
+  await page.goto(WEB + '/sklep?kod=kibic10', { waitUntil: 'networkidle' });
+  await page.waitForSelector('.promo-toast');
+  step('mobile: scanned QR link keeps the code for the cart', (await page.locator('.promo-toast').innerText()).includes('KIBIC10') && (await page.evaluate(() => localStorage.getItem('zastal_promo_v1'))) === 'KIBIC10');
   const feed = await (await fetch(WEB + '/feed/produkty.xml')).text();
   const kidsVariant = kidsShirt.variants[0];
   step('seo: Merchant feed lists one item per size with GTIN and group id', feed.includes('xmlns:g="http://base.google.com/ns/1.0"') && feed.includes(`<g:id>${kidsVariant.sku}</g:id>`) && (kidsVariant.ean.startsWith('2') ? feed.includes(`<g:mpn>${kidsVariant.sku}</g:mpn><g:identifier_exists>no</g:identifier_exists>`) : feed.includes(`<g:gtin>${kidsVariant.ean}</g:gtin>`)) && feed.includes(`<g:item_group_id>${kidsShirt.sku}</g:item_group_id>`) && feed.includes('/produkt/' + kidsShirt.slug + '?rozmiar='), `${(feed.match(/<item>/g) || []).length} pozycji`);
@@ -154,6 +157,26 @@ try {
   await d.waitForSelector('.receipt-success');
   const paidText = await d.locator('.receipt-page').innerText();
   step('desktop: receipt shows paid status and print snapshot', paidText.includes('Płatność przyjęta') && paidText.includes('KIBIC') && paidText.includes('Opłacone'));
+  // ---------- BLIK with a code typed in the store: PayU authorises in place, the receipt waits for the bank app
+  await d.goto(WEB + '/produkt/bluza-zastal-logo', { waitUntil: 'networkidle' });
+  await d.locator('button:has-text("XL")').first().click();
+  await d.getByRole('button', { name: 'Dodaj do koszyka' }).click();
+  await d.goto(WEB + '/zamowienie', { waitUntil: 'networkidle' });
+  await d.waitForSelector('main input[type="email"]');
+  await fillCheckout(d, { email: 'blik@example.test', name: 'Ewa Blik', delivery: 'odbior', payment: 'payu', address: false });
+  await d.waitForSelector('.payu-channels');
+  step('desktop: PayU option lists the channels PayU enabled', (await d.locator('.payu-channels').innerText()).includes('BLIK') && (await d.locator('.payu-channels').innerText()).includes('Karta'));
+  await d.locator('.payu-channels').getByRole('button', { name: 'BLIK' }).click();
+  await d.fill('input[aria-label="Kod BLIK"]', '777123');
+  await shot(d, '09b-checkout-blik-1440');
+  let blikOrder = null;
+  await d.route('**/api/orders', async route => { const reply = await route.fetch(); blikOrder = await reply.json(); await route.fulfill({ response: reply }); });
+  await d.getByRole('button', { name: /Zamawiam i płacę BLIKIEM/ }).click();
+  await d.waitForURL(/payment=blik/);
+  await d.waitForSelector('.receipt-success');
+  step('desktop: BLIK code order waits for the in-app confirmation', blikOrder?.payment?.awaiting_confirmation === true && blikOrder?.payment?.pay_method === 'blik' && (await d.locator('.receipt-page').innerText()).includes('Potwierdź płatność w aplikacji banku'));
+  const blikExt = (await (await fetch(`${API}/api/orders/${blikOrder.id}?token=${encodeURIComponent(blikOrder.tracking_token)}`)).json());
+  step('desktop: BLIK receipt has no redirect and no retry while the bank app decides', blikExt.payment?.redirect_url === '' && blikExt.payment?.can_retry === false);
   // ---------- Newsletter, contact form, cart page
   await d.goto(WEB + '/koszyk', { waitUntil: 'networkidle' });
   step('desktop: cart page renders its own address', (await d.locator('.cart-page').count()) === 1 && ((await d.locator('.empty-state').count()) === 1 || (await d.locator('.cart-item').count()) >= 1));
@@ -177,6 +200,11 @@ try {
   await d.waitForSelector('.player-card');
   const playerLinks = await d.locator('.player-card a[href*="zawodnik="]').count();
   step('desktop: players page links every player to a personalised shirt', playerLinks >= 10, String(playerLinks));
+  await d.locator('.player-card h2 a').first().click();
+  await d.waitForURL(/\/zawodnicy\/[a-z0-9-]+$/);
+  await d.waitForSelector('.player-page h1');
+  step('desktop: player page shows the number and a shirt with the name preselected', (await d.locator('.player-page').innerText()).includes('Nadruk na koszulce') && (await d.locator('.player-page a[href*="zawodnik="]').count()) >= 1, d.url());
+  await shot(d, '12b-player-1440');
   const limited = await d.locator('.product-badge.badge-limitowana').count().catch(() => 0);
   await d.goto(WEB + '/sklep', { waitUntil: 'networkidle' });
   step('desktop: manual badge shows on the product card', (await d.locator('.product-badge.badge-limitowana').count()) === 1, String(limited));

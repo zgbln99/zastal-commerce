@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { storeStatus } from "../lib/store-status";
-import { getAllProducts, categoryPaths } from "../lib/catalog-paths";
+import { getAllProducts, categoryPaths, getPlayers } from "../lib/catalog-paths";
 import { siteOrigin } from "../lib/site";
 
 export const dynamic = "force-dynamic";
@@ -9,12 +9,13 @@ export const dynamic = "force-dynamic";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const origin = siteOrigin();
   if (!(await storeStatus()).live) return [];
-  const products = await getAllProducts();
+  const [products, players] = await Promise.all([getAllProducts(), getPlayers()]);
   return [
     { url: origin + "/", changeFrequency: "daily", priority: 1 },
     { url: origin + "/sklep", changeFrequency: "daily", priority: 0.9 },
     ...categoryPaths().map(path => ({ url: origin + path, changeFrequency: "weekly" as const, priority: 0.8 })),
     { url: origin + "/zawodnicy", changeFrequency: "weekly", priority: 0.5 },
+    ...players.map(player => ({ url: origin + "/zawodnicy/" + player.slug, changeFrequency: "weekly" as const, priority: 0.4, images: player.photo ? [origin + player.photo] : undefined })),
     { url: origin + "/karta-podarunkowa", changeFrequency: "monthly", priority: 0.5 },
     { url: origin + "/kontakt", changeFrequency: "monthly", priority: 0.4 },
     { url: origin + "/pomoc", changeFrequency: "monthly", priority: 0.3 },

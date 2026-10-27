@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { ArrowRight, ChevronRight, Minus, Plus, ShoppingCart, Trash, TruckFast } from "reicon-react";
 import { fmt } from "../../lib/catalog";
 import { availableQty, canCheckout, cartLineKey, lineUnitPrice, personalizationLabel, productPath, variantCartQuantity } from "../../lib/commerce.mjs";
@@ -13,14 +13,32 @@ import { TextureButton } from "@/components/templates/essentials/ui/texture-butt
 
 /** Full cart page (the drawer's big sibling): the same lines, quantities, discount code and totals on their own address. */
 export default function CartPage() {
-  const store = useStore(); const router = useRouter();
+  const store = useStore(); const router = useRouter(); const params = useSearchParams();
   const [promo, setPromo] = useState<PromoPreview | null>(null);
+  const [restored, setRestored] = useState<string>("");
+  // /koszyk?przywroc=TOKEN from the reminder e-mail: the saved lines come back into this browser's cart.
+  const restoreToken = params.get("przywroc") || "";
+  useEffect(() => {
+    if (!restoreToken || !store.hydrated || store.status !== "ready" || !/^[A-Za-z0-9_-]{20,64}$/.test(restoreToken)) return;
+    let cancelled = false;
+    fetch("/api/cart/draft/" + restoreToken, { cache: "no-store" }).then(async r => {
+      const data = await r.json();
+      if (cancelled) return;
+      if (!r.ok || !Array.isArray(data.items)) { setRestored("Nie udało się przywrócić koszyka: link wygasł albo produkty są już niedostępne."); return; }
+      const added = store.restoreLines(data.items);
+      setRestored(added ? "Przywróciliśmy Twój koszyk. Sprawdź rozmiary i dostępność przed zamówieniem." : "Te produkty są już w koszyku albo nie są już dostępne.");
+      router.replace("/koszyk", { scroll: false });
+    }).catch(() => { if (!cancelled) setRestored("Nie udało się przywrócić koszyka."); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restoreToken, store.hydrated, store.status]);
   const checkedPlayers = store.playersStatus === "ready" ? store.players : [];
   const valid = store.status === "ready" && canCheckout(store.cart, store.products, checkedPlayers);
   const prices = store.status === "ready" && store.cart.every(line => store.products.find(p => p.id === line.id)?.verified);
   return <div className="container cart-page pb-16">
     <div className="breadcrumbs"><Link href="/">Strona główna</Link><ChevronRight size={12}/><span>Koszyk</span></div>
     <h1 className="text-3xl font-medium tracking-tight sm:text-4xl">Koszyk <span className="text-muted-foreground">({store.count})</span></h1>
+    {restored && <p className="cart-restored mt-4 rounded-lg border border-primary/30 bg-accent px-4 py-3 text-sm" role="status">{restored}</p>}
     {!store.cart.length ? <div className="empty-state mt-8"><ShoppingCart size={32}/><h2>Koszyk jest pusty</h2><p>Zacznij od koszulek, bluz lub klubowych akcesoriów.</p><TextureButton render={<Link href="/sklep"/>}>Przejdź do sklepu <ArrowRight size={16}/></TextureButton></div>
     : <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_22rem]">
       <div className="divide-y divide-border">{store.cart.map(line => {

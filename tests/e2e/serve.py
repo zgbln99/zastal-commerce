@@ -84,8 +84,13 @@ def main():
     def fake_transport(method, url, headers, body):
         if url.endswith('/oauth/authorize'):
             return 200, {}, json.dumps({'access_token': 'e2e-token', 'expires_in': 3600}).encode()
+        if url.endswith('/api/v2_1/paymethods'):
+            return 200, {}, json.dumps({'payByLinks': [{'value': 'blik', 'name': 'BLIK', 'status': 'ENABLED'}, {'value': 'c', 'name': 'Karty', 'status': 'ENABLED'}]}).encode()
         if url.endswith('/api/v2_1/orders'):
             payload = json.loads(body)
+            method = (payload.get('payMethods') or {}).get('payMethod') or {}
+            if method.get('value') == 'blik' and method.get('authorizationCode'):
+                return 200, {}, json.dumps({'status': {'statusCode': 'SUCCESS'}, 'orderId': 'PAYU-' + payload['extOrderId'], 'extOrderId': payload['extOrderId']}).encode()
             return 302, {}, json.dumps({'status': {'statusCode': 'SUCCESS'}, 'redirectUri': f'https://payu.example.test/pay?payu-fake={payload["extOrderId"]}', 'orderId': 'PAYU-' + payload['extOrderId']}).encode()
         return 200, {}, json.dumps({'status': {'statusCode': 'SUCCESS'}, 'refund': {'refundId': 'RF-E2E', 'status': 'PENDING'}}).encode()
     payments.TRANSPORT = fake_transport

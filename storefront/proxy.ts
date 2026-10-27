@@ -14,7 +14,9 @@ export function proxy(request: NextRequest) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self'",
-    "connect-src 'self'",
+    // Google Pay (checkout wallet button) talks to Google from the page; everything else stays same-origin.
+    "connect-src 'self' https://pay.google.com https://payments.google.com",
+    "frame-src 'self' https://pay.google.com",
     "frame-ancestors 'self'",
     "form-action 'self' https://secure.payu.com https://secure.snd.payu.com",
     "base-uri 'self'",

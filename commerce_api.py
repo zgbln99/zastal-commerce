@@ -32,6 +32,7 @@ import commerce_pricing as pricing
 import commerce_merch as merch
 import commerce_giftcards as giftcards
 import commerce_engage as engage
+import commerce_retention as retention
 import commerce_brand as brand
 import commerce_reports as reports
 import commerce_digest as digest
@@ -122,6 +123,7 @@ def init():
         merch.init_schema(c)
         giftcards.init_schema(c)
         engage.init_schema(c)
+        retention.init_schema(c)
         brand.init_schema(c)
         if 'customer_id' not in {row['name'] for row in c.execute('PRAGMA table_info(order_receipts)')}:
             c.execute('ALTER TABLE order_receipts ADD COLUMN customer_id INTEGER REFERENCES users(id)')
@@ -171,6 +173,14 @@ def catalog(c):
     return products
 
 class Invalid(Exception): pass
+
+def public_config(c,state):
+    """Store status config; in live mode it also carries the PayU channels (BLIK, card, wallets) PayU has enabled."""
+    cfg=sales.public_config(c,mail.configuration()['configured'],payments.ready(),state['mode'])
+    if state['mode']=='live' and any(p['id']=='payu' for p in cfg['payment_methods']):
+        cfg['payu_methods']=payments.pay_methods()
+        if any(m['value']=='jp' for m in cfg['payu_methods']):cfg['google_pay']=payments.google_pay_config()
+    return cfg
 
 def readiness(c):
     return sales.readiness(c,mail.configuration()['configured'],payments.ready())
@@ -294,7 +304,7 @@ class Handler(BaseHTTPRequestHandler):
                 if operation_route:return self.respond(200,ops.detail(c,int(operation_route.group(1))))
                 if path=='/api/store/status':
                     state=readiness(c)
-                    return self.respond(200,{**launch.snapshot(c,public=True,readiness=state),'config':{**sales.public_config(c,mail.configuration()['configured'],payments.ready(),state['mode']),'pages':pages.listing(c),'brand':brand.public(c)}})
+                    return self.respond(200,{**launch.snapshot(c,public=True,readiness=state),'config':{**public_config(c,state),'pages':pages.listing(c),'brand':brand.public(c)}})
                 if path=='/api/store/pages':return self.respond(200,pages.listing(c))
                 page_route=re.fullmatch(r'/api/store/pages/([a-z0-9-]{1,60})',path)
                 if page_route:return self.respond(200,pages.public_page(c,page_route.group(1)))
@@ -326,6 +336,13 @@ class Handler(BaseHTTPRequestHandler):
                 if path=='/api/account/giftcards':
                     auth.require_user(self,'customer')
                     return self.respond(200,giftcards.account_cards(c,self.request_user['id']))
+                if path=='/api/account/favorites':
+                    auth.require_user(self,'customer')
+                    return self.respond(200,{'ids':retention.favorites(c,self.request_user['id'])})
+                draft_route=re.fullmatch(r'/api/cart/draft/([A-Za-z0-9_-]{20,64})',path)
+                if draft_route:
+                    try:return self.respond(200,retention.draft_by_token(c,draft_route.group(1)))
+                    except retention.RetentionError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
                 if path=='/api/admin/pos/quick':
                     pinned=[row['product_id'] for row in c.execute('SELECT product_id FROM product_options WHERE pos_quick=1 ORDER BY product_id')]
                     best=[pid for pid in merch.bestsellers(c,days=60,limit=12,minimum=1) if pid not in pinned]
@@ -354,6 +371,7 @@ class Handler(BaseHTTPRequestHandler):
                     try:return self.respond(200,giftcards.admin_card(c,int(gift_route.group(1))))
                     except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
                 if path=='/api/admin/stock-alerts':return self.respond(200,merch.pending_alerts(c))
+                if path=='/api/admin/price-alerts':return self.respond(200,retention.pending_price_alerts(c))
                 price_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/prices',path)
                 if price_route:return self.respond(200,{'history':pricing.history(c,int(price_route.group(1))),'reduction':pricing.reduction(c,int(price_route.group(1)))})
                 gallery_route=re.fullmatch(r'/api/admin/products/([1-9][0-9]*)/gallery',path)
@@ -518,6 +536,16 @@ class Handler(BaseHTTPRequestHandler):
                     with connect() as c:row,discount=merch.find_code(c,data.get('code'),subtotal)
                 except merch.MerchError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
                 return self.respond(200,merch.public_code(row,discount))
+            if path in ('/api/price-alerts','/api/cart/draft'):
+                data=self.body()
+                if data.get('website'):return self.respond(200,{'ok':True})  # honeypot
+                if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        result=retention.subscribe_price(c,data.get('product_id'),data.get('email')) if path=='/api/price-alerts' else retention.save_draft(c,data)
+                except retention.RetentionError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,result)
             if path=='/api/stock-alerts':
                 data=self.body()
                 if not self.public_rate():return self.respond(429,{'error':'Zbyt wiele prób. Spróbuj później.'})
@@ -583,10 +611,11 @@ class Handler(BaseHTTPRequestHandler):
                     order=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone();detail=sales.details(c,oid)
                     if readiness(c)['mode']!='live' or not detail or detail['mode']!='live' or detail['payment_method']!='payu':return self.respond(409,{'error':'To zamówienie nie korzysta z płatności online','code':'payment_not_applicable'})
                     if order['status']!='oczekuje_platnosci' or detail['payment_status']=='paid':return self.respond(409,{'error':'Zamówienie nie oczekuje już na płatność','code':'payment_not_pending'})
-                    open_attempt=payments.open_attempt(c,oid)
+                    channel=payments.parse_channel(data.get('payment_channel'))
+                    open_attempt=None if channel else payments.open_attempt(c,oid)
                     if open_attempt:return self.respond(200,{'redirect_url':open_attempt['redirect_url'],'ext_order_id':open_attempt['ext_order_id'],'resumed':True})
-                    row=payments.create_order(c,order,{**detail,'tracking_token':receipt['tracking_token'],'shipping_fee':receipt['shipping_fee']},self.client_ip(),json.loads(order['items']))
-                return self.respond(200,{'redirect_url':row['redirect_url'],'ext_order_id':row['ext_order_id']})
+                    row=payments.create_order(c,order,{**detail,'tracking_token':receipt['tracking_token'],'shipping_fee':receipt['shipping_fee']},self.client_ip(),json.loads(order['items']),channel=channel)
+                return self.respond(200,{'redirect_url':row['redirect_url'],'ext_order_id':row['ext_order_id'],'awaiting_confirmation':not row['redirect_url'],'pay_method':row['pay_method']})
             with connect() as c:
                 if auth.dispatch(self,path,c):return
                 if auth.staff_dispatch(self,path,c):return
@@ -684,6 +713,14 @@ class Handler(BaseHTTPRequestHandler):
                         card=giftcards.attach(c,data.get('code'),user['id'])
                 except giftcards.GiftError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
                 return self.respond(200,card)
+            if path=='/api/account/favorites':
+                user=auth.require_user(self,'customer')
+                try:
+                    with connect() as c:
+                        c.execute('BEGIN IMMEDIATE')
+                        ids=retention.merge_favorites(c,user['id'],data.get('ids'),replace=data.get('replace') is True)
+                except retention.RetentionError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
+                return self.respond(200,{'ids':ids})
             if path=='/api/account/orders/claim':
                 user=auth.require_user(self,'customer')
                 oid=data.get('id');token=data.get('tracking_token')
@@ -723,6 +760,8 @@ class Handler(BaseHTTPRequestHandler):
                         item['personalization'] = personalization.normalize_request(line['personalization'])
                     normalized.append(item)
                 extended=any(key_ in data for key_ in ('customer','shipping','payment','invoice','consents'))
+                try:channel=payments.parse_channel(data.get('payment_channel'))
+                except payments.PaymentError as ex:raise Invalid(str(ex))
                 result=[]
                 with connect() as c:
                     c.execute("BEGIN IMMEDIATE")
@@ -806,6 +845,7 @@ class Handler(BaseHTTPRequestHandler):
                         except giftcards.GiftError as ex:raise Invalid(str(ex))
                     sales.save_details(c,oid,checkout,mode,{'code':promo['code'],'discount':discount} if promo else None,gift_record)
                     if live and checkout['consents'].get('marketing') and checkout['customer'].get('email'):engage.subscribe_quietly(c,checkout['customer']['email'],'checkout')
+                    if checkout['customer'].get('email'):retention.convert_draft(c,checkout['customer']['email'])
                     if gift_applied and total==0:
                         c.execute('UPDATE order_details SET payment_method=? WHERE order_id=?',('giftcard',oid))
                         sales.mark_paid(c,oid,gift_applied,'Karta podarunkowa',giftcards.mask(gift_record['code']))
@@ -819,7 +859,7 @@ class Handler(BaseHTTPRequestHandler):
                 if start_payu:
                     with connect() as c:
                         order_row=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
-                        try:payments.create_order(c,order_row,{**sales.details(c,oid),'tracking_token':tracking,'shipping_fee':shipping},self.client_ip(),result)
+                        try:payments.create_order(c,order_row,{**sales.details(c,oid),'tracking_token':tracking,'shipping_fee':shipping},self.client_ip(),result,channel=channel)
                         except payments.PaymentError as ex:
                             sales.mark_payment(c,oid,'failed','PayU: '+ex.code)
                             audit(c,'payment',oid,'Nie udało się rozpocząć płatności online: '+ex.code)
@@ -925,11 +965,16 @@ class Handler(BaseHTTPRequestHandler):
                     result=next(p for p in catalog(c) if p['id']==pid)
                     c.commit()
                     return self.respond(201,result)
+            if path=='/api/admin/players/photo':
+                try:return self.respond(201,{'url':brand.write_image(data,kind='photo')})
+                except brand.BrandError as ex:return self.respond(ex.status,{'error':str(ex),'code':ex.code})
             if path=='/api/admin/players':
                 player=personalization.player_value(data)
                 with connect() as c:
-                    cur=c.execute('INSERT INTO players(name,print_name,number,active) VALUES(?,?,?,?)',
-                                  tuple(player[key] for key in ('name','print_name','number','active')))
+                    c.execute('BEGIN IMMEDIATE')
+                    cur=c.execute('INSERT INTO players(name,print_name,number,active,position,photo) VALUES(?,?,?,?,?,?)',
+                                  tuple(player[key] for key in ('name','print_name','number','active','position','photo')))
+                    c.execute('UPDATE players SET slug=? WHERE id=?',(personalization.player_slug(c,player['name'],cur.lastrowid),cur.lastrowid))
                     audit(c,'player',cur.lastrowid,'Dodano zawodnika do listy nadruków')
                     result=personalization.player_public(c.execute('SELECT * FROM players WHERE id=?',(cur.lastrowid,)).fetchone(),True)
                     c.commit()
@@ -1095,8 +1140,9 @@ class Handler(BaseHTTPRequestHandler):
                     row=c.execute('SELECT * FROM players WHERE id=?',(pid,)).fetchone()
                     if not row:return self.respond(404,{'error':'Zawodnik nie istnieje'})
                     player=personalization.player_value(data,{**dict(row),'active':bool(row['active'])})
-                    c.execute('UPDATE players SET name=?,print_name=?,number=?,active=? WHERE id=?',
-                              (*tuple(player[key] for key in ('name','print_name','number','active')),pid))
+                    slug=row['slug'] if row['slug'] and player['name']==row['name'] else personalization.player_slug(c,player['name'],pid)
+                    c.execute('UPDATE players SET name=?,print_name=?,number=?,active=?,position=?,photo=?,slug=? WHERE id=?',
+                              (*tuple(player[key] for key in ('name','print_name','number','active','position','photo')),slug,pid))
                     audit(c,'player',pid,'Zmieniono dane zawodnika na liście nadruków')
                     result=personalization.player_public(c.execute('SELECT * FROM players WHERE id=?',(pid,)).fetchone(),True)
                     c.commit()

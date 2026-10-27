@@ -22,17 +22,18 @@ bash tools/healthcheck.sh                                 # stan usług na serwe
 commerce_api.py           # routing HTTP, katalog (/api/catalog, /api/catalog/{slug|id}), zamówienia, panel
 commerce_auth.py          # role, uprawnienia (ROLE_CAPABILITIES), prefiksy tras (ROUTE_CAPABILITIES), sesje
 commerce_sales.py         # ustawienia sprzedaży, szczegóły zamówień, statusy, e-maile o zamówieniu
-commerce_payments.py      # PayU REST (OAuth, zamówienia, notyfikacje, zwroty)
+commerce_payments.py      # PayU REST (OAuth, zamówienia, notyfikacje, zwroty, lista kanałów BLIK/karta/Google Pay/Apple Pay, kod BLIK i token portfela)
 commerce_ops.py           # kasa POS, zmiany kasowe, realizacja (kompletacja, nadruki, wydanie)
 commerce_personalization.py  # produkty i opcje (slug, SEO, odznaki, premiery, karta), zawodnicy
 commerce_merch.py         # odznaki, premiery, powiadomienia o dostępności, kody rabatowe
 commerce_giftcards.py     # karty podarunkowe
 commerce_engage.py        # newsletter (podwójne potwierdzenie), wiadomości z formularza
+commerce_retention.py     # ulubione na koncie, powiadomienia o obniżce ceny, przypomnienia o porzuconym koszyku
 commerce_brand.py         # podpis sklepu i logotypy rozgrywek (upload PNG/WebP z panelu)
 commerce_mailtheme.py     # wersja HTML każdego e-maila w barwach sklepu, podgląd w panelu Poczta
 commerce_email.py         # kolejka wiadomości (outbox) i treści
 commerce_reports.py, commerce_digest.py, commerce_returns.py, commerce_dpd.py, commerce_cms.py, commerce_pages.py, commerce_media.py, commerce_pricing.py, commerce_launch.py
-storefront/app/           # strony: /, /sklep, /kategoria/[slug], /szukaj, /produkt/[handle], /koszyk, /zamowienie, /konto, /pomoc, /kontakt, /newsletter, /zawodnicy, /karta-podarunkowa, /informacje/[slug], /admin; feed/produkty.xml (Google Merchant / Meta, tylko w trybie live)
+storefront/app/           # strony: /, /sklep, /kategoria/[slug], /szukaj, /produkt/[handle], /koszyk, /zamowienie, /konto, /pomoc, /kontakt, /newsletter, /zawodnicy, /zawodnicy/[slug], /karta-podarunkowa, /informacje/[slug], /admin (podglad/kod = plakat QR kodu rabatowego); feed/produkty.xml (Google Merchant / Meta, tylko w trybie live)
 storefront/components/    # StoreShell (nagłówek, koszyk, stopka), HomeCanvas (sekcje CMS), ProductCard, PurchaseControls, CompetitionLogos, search/SearchBox, PromoField, NewsletterForm
 storefront/components/templates/essentials/ui/texture-button.tsx   # przycisk z zestawu kairoui, bez zmian
 storefront/lib/           # commerce.mjs (koszyk, filtry, productPath), money.ts, json-ld.tsx, site.ts, catalog-paths.ts, home-layout.ts
@@ -54,6 +55,9 @@ docs/                     # runbook wdrożenia, raport wydania, szablon opisu pr
 - Storefront: komponenty klienckie w zwięzłym JSX, klasy Tailwind, ikony `reicon-react` (nowe widoki) lub `lucide-react` (panel). Stare arkusze CSS żyją w warstwie `legacy` i nie wygrywają z utilities.
 - Zdjęcia: `ProductImage` z `sizes` (albo `next/image` z `fill`) dla lokalnych ścieżek `/assets/**` i `/api/store/media/**` (optymalizator w `next.config.mjs`); bez `sizes` zostaje zwykły `<img>` dla starych arkuszy. SVG i adresy zewnętrzne zawsze `unoptimized`.
 - Próg darmowej dostawy liczy się od wartości produktów **po** rabacie (API `shipping_cost(method, subtotal-discount)`, storefront `FreeShipping`/`CheckoutClient` tak samo). Nieopłacone zamówienia wygasają po `unpaid_hours` (domyślnie 336 h = 14 dni; PayU ma własny limit 72 h) przez `tools/maintenance.py` albo przycisk „Wygaś nieopłacone” w panelu.
+- PayU: kanał płatności z checkoutu (`payment_channel`) przechodzi przez `payments.parse_channel`; odpowiedź bez `redirectUri` jest poprawna tylko dla kodu BLIK/tokenu portfela (`awaiting_confirmation`). Lista kanałów `payments.pay_methods()` odświeża się w tle, nigdy nie blokuje `/api/store/status`.
+- Zdjęcia zawodników i logotypy tylko z uploadu w panelu (`brand.write_image`), adres `/api/store/media/<hash>.webp`; strona zawodnika pod `/zawodnicy/<slug>` (slug z nazwiska, `player_slug`).
+- Przypomnienia o koszyku wymagają podstawy (zgoda marketingowa z formularza albo potwierdzony newsletter); `retention.save_draft` bez niej nic nie zapisuje.
 - Nic fikcyjnego: brak atrap integracji, numerów przesyłek czy dokumentów poza izolowanym środowiskiem testowym.
 
 ## Validation checklist

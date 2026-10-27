@@ -48,4 +48,19 @@ function mapOne(row: Record<string, unknown>): CatalogEntry | null {
     previous_price: Number.isSafeInteger((row as { price_reduction?: { previous?: number } }).price_reduction?.previous) ? ((row as { price_reduction: { previous: number } }).price_reduction.previous) : null };
 }
 
+export type RosterEntry = { id: number; name: string; print_name: string; number: string; slug: string; photo: string; position: string };
+/** Active squad for the player pages and the sitemap. Server-side only; never throws. */
+export async function getPlayers(): Promise<RosterEntry[]> {
+  try {
+    const response = await fetch(backend() + "/api/players", { cache: "no-store", signal: AbortSignal.timeout(2500) });
+    if (!response.ok) return [];
+    const data = await response.json();
+    if (!Array.isArray(data?.players)) return [];
+    return data.players.filter((row: { id?: number; slug?: string }) => Number.isSafeInteger(row?.id) && typeof row.slug === "string" && /^[a-z0-9][a-z0-9-]{0,79}$/.test(row.slug)).map((row: Record<string, unknown>) => ({
+      id: row.id as number, name: String(row.name || ""), print_name: String(row.print_name || ""), number: String(row.number || ""), slug: String(row.slug),
+      photo: typeof row.photo === "string" && /^\/api\/store\/media\/[0-9a-f]{32}\.webp$/.test(row.photo) ? row.photo : "", position: String(row.position || "").slice(0, 40),
+    }));
+  } catch { return []; }
+}
+
 export const categoryPaths = () => Object.keys(CATEGORY_SLUGS).map(slug => "/kategoria/" + slug);

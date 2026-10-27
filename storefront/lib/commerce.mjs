@@ -13,13 +13,16 @@ export function normalizeStoreStatus(raw) {
   const payments = Array.isArray(config.payment_methods) ? config.payment_methods.filter(p => p && ['payu', 'transfer', 'pickup'].includes(p.id)).map(p => ({ id: p.id, name: text(p.name, 80) || p.id, description: text(p.description, 200), pickup_only: p.pickup_only === true })) : [];
   const legal = config.legal && typeof config.legal === 'object' ? config.legal : {};
   const seller = config.seller && typeof config.seller === 'object' ? config.seller : {};
+  const payuMethods = Array.isArray(config.payu_methods) ? config.payu_methods.filter(m => m && ['blik', 'c', 'jp', 'ap'].includes(m.value)).map(m => ({ value: m.value, name: text(m.name, 40) || m.value })) : [];
+  const gp = config.google_pay && typeof config.google_pay === 'object' ? config.google_pay : null;
+  const googlePay = gp && /^[0-9]{1,32}$/.test(String(gp.gateway_merchant_id || '')) ? { environment: gp.environment === 'PRODUCTION' ? 'PRODUCTION' : 'TEST', gateway_merchant_id: String(gp.gateway_merchant_id), merchant_id: /^[A-Z0-9]{1,32}$/i.test(String(gp.merchant_id || '')) ? String(gp.merchant_id) : '', merchant_name: text(gp.merchant_name, 60) || 'Zastal Store' } : null;
   const https = input => typeof input === 'string' && /^https:\/\/[^\s]{1,390}$/.test(input) ? input : '';
   return {
     loaded: true,
     checkoutEnabled: value.checkout_enabled === true && shipping.length > 0 && payments.length > 0,
     phase: value.phase === 'live' ? 'live' : 'prelaunch',
     notice: text(value.notice, 300),
-    shipping, payments,
+    shipping, payments, payuMethods, googlePay,
     pickupAddress: text(config.pickup_address, 350), pickupHours: text(config.pickup_hours, 200),
     invoiceEnabled: config.invoice_enabled !== false, orderNote: text(config.order_note, 400),
     legal: { terms: https(legal.terms_url), privacy: https(legal.privacy_url), returns: https(legal.returns_url), shipping: https(legal.shipping_url) },
@@ -40,7 +43,7 @@ export function normalizeBrand(raw) {
   })) : [];
   return { tagline: text(source.tagline, 60) || 'Oficjalny sklep klubu', competitions };
 }
-export const PRELAUNCH_STATUS = Object.freeze({ loaded: false, checkoutEnabled: false, phase: 'prelaunch', notice: '', shipping: [], payments: [], pickupAddress: '', pickupHours: '', invoiceEnabled: true, orderNote: '', legal: { terms: '', privacy: '', returns: '', shipping: '' }, seller: { name: '', email: '', phone: '' }, brand: { tagline: 'Oficjalny sklep klubu', competitions: [] }, pages: [] });
+export const PRELAUNCH_STATUS = Object.freeze({ loaded: false, checkoutEnabled: false, phase: 'prelaunch', notice: '', shipping: [], payments: [], payuMethods: [], googlePay: null, pickupAddress: '', pickupHours: '', invoiceEnabled: true, orderNote: '', legal: { terms: '', privacy: '', returns: '', shipping: '' }, seller: { name: '', email: '', phone: '' }, brand: { tagline: 'Oficjalny sklep klubu', competitions: [] }, pages: [] });
 export function normalizePersonalization(value) {
   if (value == null) return undefined;
   if (!value || typeof value !== 'object') return null;

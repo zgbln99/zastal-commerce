@@ -47,6 +47,8 @@
 .store-site .delivery-option:has(input:checked) { @apply border-primary bg-accent; }
 .store-site .account-navigation a, .store-site .help-nav a { @apply rounded-full; }
 .store-site .account-navigation a.active, .store-site .help-nav a.active { @apply bg-primary text-primary-foreground; }
+.store-site .account-navigation a.account-nav-link { @apply flex w-full items-center gap-3 px-4 py-2.5 text-sm font-medium text-foreground no-underline hover:bg-muted; }
+.store-site .account-navigation a.account-nav-link > span { @apply ml-auto rounded-full bg-muted px-2 text-xs text-muted-foreground; }
 .store-site .player-card { @apply p-5; }
 .store-site .player-number { @apply text-primary; }
 .store-site .store-toast { @apply fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-foreground px-5 py-3 text-sm text-background shadow-lg; }

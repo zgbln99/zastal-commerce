@@ -4,7 +4,8 @@ Credentials live only in the protected runtime environment. Without them the
 adapter reports "not configured" and live checkout cannot offer online payment.
 Notifications are verified with the OpenPayu-Signature header (second key),
 deduplicated by body digest and applied idempotently. No card data is ever
-handled here: customers pay on PayU's hosted page.
+handled here: customers pay on PayU's hosted page, or hand us a one-off BLIK code
+or a Google Pay token that PayU authorises directly.
 """
 import datetime as dt
 import hashlib
@@ -20,6 +21,13 @@ import urllib.request
 import commerce_sales as sales
 
 PROVIDER = 'payu'
+# Payment channels a shopper may pick before leaving the store (PayU "pay-by-link" values).
+# Google Pay needs the token from Google's sheet; a BLIK code is optional (without it PayU asks for it on its page).
+PAY_METHODS = {'blik': 'BLIK', 'c': 'Karta płatnicza', 'jp': 'Google Pay', 'ap': 'Apple Pay'}
+METHOD_ORDER = ('blik', 'c', 'jp', 'ap')
+_methods_cache = {'value': [], 'expires': 0, 'refreshing': False, 'thread': None}
+_methods_lock = threading.Lock()
+METHODS_TTL = 600
 HOSTS = {'sandbox': 'https://secure.snd.payu.com', 'production': 'https://secure.payu.com'}
 STATES = ('new', 'pending', 'completed', 'canceled', 'rejected', 'failed')
 _token_cache = {'value': '', 'expires': 0}
@@ -56,6 +64,8 @@ def init_schema(c):
                 CHECK(status IN ('requested','pending','finalized','canceled','failed')),
             reason TEXT NOT NULL DEFAULT '', actor_id INTEGER, created TEXT NOT NULL, updated TEXT NOT NULL);
     ''')
+    if 'pay_method' not in {row['name'] for row in c.execute('PRAGMA table_info(payments)')}:
+        c.execute("ALTER TABLE payments ADD COLUMN pay_method TEXT NOT NULL DEFAULT ''")
 
 
 def configuration():
@@ -136,13 +146,82 @@ def access_token():
 def clear_token_cache():
     with _token_lock:
         _token_cache.update(value='', expires=0)
+    with _methods_lock:
+        _methods_cache.update(value=[], expires=0)
+
+
+def _fetch_pay_methods():
+    try:
+        status, payload = _call('GET', '/api/v2_1/paymethods', token=access_token())
+    except PaymentError:
+        status, payload = 0, {}
+    found = {}
+    if status == 200 and isinstance(payload, dict):
+        for item in payload.get('payByLinks') or []:
+            if isinstance(item, dict) and item.get('status') == 'ENABLED' and item.get('value') in PAY_METHODS:
+                found[item['value']] = {'value': item['value'], 'name': PAY_METHODS[item['value']]}
+    methods = [found[value] for value in METHOD_ORDER if value in found]
+    with _methods_lock:
+        # A failed lookup is retried after a minute instead of hammering PayU on every page view.
+        _methods_cache.update(value=methods, expires=time.time() + (METHODS_TTL if status == 200 else 60), refreshing=False)
+    return methods
+
+
+def pay_methods(wait=False):
+    """Channels PayU has enabled for this point of sale. Refreshed in the background so page views never wait on PayU."""
+    if not configuration()['configured']:
+        return []
+    with _methods_lock:
+        fresh = _methods_cache['expires'] > time.time()
+        if fresh or _methods_cache['refreshing']:
+            thread, value = _methods_cache['thread'], list(_methods_cache['value'])
+        else:
+            _methods_cache['refreshing'] = True
+            thread = threading.Thread(target=_fetch_pay_methods, daemon=True)
+            _methods_cache['thread'] = thread
+            thread.start()
+            value = list(_methods_cache['value'])
+    if wait and thread is not None:
+        thread.join(timeout=25)
+        with _methods_lock:
+            return list(_methods_cache['value'])
+    return value
+
+
+def google_pay_config():
+    """What the Google Pay button needs; the merchant id comes from Google's business console (not needed in TEST)."""
+    config = configuration()
+    return {'environment': 'PRODUCTION' if config['environment'] == 'production' else 'TEST',
+            'gateway_merchant_id': config['pos_id'], 'merchant_id': os.environ.get('ZASTAL_GOOGLE_PAY_MERCHANT_ID', '').strip(),
+            'merchant_name': os.environ.get('ZASTAL_GOOGLE_PAY_MERCHANT_NAME', 'Zastal Store').strip()[:60]}
+
+
+def parse_channel(data):
+    """Optional payment channel chosen in the store: {'value': 'blik'|'c'|'jp'|'ap', 'authorization_code': '...'}."""
+    if data in (None, '', {}):
+        return None
+    if not isinstance(data, dict) or data.get('value') not in PAY_METHODS:
+        raise PaymentError(400, 'Nieznana metoda płatności online.', 'channel_invalid')
+    code = data.get('authorization_code', '')
+    if code is None:
+        code = ''
+    if not isinstance(code, str) or len(code) > 4000 or any(ch.isspace() for ch in code.strip()) and data['value'] != 'jp':
+        raise PaymentError(400, 'Nieprawidłowy kod autoryzacji.', 'channel_invalid')
+    code = code.strip()
+    if data['value'] == 'blik' and code and not (len(code) == 6 and code.isdigit()):
+        raise PaymentError(400, 'Kod BLIK ma 6 cyfr.', 'blik_code_invalid')
+    if data['value'] in ('jp', 'ap') and not code:
+        raise PaymentError(400, 'Brak tokenu płatności z portfela.', 'channel_invalid')
+    if data['value'] == 'c':
+        code = ''
+    return {'value': data['value'], 'authorization_code': code}
 
 
 def _ext_order_id(order_id):
     return f'ZS-{order_id:05d}-{secrets.token_hex(4)}'
 
 
-def create_order(c, order, detail, customer_ip, items):
+def create_order(c, order, detail, customer_ip, items, channel=None):
     """Registers a PayU order for an awaiting-payment store order. Returns the payment row."""
     config = configuration()
     if not config['configured']:
@@ -171,20 +250,35 @@ def create_order(c, order, detail, customer_ip, items):
     }
     if detail.get('shipping_fee'):
         body['products'].append({'name': 'Dostawa', 'unitPrice': str(detail['shipping_fee']), 'quantity': '1'})
+    inline = bool(channel and channel['authorization_code'])
+    if channel:
+        method = {'type': 'PBL', 'value': channel['value']}
+        if inline:
+            method['authorizationCode'] = channel['authorization_code']
+        body['payMethods'] = {'payMethod': method}
     status, payload = _call('POST', '/api/v2_1/orders', body, token=access_token())
     redirect = payload.get('redirectUri', '') if isinstance(payload, dict) else ''
     code = (payload.get('status') or {}).get('statusCode') if isinstance(payload, dict) else None
-    if status not in (200, 201, 302) or code != 'SUCCESS' or not isinstance(redirect, str) or not redirect.startswith('https://'):
+    # Hosted flows always come back with a redirect; a BLIK code or wallet token may be authorised in place
+    # (SUCCESS without redirect: the shopper confirms in the bank app) or sent to 3-D Secure (WARNING_CONTINUE_3DS).
+    accepted = status in (200, 201, 302) and code in ('SUCCESS', 'WARNING_CONTINUE_3DS', 'WARNING_CONTINUE_REDIRECT')
+    has_redirect = isinstance(redirect, str) and redirect.startswith('https://')
+    if not accepted or (not has_redirect and not inline):
         c.execute('INSERT INTO audit_log(kind,object_id,note,created) VALUES(?,?,?,?)',
                   ('payment', str(order['id']), f'PayU odrzucił utworzenie płatności (HTTP {status}, {code})', stamp()))
+        if inline and channel['value'] == 'blik':
+            raise PaymentError(400, 'PayU nie przyjął kodu BLIK. Wygeneruj nowy kod w aplikacji banku i spróbuj ponownie.', 'blik_rejected')
+        if inline:
+            raise PaymentError(400, 'PayU nie przyjął płatności z portfela. Spróbuj ponownie albo wybierz inną metodę.', 'wallet_rejected')
         raise PaymentError(502, 'Nie udało się rozpocząć płatności online. Spróbuj ponownie lub wybierz inną metodę.', 'provider_rejected')
     now = stamp()
-    cursor = c.execute('''INSERT INTO payments(order_id,provider,ext_order_id,provider_order_id,status,amount,currency,redirect_url,environment,created,updated)
-                          VALUES(?,?,?,?,?,?,?,?,?,?,?)''', (order['id'], PROVIDER, ext, str(payload.get('orderId', ''))[:64], 'pending',
-                                                            order['total'], 'PLN', redirect, config['environment'], now, now))
-    sales.mark_payment(c, order['id'], 'pending', 'PayU: oczekiwanie na płatność')
+    cursor = c.execute('''INSERT INTO payments(order_id,provider,ext_order_id,provider_order_id,status,amount,currency,redirect_url,environment,created,updated,pay_method)
+                          VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''', (order['id'], PROVIDER, ext, str(payload.get('orderId', ''))[:64], 'pending',
+                                                              order['total'], 'PLN', redirect if has_redirect else '', config['environment'], now, now,
+                                                              channel['value'] if channel else ''))
+    sales.mark_payment(c, order['id'], 'pending', 'PayU: ' + ('kod BLIK przekazany, czeka na potwierdzenie w aplikacji' if inline and channel['value'] == 'blik' else 'oczekiwanie na płatność'))
     c.execute('INSERT INTO audit_log(kind,object_id,note,created) VALUES(?,?,?,?)',
-              ('payment', str(order['id']), f'Rozpoczęto płatność PayU {ext} ({config["environment"]})', now))
+              ('payment', str(order['id']), f'Rozpoczęto płatność PayU {ext} ({config["environment"]}' + (f', {PAY_METHODS[channel["value"]]}' if channel else '') + ')', now))
     return dict(c.execute('SELECT * FROM payments WHERE id=?', (cursor.lastrowid,)).fetchone())
 
 
@@ -351,6 +445,17 @@ def public_payment(c, order_id):
     """Customer-facing view: latest attempt status and whether a retry is possible."""
     rows = order_payments(c, order_id)
     latest = rows[-1] if rows else None
+    if not latest:
+        # PayU refused to open a session (e.g. a wrong BLIK code): nothing was recorded, the shopper may try again.
+        detail = c.execute('SELECT payment_status FROM order_details WHERE order_id=?', (order_id,)).fetchone()
+        state = detail['payment_status'] if detail else 'unpaid'
+        return {'provider': PROVIDER, 'status': 'failed' if state == 'failed' else None, 'redirect_url': '', 'pay_method': '',
+                'awaiting_confirmation': False, 'can_retry': state in ('failed', 'unpaid')}
+    pending_inline = bool(latest) and latest['status'] in ('new', 'pending') and not latest['redirect_url']
+    # An in-app BLIK confirmation has two minutes; after that the shopper may start again.
+    stale = pending_inline and latest['created'] < (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=3)).isoformat(timespec='seconds')
     return {'provider': PROVIDER, 'status': latest['status'] if latest else None,
             'redirect_url': latest['redirect_url'] if latest and latest['status'] in ('new', 'pending') else '',
-            'can_retry': bool(latest) and latest['status'] in ('canceled', 'rejected', 'failed')}
+            'pay_method': latest['pay_method'] if latest else '',
+            'awaiting_confirmation': pending_inline and not stale,
+            'can_retry': bool(latest) and (latest['status'] in ('canceled', 'rejected', 'failed') or stale)}

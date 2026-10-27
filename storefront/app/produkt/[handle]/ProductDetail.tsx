@@ -11,6 +11,7 @@ import RecentlyViewed from "../../../components/RecentlyViewed";
 import PurchaseControls from "../../../components/PurchaseControls";
 import ProductGallery from "../../../components/ProductGallery";
 import PriceReduction from "../../../components/PriceReduction";
+import PriceAlert from "../../../components/PriceAlert";
 import PageContent from "../../../components/PageContent";
 import { TextureButton } from "@/components/templates/essentials/ui/texture-button";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,7 @@ export default function ProductDetail({ productId }: { productId: number }) {
         </div>
         {product.preorder && <div className="product-preorder-note flex items-start gap-3 rounded-xl border border-primary/30 bg-accent p-4 text-sm"><Clock size={18} className="mt-0.5 shrink-0 text-primary"/><div><strong className="font-medium">Przedsprzedaż</strong><p className="mt-0.5 text-muted-foreground">{product.preorder_note}{product.preorder_until ? " · planowana wysyłka od " + new Date(product.preorder_until + "T00:00:00").toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: "numeric" }) : ""}</p></div></div>}
         <PurchaseControls key={product.id} product={product} onUnitPriceChange={setSelectedPrice}/>
+        {product.verified && !product.gift_card && <PriceAlert product={product}/>}
         <div className="divide-y divide-border rounded-xl border border-border text-sm">
           <div className="flex items-start gap-3 p-4"><TruckFast size={18} className="mt-0.5 shrink-0 text-primary"/><span className="flex-1"><span className="block font-medium">Dostawa lub odbiór osobisty</span><small className="text-muted-foreground">{store.sales.checkoutEnabled ? store.sales.shipping.map(m => m.name + (shippingCost(m, 0) ? " " + fmt(shippingCost(m, 0)) : " bezpłatnie")).join(" · ") : "Szczegóły znajdziesz w informacjach o dostawie."}</small></span><Link href="/pomoc#dostawa" aria-label="Informacje o dostawie" className="text-muted-foreground hover:text-foreground"><ChevronRight size={16}/></Link></div>
           <div className="flex items-start gap-3 p-4"><Box size={18} className="mt-0.5 shrink-0 text-primary"/><span><span className="block font-medium">Dostępność</span><small className="text-muted-foreground">{availability}</small></span></div>

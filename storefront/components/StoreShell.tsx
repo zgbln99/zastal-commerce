@@ -13,7 +13,7 @@ import { useAuth } from "./AuthProvider";
 import PriceReduction from "./PriceReduction";
 import FreeShipping from "./FreeShipping";
 import SearchBox from "./search/SearchBox";
-import PromoField, { type PromoPreview } from "./PromoField";
+import PromoField, { storePromo, type PromoPreview } from "./PromoField";
 import NewsletterForm from "./NewsletterForm";
 import CompetitionLogos from "./CompetitionLogos";
 import { TextureButton } from "@/components/templates/essentials/ui/texture-button";
@@ -126,6 +126,15 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
   const brand = store.sales.brand;
   const [shopOpen, setShopOpen] = useState(false);
   useEffect(() => { setShopOpen(false); }, [pathname]);
+  // A scanned poster (/sklep?kod=MECZ2410) keeps the code for the cart; the shopper sees it was picked up.
+  const [scannedCode, setScannedCode] = useState("");
+  useEffect(() => {
+    const code = (params?.get("kod") || "").trim().toUpperCase();
+    if (!/^[A-Z0-9][A-Z0-9-]{2,23}$/.test(code)) return;
+    storePromo(code); setScannedCode(code);
+    const timer = window.setTimeout(() => setScannedCode(""), 9000);
+    return () => window.clearTimeout(timer);
+  }, [params]);
   // The header is fixed: 64 px top bar on phones, 88 px bar + 48 px menu on desktop, plus 32 px for the pre-launch notice.
   const offset = pathname === "/" ? "" : notice ? "pt-24 md:pt-42" : "pt-16 md:pt-34";
   const menuLink = "inline-flex h-12 items-center gap-1 border-b-2 border-transparent px-3.5 text-[15px] font-medium text-white/90 transition-colors hover:border-orange hover:text-white";
@@ -166,6 +175,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
       </div></div>
     </header>
     {store.status === "error" && <div className="catalog-error border-b border-destructive/30 bg-destructive/10"><div className="container flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><span>{store.error}</span><button className={pill} onClick={store.refresh}>Spróbuj ponownie</button></div></div>}
+    {scannedCode && <div className="promo-toast fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-primary/30 bg-background p-3 text-sm shadow-lg" role="status"><Check size={18} className="shrink-0 text-primary"/><span>Kod rabatowy <strong>{scannedCode}</strong> zapisany. Naliczy się w koszyku przy zamówieniu.</span><Link href="/koszyk" className="ml-auto shrink-0 font-medium text-primary hover:underline" onClick={() => setScannedCode("")}>Koszyk</Link><button type="button" className="shrink-0 text-muted-foreground hover:text-foreground" aria-label="Zamknij" onClick={() => setScannedCode("")}><X size={16}/></button></div>}
     <main id="main-content" className="flex-1">{children}</main>
     <footer className="mt-24 border-t border-border bg-muted/60">
       <div className="container grid gap-10 py-16 md:grid-cols-4 md:gap-8">

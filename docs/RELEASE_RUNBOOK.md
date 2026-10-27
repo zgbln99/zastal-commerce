@@ -36,6 +36,9 @@ Wszystkie kroki wykonuje osoba z dostępem do serwera. Żaden krok nie kasuje ba
 | nowe tabele (2) | `subscribers` (newsletter, podwójne potwierdzenie), `contact_messages` (formularz kontaktowy), `site_brand` (podpis i logotypy rozgrywek); tabela `reviews` usuwana przy starcie | CREATE TABLE IF NOT EXISTS |
 | `order_details` (2) | kolumny: kod rabatowy, rabat, karta podarunkowa (kod, kwota, e-mail i wiadomość obdarowanego) | ALTER TABLE |
 | `pos_sales` (2) | kolumna: kwota z karty podarunkowej | ALTER TABLE |
+| `payments` (2) | kolumna `pay_method` (kanał PayU: blik, c, jp, ap) | ALTER TABLE |
+| `players` (2) | kolumny `slug` (adres strony zawodnika, uzupełniany z nazwiska), `photo`, `position` | ALTER TABLE, bez utraty |
+| nowe tabele (3) | `account_favorites` (ulubione na koncie), `price_alerts` (powiadomienia o obniżce), `cart_drafts` (koszyki do przypomnienia) | CREATE TABLE IF NOT EXISTS |
 
 Migracje są idempotentne (testy `test_staff`, `test_sales` uruchamiają `init()` dwukrotnie i na starym schemacie).
 
@@ -72,6 +75,8 @@ z sandboxową płatnością → sprawdzenie notyfikacji `/api/payments/payu/noti
 przełączenie na `production` z kluczami z umowy → jedno kontrolowane zamówienie live (np. pracownik, zwrot).
 Adres notyfikacji do wpisania w panelu PayU: `https://<domena>/api/payments/payu/notify`.
 
+**Kanały PayU w sklepie (BLIK, karta, Google Pay, Apple Pay):** sklep pobiera z PayU (`GET /api/v2_1/paymethods`, odświeżane co 10 minut w tle) listę włączonych metod i pokazuje je pod opcją „Płatność online (PayU)”. Co włączyć po stronie PayU: w panelu PayU metody BLIK, karty, Google Pay i Apple Pay dla danego POS. BLIK: klient może wpisać 6-cyfrowy kod w sklepie (autoryzacja w miejscu, potwierdzenie w aplikacji banku, strona potwierdzenia odświeża się do 2 minut) albo podać go na stronie PayU. Karta: od razu formularz karty na stronie PayU. Google Pay: przycisk w sklepie (skrypt `pay.google.com`), token trafia do PayU jako `authorizationCode`; w produkcji wymagany `ZASTAL_GOOGLE_PAY_MERCHANT_ID` (Google Pay Business Console, z zarejestrowaną domeną sklepu), opcjonalnie `ZASTAL_GOOGLE_PAY_MERCHANT_NAME`; w sandboxie działa bez identyfikatora. **Google Pay trzeba sprawdzić w sandboxie na prawdziwej domenie** (CSP dopuszcza `pay.google.com` i `payments.google.com`; w razie blokady w konsoli przeglądarki uzupełnij `storefront/proxy.ts`). Apple Pay: plik weryfikacyjny od PayU do `storefront/public/.well-known/apple-developer-merchantid-domain-association` (opis w `README.md` obok), potem przycisk pojawia się na stronie PayU w Safari; sklep pokazuje go w opisie metody, bez własnej integracji.
+
 **Feed produktów (Google Merchant Center, Meta Commerce Manager):** `https://<domena>/feed/produkty.xml` (RSS 2.0 z przestrzenią `g:`). Jedna pozycja na rozmiar: `g:id` = SKU wariantu, `g:item_group_id` = SKU produktu, `g:gtin` = EAN, cena brutto PLN (`g:sale_price` przy obniżce z Omnibusa), dostępność ze stanu (`in_stock` / `out_of_stock` / `preorder` dla przedsprzedaży), zdjęcia z galerii, link do produktu z `?rozmiar=`. Przed startem sprzedaży feed jest pusty. W Merchant Center: *Produkty → Źródła danych → Zaplanowane pobieranie* (codziennie), kraj PL, język polski; w Meta: *Katalog → Źródła danych → URL*. Koszty dostawy i zwroty uzupełnia się w ustawieniach konta Merchant Center (feed ich nie niesie).
 
 ## 5. Monitoring i codzienne sprawdzenie
@@ -80,6 +85,7 @@ Adres notyfikacji do wpisania w panelu PayU: `https://<domena>/api/payments/payu
 - `tools/healthcheck.sh [origin]` — jedna sonda dla crona/monitoringu (katalog przez Nginx, strona główna, `/health` lokalnie); kod wyjścia ≠ 0 = alarm, np. `*/5 * * * * /…/tools/healthcheck.sh || logger -t zastal-store 'healthcheck FAILED'`.
 - `journalctl -u zastal-store-email -n 50` — worker outboxu; panel **Poczta sklepu** pokazuje kolejkę i błędy.
 - Panel **Przegląd** → zamówienia w toku; **Zwroty i reklamacje** → otwarte zgłoszenia; **Sprzedaż i dostawy** → gotowość.
+- Timer utrzymania wysyła też powiadomienia o obniżce ceny (`price_alerts`) i jednorazowe przypomnienia o koszyku po 24 h (`cart_reminders`, tylko za zgodą marketingową z zamówienia albo dla potwierdzonych subskrybentów newslettera; link `/koszyk?przywroc=` odtwarza koszyk).
 - Timer utrzymania anuluje nieopłacone zamówienia po `unpaid_hours` (domyślnie 336 h = 14 dni; sesja PayU i tak wygasa po 72 h, zamówienie czeka dobę dłużej na notyfikację; ręcznie: przycisk **Wygaś nieopłacone** w panelu Zamówienia), zwalnia rezerwacje, kolejkuje e-maile „produkt znów dostępny” (`restock_alerts`) i w dni robocze po 7:00 wysyła podsumowanie dla obsługi (`digest_sent_to`), jeśli włączone w **Sprzedaż i dostawy**.
 - Etykiety: zakładka **Etykiety** drukuje na arkusz A4 albo na drukarkę etykiet (rolka 50 × 30 mm, w oknie drukowania format 50 × 30 i margines 0).
 - Panel **Promocje i kody** → kody rabatowe (użycia, limity) i lista klientów czekających na rozmiar.

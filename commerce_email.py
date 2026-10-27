@@ -164,7 +164,7 @@ def _consume_token(c, raw, kind):
 
 
 ORDER_KINDS = ('order_created', 'order_status_changed', 'order_paid', 'return_update')
-GUEST_KINDS = ('stock_alert', 'gift_card_issued', 'staff_digest', 'test_email', 'newsletter_confirm', 'contact_received', 'contact_ack')
+GUEST_KINDS = ('stock_alert', 'price_alert', 'cart_reminder', 'gift_card_issued', 'staff_digest', 'test_email', 'newsletter_confirm', 'contact_received', 'contact_ack')
 # Intermediate workflow steps are not customer events; packing is news only for pickup orders.
 QUIET_STATUSES = ('potwierdzone', 'do_kompletacji', 'nanoszenie_dtf', 'kontrola_jakosci')
 
@@ -373,6 +373,14 @@ def _message(c, row, config):
     elif row['kind'] == 'stock_alert':
         import commerce_merch as merch
         composed = merch.alert_message(c, int(row['dedupe_key'].rsplit(':', 1)[1]), os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
+        if not composed:
+            c.commit()
+            return None
+        subject, body = composed
+    elif row['kind'] in ('price_alert', 'cart_reminder'):
+        import commerce_retention as retention
+        composer = retention.price_alert_message if row['kind'] == 'price_alert' else retention.reminder_message
+        composed = composer(c, int(row['dedupe_key'].rsplit(':', 1)[1]), os.environ['ZASTAL_SITE_ORIGIN'].rstrip('/'))
         if not composed:
             c.commit()
             return None

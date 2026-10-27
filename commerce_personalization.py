@@ -55,10 +55,16 @@ def init_schema(c):
         if column not in present:
             c.execute(f'ALTER TABLE product_options ADD COLUMN {column} {definition}')
     backfill_slugs(c)
+    players_present = {row['name'] for row in c.execute('PRAGMA table_info(players)')}
+    for column, definition in (('slug', "TEXT NOT NULL DEFAULT ''"), ('photo', "TEXT NOT NULL DEFAULT ''"), ('position', "TEXT NOT NULL DEFAULT ''")):
+        if column not in players_present:
+            c.execute(f'ALTER TABLE players ADD COLUMN {column} {definition}')
     if not c.execute("SELECT 1 FROM commerce_migrations WHERE name='official-roster-2026-10-10'").fetchone():
         if not c.execute('SELECT 1 FROM players LIMIT 1').fetchone():
             c.executemany('INSERT INTO players(name,print_name,number) VALUES(?,?,?)', ROSTER)
         c.execute("INSERT INTO commerce_migrations(name) VALUES('official-roster-2026-10-10')")
+    for row in c.execute("SELECT id,name FROM players WHERE slug=''").fetchall():
+        c.execute('UPDATE players SET slug=? WHERE id=?', (player_slug(c, row['name'], row['id']), row['id']))
 
 
 def text(value, label, maximum, empty=False):
@@ -348,17 +354,36 @@ def snapshot(c, product_id, requested):
     return value, options['personalization_fee']
 
 
+PLAYER_FIELDS = ('name', 'print_name', 'number', 'active', 'position', 'photo')
+
+
+def player_slug(c, name, pid):
+    """Address of the player page (/zawodnicy/kuba-galewski); a namesake gets the id appended."""
+    base = slugify(name) or f'zawodnik-{pid}'
+    if c.execute('SELECT 1 FROM players WHERE slug=? AND id<>?', (base, pid)).fetchone():
+        return f'{base}-{pid}'
+    return base
+
+
 def player_value(data, existing=None):
-    values = {'active': True, **dict(existing or {}), **data}
-    if existing is not None and not any(key in data for key in ('name', 'print_name', 'number', 'active')):
+    values = {'active': True, 'position': '', 'photo': '', **dict(existing or {}), **data}
+    if existing is not None and not any(key in data for key in PLAYER_FIELDS):
         raise ValueError('Podaj dane zawodnika do zmiany')
+    photo = values.get('photo') or ''
+    if not isinstance(photo, str) or (photo and not re.fullmatch(r'/api/store/media/[0-9a-f]{32}\.webp', photo)):
+        raise ValueError('Zdjęcie zawodnika musi pochodzić z panelu (wgraj plik)')
     return {'name': text(values.get('name'), 'imię i nazwisko zawodnika', 80),
             'print_name': print_name(values.get('print_name')), 'number': print_number(values.get('number')),
-            'active': flag(values['active'], 'aktywny zawodnik')}
+            'active': flag(values['active'], 'aktywny zawodnik'),
+            'position': text(values.get('position') or '', 'pozycja', 40, empty=True), 'photo': photo}
 
 
 def player_public(row, admin=False):
     value = {key: row[key] for key in ('id', 'name', 'print_name', 'number')}
+    keys = row.keys() if hasattr(row, 'keys') else ()
+    value['slug'] = row['slug'] if 'slug' in keys and row['slug'] else slugify(row['name']) or f'zawodnik-{row["id"]}'
+    value['photo'] = row['photo'] if 'photo' in keys else ''
+    value['position'] = row['position'] if 'position' in keys else ''
     if admin:
         value['active'] = bool(row['active'])
     return value

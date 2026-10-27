@@ -87,24 +87,38 @@ def save(c, data):
     return config
 
 
+KINDS = {
+    'logo': {'label': 'logo', 'prefixes': ('data:image/png;base64', 'data:image/webp;base64'), 'mode': 'RGBA', 'side': 800, 'quality': 90, 'limit': 1_400_000,
+             'hint': 'Logo wgraj jako PNG z przezroczystością albo WebP', 'size_hint': 'Logo musi mieć od 40×40 px do 8 Mpix'},
+    'photo': {'label': 'zdjęcie', 'prefixes': ('data:image/jpeg;base64', 'data:image/png;base64', 'data:image/webp;base64'), 'mode': 'RGB', 'side': 1200, 'quality': 84, 'limit': 5_600_000,
+              'hint': 'Zdjęcie wgraj jako JPEG, PNG albo WebP', 'size_hint': 'Zdjęcie musi mieć od 200×200 px do 24 Mpix', 'min': 200, 'pixels': 24_000_000},
+}
+
+
 def write_logo(data):
-    """Logotype upload: PNG or WebP, transparency kept, scaled to at most 800 px. Returns the public URL."""
-    if not isinstance(data, dict) or not isinstance(data.get('image'), str) or len(data['image']) > 1_400_000:
-        raise BrandError(400, 'Plik logo jest za duży (maks. 1 MB)')
+    return write_image(data, kind='logo')
+
+
+def write_image(data, kind='logo'):
+    """Image upload from the panel (competition logos, player photos): re-encoded to WebP, scaled down, stored under its hash."""
+    spec = KINDS[kind]
+    if not isinstance(data, dict) or not isinstance(data.get('image'), str) or len(data['image']) > spec['limit']:
+        raise BrandError(400, f'Plik ({spec["label"]}) jest za duży (maks. {spec["limit"] // 1_400_000} MB)')
     try:
         prefix, encoded = data['image'].split(',', 1)
-        if prefix not in ('data:image/png;base64', 'data:image/webp;base64'):
-            raise ValueError('Logo wgraj jako PNG z przezroczystością albo WebP')
+        if prefix not in spec['prefixes']:
+            raise ValueError(spec['hint'])
         blob = base64.b64decode(encoded, validate=True)
         with Image.open(io.BytesIO(blob)) as picture:
             picture.verify()
         with Image.open(io.BytesIO(blob)) as picture:
-            if picture.width < 40 or picture.height < 40 or picture.width * picture.height > 8_000_000:
-                raise ValueError('Logo musi mieć od 40×40 px do 8 Mpix')
-            image = picture.convert('RGBA')
-            image.thumbnail((800, 800))
+            least, most = spec.get('min', 40), spec.get('pixels', 8_000_000)
+            if picture.width < least or picture.height < least or picture.width * picture.height > most:
+                raise ValueError(spec['size_hint'])
+            image = picture.convert(spec['mode'])
+            image.thumbnail((spec['side'], spec['side']))
             buffer = io.BytesIO()
-            image.save(buffer, 'WEBP', quality=90, method=6, lossless=False)
+            image.save(buffer, 'WEBP', quality=spec['quality'], method=6, lossless=False)
             content = buffer.getvalue()
     except (OSError, UnidentifiedImageError, ValueError, base64.binascii.Error) as ex:
         raise BrandError(400, 'Nieprawidłowy obraz: ' + str(ex)[:90])

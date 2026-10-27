@@ -40,10 +40,22 @@ class FakePayU:
         self.calls.append((method, url, headers, body))
         if url.endswith('/oauth/authorize'):
             return 200, {}, json.dumps({'access_token': 'fixture-token', 'expires_in': 3600}).encode()
+        if url.endswith('/api/v2_1/paymethods'):
+            return 200, {}, json.dumps({'payByLinks': [{'value': 'blik', 'name': 'BLIK', 'status': 'ENABLED'}, {'value': 'c', 'name': 'Karty', 'status': 'ENABLED'},
+                                                       {'value': 'jp', 'name': 'Google Pay', 'status': 'ENABLED'}, {'value': 'ap', 'name': 'Apple Pay', 'status': 'DISABLED'},
+                                                       {'value': 'm', 'name': 'mTransfer', 'status': 'ENABLED'}]}).encode()
         if url.endswith('/api/v2_1/orders'):
             if self.fail_orders:
                 return 400, {}, json.dumps({'status': {'statusCode': 'ERROR_VALUE_INVALID'}}).encode()
             payload = json.loads(body)
+            method = (payload.get('payMethods') or {}).get('payMethod') or {}
+            if method.get('value') == 'blik' and method.get('authorizationCode'):
+                if method['authorizationCode'] == '000000':
+                    return 400, {}, json.dumps({'status': {'statusCode': 'ERROR_VALUE_INVALID', 'codeLiteral': 'BLIK_CODE_INVALID'}}).encode()
+                return 200, {}, json.dumps({'status': {'statusCode': 'SUCCESS'}, 'orderId': 'PAYU-' + payload['extOrderId'], 'extOrderId': payload['extOrderId']}).encode()
+            if method.get('value') == 'jp':
+                return 200, {}, json.dumps({'status': {'statusCode': 'WARNING_CONTINUE_3DS'}, 'redirectUri': 'https://secure.snd.payu.com/3ds/?id=abc',
+                                            'orderId': 'PAYU-' + payload['extOrderId'], 'extOrderId': payload['extOrderId']}).encode()
             return 302, {}, json.dumps({'status': {'statusCode': 'SUCCESS'}, 'redirectUri': 'https://secure.snd.payu.com/pay/?id=abc',
                                         'orderId': 'PAYU-' + payload['extOrderId'], 'extOrderId': payload['extOrderId']}).encode()
         if '/refunds' in url:
@@ -227,6 +239,37 @@ class SalesTests(unittest.TestCase):
             self.assertEqual(c.execute('SELECT status FROM orders WHERE id=?', (reply['id'],)).fetchone()[0], 'potwierdzone')
 
     # ------------------------------------------------------------ PayU
+    def test_payu_channels_blik_code_card_and_google_pay(self):
+        self.go_live()
+        # The store status lists the channels PayU has enabled (Apple Pay disabled, bank buttons stay on PayU's page).
+        self.assertEqual([m['value'] for m in payments.pay_methods(wait=True)], ['blik', 'c', 'jp'])
+        config = self.public('GET', '/api/store/status')[1]['config']
+        self.assertEqual([m['name'] for m in config['payu_methods']], ['BLIK', 'Karta płatnicza', 'Google Pay'])
+        self.assertEqual((config['google_pay']['environment'], config['google_pay']['gateway_merchant_id']), ('TEST', PAYU_ENV['ZASTAL_PAYU_POS_ID']))
+        # Malformed channels are refused before any order is written.
+        self.assertEqual(self.order(payment='payu', payment_channel={'value': 'blik', 'authorization_code': '12'})[0], 400)
+        self.assertEqual(self.order(payment='payu', payment_channel={'value': 'jp'})[0], 400)
+        self.assertEqual(self.order(payment='payu', payment_channel={'value': 'paypal'})[0], 400)
+        # BLIK with a code: PayU authorises in place, no redirect, the shopper confirms in the bank app.
+        code, reply = self.order(payment='payu', payment_channel={'value': 'blik', 'authorization_code': '777123'})
+        self.assertEqual(code, 201, reply)
+        self.assertEqual((reply['payment']['status'], reply['payment']['redirect_url'], reply['payment']['awaiting_confirmation'], reply['payment']['pay_method']), ('pending', '', True, 'blik'))
+        sent = json.loads(next(call for call in self.fake.calls if call[1].endswith('/api/v2_1/orders'))[3])
+        self.assertEqual(sent['payMethods'], {'payMethod': {'type': 'PBL', 'value': 'blik', 'authorizationCode': '777123'}})
+        # A rejected code marks the attempt failed and the receipt offers a retry with a new code.
+        code, reply = self.order(payment='payu', payment_channel={'value': 'blik', 'authorization_code': '000000'}, idempotency_key='live-order-key-00000002')
+        self.assertEqual((code, reply['payment']['status'], reply['payment']['can_retry']), (201, 'failed', True), reply)
+        code, retry = self.public('POST', f"/api/orders/{reply['id']}/payment/retry", {'tracking_token': reply['tracking_token'], 'payment_channel': {'value': 'blik', 'authorization_code': '777124'}})
+        self.assertEqual((code, retry['awaiting_confirmation'], retry['pay_method']), (200, True, 'blik'), retry)
+        # Card: PayU's page opens straight on the card form; Google Pay token goes to 3-D Secure.
+        code, reply = self.order(payment='payu', payment_channel={'value': 'c'}, idempotency_key='live-order-key-00000003')
+        self.assertEqual((code, reply['payment']['pay_method']), (201, 'c'), reply)
+        self.assertTrue(reply['payment']['redirect_url'].startswith('https://'))
+        code, reply = self.order(payment='payu', payment_channel={'value': 'jp', 'authorization_code': 'eyJ0b2tlbiI6Imdvb2dsZSJ9'}, idempotency_key='live-order-key-00000004', items=[{'id': 1, 'size': 'M', 'quantity': 1}])
+        self.assertEqual(code, 201, reply)
+        self.assertEqual(reply['payment']['pay_method'], 'jp', reply)
+        self.assertIn('/3ds/', reply['payment']['redirect_url'])
+
     def test_payu_order_redirect_signed_notification_and_refund(self):
         self.go_live()
         code, reply = self.order(payment='payu')
@@ -276,7 +319,8 @@ class SalesTests(unittest.TestCase):
         self.fake.fail_orders = True
         code, reply = self.order(payment='payu')
         self.assertEqual(code, 201, reply)
-        self.assertEqual(reply['payment']['status'], None)
+        # No PayU session was opened, so the receipt reports the refusal and offers a retry.
+        self.assertEqual((reply['payment']['status'], reply['payment']['can_retry']), ('failed', True))
         with api.connect() as c:
             self.assertEqual(sales.details(c, reply['id'])['payment_status'], 'failed')
         self.fake.fail_orders = False
