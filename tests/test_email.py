@@ -412,7 +412,7 @@ class EmailHTTPTests(unittest.TestCase):
 
     def test_http_verification_and_admin_metadata_enforce_csrf_and_roles(self):
         self.client.register(password=PASSWORD)
-        self.assertEqual(self.client.request('GET', '/api/admin/email')[0], 403)
+        self.assertEqual(self.client.request('GET', '/api/admin/email')[0], 401)
         self.assertEqual(self.client.request('POST', '/api/account/email/verification', {}, csrf=False)[0], 403)
         self.assertEqual(self.client.request('GET', '/api/auth/email/status'), (200, {'configured': False}))
         with self.api.connect() as c:

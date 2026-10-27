@@ -22,7 +22,7 @@ const gridCols: Record<number, string> = { 2: "sm:grid-cols-2", 3: "sm:grid-cols
 function Heading({ id, title, eyebrow, link, linkText }: { id: string; title: string; eyebrow?: string; link?: string; linkText?: string }) {
   const lines = titleLines(title);
   return <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-    <div>{kicker(eyebrow || "") && <p className="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-primary">{kicker(eyebrow || "")}</p>}<h2 id={id} className="text-2xl font-medium tracking-tight sm:text-3xl">{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2></div>
+    <div>{kicker(eyebrow || "") && <p className="mb-2 text-sm font-medium text-primary">{kicker(eyebrow || "")}</p>}<h2 id={id} className="text-2xl font-semibold tracking-tight sm:text-3xl">{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2></div>
     {link && linkText && <Link className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline" href={link}>{linkText} <ArrowRight size={16}/></Link>}
   </div>;
 }
@@ -75,7 +75,7 @@ function Block({ section }: { section: HomeSection }) {
     return <section className="container py-8" aria-labelledby={section.id}>
       <div className="grid overflow-hidden rounded-2xl bg-primary text-primary-foreground md:grid-cols-2">
         <div className="flex flex-col justify-center gap-5 p-8 sm:p-12">
-          {kicker(text(s, "eyebrow")) && <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary-foreground/70">{kicker(text(s, "eyebrow"))}</p>}
+          {kicker(text(s, "eyebrow")) && <p className="text-sm font-medium text-primary-foreground/75">{kicker(text(s, "eyebrow"))}</p>}
           <h2 id={section.id} className="text-3xl font-medium leading-[1.08] tracking-tight text-primary-foreground sm:text-4xl lg:text-5xl">{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2>
           <p className="max-w-md text-base text-primary-foreground/85">{text(s, "description")}</p>
           {players.length > 0 && <div className="text-sm">
@@ -96,7 +96,7 @@ function Block({ section }: { section: HomeSection }) {
       <div className="grid overflow-hidden rounded-2xl border border-border bg-card md:grid-cols-2">
         <Link href={productPath(chosen)} className="group relative min-h-72 bg-muted md:order-2">{image ? <Image src={image} alt={chosen.name} fill sizes="(min-width: 768px) 50vw, 100vw" unoptimized={!optimizable(image)} className="object-cover transition-transform duration-500 group-hover:scale-105"/> : <ProductImage product={chosen} sizes="(min-width: 768px) 50vw, 100vw" className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"/>}</Link>
         <div className="flex flex-col justify-center gap-5 p-8 sm:p-12">
-          {kicker(text(s, "eyebrow")) && <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">{kicker(text(s, "eyebrow"))}</p>}
+          {kicker(text(s, "eyebrow")) && <p className="text-sm font-medium text-primary">{kicker(text(s, "eyebrow"))}</p>}
           <h2 id={section.id} className="text-3xl font-medium leading-[1.08] tracking-tight sm:text-4xl">{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2>
           <p className="max-w-md text-muted-foreground">{text(s, "description")}</p>
           <p className="text-sm"><span className="font-medium">{chosen.name}</span>{chosen.verified && <span className="text-muted-foreground"> · {fmt(productDisplayPrice(chosen))}</span>}</p>
@@ -122,7 +122,7 @@ function Block({ section }: { section: HomeSection }) {
         {image && <Image src={image} alt="" fill sizes="100vw" unoptimized={!optimizable(image)} className="object-cover"/>}
         {image && <div className="absolute inset-0 bg-linear-to-t from-foreground/90 via-foreground/55 to-foreground/15" aria-hidden="true"/>}
         <div className={cn("relative z-10 max-w-xl", image && "text-white")}>
-          {kicker(text(s, "eyebrow")) && <p className="mb-3 text-xs font-medium uppercase tracking-[0.2em] opacity-80">{kicker(text(s, "eyebrow"))}</p>}
+          {kicker(text(s, "eyebrow")) && <p className="mb-3 text-sm font-medium opacity-80">{kicker(text(s, "eyebrow"))}</p>}
           <h2 id={section.id} className={cn("text-3xl font-medium leading-[1.08] tracking-tight sm:text-4xl lg:text-5xl", image ? "text-white" : "text-foreground")}>{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2>
           {text(s, "description") && <p className="mt-4 text-base opacity-90">{text(s, "description")}</p>}
           {text(s, "cta_text") && <div className="mt-6"><TextureButton variant={image ? "inverse" : "primary"} size="lg" render={<Link href={text(s, "cta_url") || "/sklep"}/>}>{text(s, "cta_text")} <ArrowRight size={18}/></TextureButton></div>}
@@ -134,7 +134,7 @@ function Block({ section }: { section: HomeSection }) {
     const alignment = text(s, "alignment");
     return <section className={cn("container py-12", alignment === "center" && "text-center", alignment === "right" && "text-right")} aria-labelledby={section.id}>
       <div className={cn("max-w-2xl rounded-2xl p-8 sm:p-10", alignment === "center" && "mx-auto", alignment === "right" && "ml-auto")} style={{ backgroundColor: text(s, "background") || undefined, color: text(s, "text_color") || undefined }}>
-        {kicker(text(s, "eyebrow")) && <p className="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-primary">{kicker(text(s, "eyebrow"))}</p>}
+        {kicker(text(s, "eyebrow")) && <p className="mb-3 text-sm font-medium text-primary">{kicker(text(s, "eyebrow"))}</p>}
         <h2 id={section.id} className="text-3xl font-medium leading-[1.1] tracking-tight sm:text-4xl">{lines.map((line, i) => <span key={i}>{line}{i < lines.length - 1 && <br/>}</span>)}</h2>
         <p className="mt-4 text-base opacity-85">{text(s, "description")}</p>
       </div>
@@ -147,7 +147,7 @@ function Block({ section }: { section: HomeSection }) {
       { title: text(s, "third_title"), description: text(s, "third_text"), href: "/pomoc#rozmiary", icon: <Ruler size={18}/> }
     ];
     return <section className="container py-16 sm:py-20" aria-label={text(s, "title")}>
-      <h2 className="mb-8 text-2xl font-medium tracking-tight sm:text-3xl">{text(s, "title")}</h2>
+      <h2 className="mb-8 text-2xl font-semibold tracking-tight sm:text-3xl">{text(s, "title")}</h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{blocks.map((entry, i) => <Link key={i} href={entry.href} className="group flex flex-col gap-4 rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40"><span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">{entry.icon}</span><span><strong className="block text-base font-medium">{entry.title}</strong><span className="mt-1 block text-sm text-muted-foreground">{entry.description}</span></span><span className="mt-auto inline-flex items-center gap-1 text-sm font-medium text-primary">Więcej <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5"/></span></Link>)}</div>
     </section>;
   }
@@ -157,7 +157,7 @@ function Block({ section }: { section: HomeSection }) {
 export default function HomeCanvas({ config }: { config: HomeConfig }) {
   const enabled = config.sections.filter(section => section.enabled);
   const startsWithHero = enabled[0]?.type === "hero";
-  return <div className={cn("cms-home", !startsWithHero && "pt-16 md:pt-34")}>
+  return <div className={cn("cms-home", !startsWithHero && "pt-16")}>
     {enabled.map(section => <Block key={section.id} section={section}/>)}
   </div>;
 }

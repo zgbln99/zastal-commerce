@@ -25,6 +25,7 @@ const label = (c: string) => c === "Dzieci" ? "Dla dzieci" : c;
 const categoryUrl = (c: string) => categoryPath(c);
 const pill = "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-muted";
 const pillActive = "border-primary bg-primary text-primary-foreground hover:bg-primary";
+const glassIcon = "inline-flex size-10 shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:bg-foreground/[0.07] disabled:opacity-50";
 const iconButton = "inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:opacity-50";
 
 function SearchDialog() {
@@ -135,49 +136,51 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
     const timer = window.setTimeout(() => setScannedCode(""), 9000);
     return () => window.clearTimeout(timer);
   }, [params]);
-  // The header is fixed: 64 px top bar on phones, 88 px bar + 48 px menu on desktop, plus 32 px for the pre-launch notice.
-  const offset = pathname === "/" ? "" : notice ? "pt-24 md:pt-42" : "pt-16 md:pt-34";
-  const menuLink = "inline-flex h-12 items-center gap-1 border-b-2 border-transparent px-3.5 text-[15px] font-medium text-white/90 transition-colors hover:border-orange hover:text-white";
-  const menuActive = "border-orange text-white";
+  // The header is a single fixed glass bar of 64 px, plus 32 px for the pre-launch notice.
+  const offset = pathname === "/" ? "" : notice ? "pt-24" : "pt-16";
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => { const onScroll = () => setScrolled(window.scrollY > 8); onScroll(); window.addEventListener("scroll", onScroll, { passive: true }); return () => window.removeEventListener("scroll", onScroll); }, []);
+  const menuLink = "inline-flex h-10 items-center gap-1 whitespace-nowrap rounded-full px-3 text-sm font-medium text-foreground/70 transition-colors hover:text-foreground xl:px-3.5";
+  const menuActive = "bg-foreground/[0.06] text-foreground";
   const coverFor = (category: string) => store.products.find(p => p.category === category);
   return <div className={cn("store-site flex min-h-dvh flex-col bg-background text-foreground", offset)}>
     <a href="#main-content" className="skip-link">Przejdź do treści</a>
-    <header className="fixed inset-x-0 top-0 z-40 bg-background shadow-[0_1px_0_0_var(--border)]" onMouseLeave={() => setShopOpen(false)}>
+    <header className={cn("glass-header fixed inset-x-0 top-0 z-40 border-b backdrop-blur-xl backdrop-saturate-150 transition-[background-color,border-color,box-shadow] duration-300", scrolled || shopOpen ? "border-border/70 bg-background/78 shadow-[0_10px_30px_-18px_rgb(0_0_0/0.35)]" : "border-transparent bg-background/68")} onMouseLeave={() => setShopOpen(false)}>
       {notice && <div className="bg-orange text-white"><div className="container flex h-8 items-center justify-between gap-4 text-xs"><span className="font-semibold">Zastal Zielona Góra</span><Link href="/pomoc" className="truncate hover:underline">Zamówienia online chwilowo niedostępne</Link></div></div>}
-      <div className="container flex h-16 items-center gap-3 md:h-22 md:gap-6">
-        <button className={cn(iconButton, "md:hidden")} aria-label="Otwórz menu" onClick={() => store.setDialog("menu")}><Menu2 size={20}/></button>
+      <div className="container flex h-16 items-center gap-2 md:gap-4">
+        <button className={cn(glassIcon, "xl:hidden")} aria-label="Otwórz menu" onClick={() => store.setDialog("menu")}><Menu2 size={22}/></button>
         <Link href="/" className="flex shrink-0 items-center" aria-label="Zastal Store, strona główna">
-          <img src="/assets/zastal-logo.svg" alt="Zastal Zielona Góra" className="h-9 w-auto sm:h-10 md:h-[60px]" width={212} height={60}/>
+          <img src="/assets/zastal-logo.svg" alt="Zastal Zielona Góra" className="h-8 w-auto sm:h-9 xl:h-10" width={141} height={40}/>
         </Link>
-        <SearchBox products={store.products} className="mx-auto hidden w-full max-w-lg md:block"/>
-        <div className="ml-auto flex items-center gap-1.5 md:gap-2">
-          <button className={cn(iconButton, "md:hidden")} aria-label="Szukaj produktów" onClick={() => store.setDialog("search")}><Search size={20}/></button>
-          <Link className={cn(iconButton, "relative hidden sm:inline-flex md:size-12")} href="/ulubione" aria-label={"Ulubione: " + store.favorites.length}><Heart size={22}/>{store.favorites.length > 0 && <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-orange text-[11px] font-semibold text-white">{store.favorites.length}</span>}</Link>
-          <Link className={cn(iconButton, "hidden sm:inline-flex md:size-12")} href="/konto" aria-label={auth.user ? "Moje konto" : "Konto"} title={auth.user ? "Moje konto" : "Zaloguj się"}><User size={22}/></Link>
-          <button className="inline-flex h-10 items-center gap-2 rounded-full bg-primary pl-3 pr-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 md:h-12 md:pl-4 md:pr-2.5" onClick={() => store.setDialog("cart")} aria-label={"Otwórz koszyk (" + store.count + ")"}><ShoppingCart size={20}/><span className="hidden sm:inline">Koszyk</span><b className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold text-primary">{store.count}</b></button>
-        </div>
-      </div>
-      <div className="hidden bg-primary text-primary-foreground md:block"><div className="container flex h-12 items-center">
-        <nav className="flex h-12 items-center" aria-label="Nawigacja główna">
-          <div className="relative h-12" onMouseEnter={() => setShopOpen(true)}>
+        <nav className="hidden h-full min-w-0 flex-1 items-center justify-center gap-0.5 xl:flex" aria-label="Nawigacja główna">
+          <div className="relative flex h-full items-center" onMouseEnter={() => setShopOpen(true)}>
             <button type="button" className={cn(menuLink, (shopOpen || pathname === "/sklep" || pathname?.startsWith("/kategoria/")) && menuActive)} aria-expanded={shopOpen} aria-haspopup="true" onClick={() => setShopOpen(open => !open)} onKeyDown={e => { if (e.key === "Escape") setShopOpen(false); }}>Sklep <ChevronDown size={14} className={cn("transition-transform", shopOpen && "rotate-180")}/></button>
-            {shopOpen && <div className="absolute left-0 top-full z-50 w-[44rem] rounded-b-2xl border border-t-0 border-border bg-background p-5 text-foreground shadow-xl" onKeyDown={e => { if (e.key === "Escape") setShopOpen(false); }}>
-              <div className="grid grid-cols-4 gap-3">{CATEGORIES.map(c => { const cover = coverFor(c); return <Link key={c} href={categoryUrl(c)} className="group rounded-xl border border-border p-2 transition-colors hover:border-primary/40" onClick={() => setShopOpen(false)}><span className="block aspect-square overflow-hidden rounded-lg bg-muted">{cover && <ProductImage product={cover} sizes="220px" className="size-full object-cover transition-transform duration-500 group-hover:scale-105"/>}</span><span className="mt-2 block text-sm font-semibold">{label(c)}</span><span className="block text-xs text-muted-foreground">{store.products.filter(p => p.category === c).length} produktów</span></Link>; })}</div>
-              <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-border pt-4 text-sm"><Link href="/sklep" className="inline-flex items-center gap-1 font-semibold text-primary hover:underline" onClick={() => setShopOpen(false)}>Wszystkie produkty <ArrowRight size={14}/></Link><Link href="/sklep?q=retro" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Kolekcja Retro</Link><Link href="/zawodnicy" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Koszulki zawodników</Link><Link href="/karta-podarunkowa" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Karta podarunkowa</Link></div>
+            {shopOpen && <div className="absolute left-0 top-full z-50 w-[46rem] max-w-[calc(100vw-2rem)] pt-2" onKeyDown={e => { if (e.key === "Escape") setShopOpen(false); }}>
+              <div className="rounded-3xl border border-border/70 bg-background/85 p-5 text-foreground shadow-2xl shadow-black/15 backdrop-blur-2xl backdrop-saturate-150 not-supports-[backdrop-filter]:bg-background">
+              <div className="grid grid-cols-4 gap-3">{CATEGORIES.map(c => { const cover = coverFor(c); return <Link key={c} href={categoryUrl(c)} className="group rounded-2xl border border-border/60 bg-background/60 p-2 transition-colors hover:border-primary/40 hover:bg-background/90" onClick={() => setShopOpen(false)}><span className="block aspect-square overflow-hidden rounded-xl bg-muted">{cover && <ProductImage product={cover} sizes="220px" className="size-full object-cover transition-transform duration-500 group-hover:scale-105"/>}</span><span className="mt-2 block text-sm font-semibold">{label(c)}</span><span className="block text-xs text-muted-foreground">{store.products.filter(p => p.category === c).length} produktów</span></Link>; })}</div>
+              <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-border/60 pt-4 text-sm"><Link href="/sklep" className="inline-flex items-center gap-1 font-semibold text-primary hover:underline" onClick={() => setShopOpen(false)}>Wszystkie produkty <ArrowRight size={14}/></Link><Link href="/sklep?q=retro" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Kolekcja Retro</Link><Link href="/zawodnicy" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Koszulki zawodników</Link><Link href="/karta-podarunkowa" className="text-muted-foreground hover:text-foreground" onClick={() => setShopOpen(false)}>Karta podarunkowa</Link></div>
+              {brand.competitions.some(c => c.image) && <div className="mt-4 border-t border-border/60 pt-4"><CompetitionLogos items={brand.competitions}/></div>}
+              </div>
             </div>}
           </div>
           {CATEGORIES.map(c => <Link key={c} href={categoryUrl(c)} className={cn(menuLink, activeCategory === c && menuActive)} aria-current={activeCategory === c ? "page" : undefined} onMouseEnter={() => setShopOpen(false)}>{label(c)}</Link>)}
-          <Link href="/zawodnicy" className={cn(menuLink, pathname === "/zawodnicy" && menuActive)} onMouseEnter={() => setShopOpen(false)}>Zawodnicy</Link>
+          <Link href="/zawodnicy" className={cn(menuLink, pathname?.startsWith("/zawodnicy") && menuActive)} onMouseEnter={() => setShopOpen(false)}>Zawodnicy</Link>
           <Link href="/karta-podarunkowa" className={cn(menuLink, pathname === "/karta-podarunkowa" && menuActive)} onMouseEnter={() => setShopOpen(false)}>Karta podarunkowa</Link>
           <Link href="/kontakt" className={cn(menuLink, pathname === "/kontakt" && menuActive)} onMouseEnter={() => setShopOpen(false)}>Kontakt</Link>
         </nav>
-        <div className="ml-auto flex items-center"><CompetitionLogos items={brand.competitions} tone="dark"/></div>
-      </div></div>
+        <div className="ml-auto flex shrink-0 items-center gap-1 xl:ml-0">
+          <button type="button" className="hidden h-10 w-44 items-center gap-2 rounded-full border border-border/70 bg-background/50 px-3.5 text-sm text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground xl:inline-flex" onClick={() => store.setDialog("search")} aria-label="Szukaj produktów"><Search size={17}/><span className="flex-1 text-left">Szukaj…</span><kbd className="rounded border border-border/70 px-1.5 text-[11px] leading-5 text-muted-foreground">Ctrl K</kbd></button>
+          <button className={cn(glassIcon, "xl:hidden")} aria-label="Szukaj produktów" onClick={() => store.setDialog("search")}><Search size={21}/></button>
+          <Link className={cn(glassIcon, "relative hidden sm:inline-flex")} href="/ulubione" aria-label={"Ulubione: " + store.favorites.length}><Heart size={21}/>{store.favorites.length > 0 && <span className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-orange text-[10px] font-semibold text-white">{store.favorites.length}</span>}</Link>
+          <Link className={cn(glassIcon, "hidden sm:inline-flex")} href="/konto" aria-label={auth.user ? "Moje konto" : "Konto"} title={auth.user ? "Moje konto" : "Zaloguj się"}><User size={21}/></Link>
+          <button className="inline-flex ml-1 h-10 items-center gap-2 rounded-full bg-primary pl-3.5 pr-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90" onClick={() => store.setDialog("cart")} aria-label={"Otwórz koszyk (" + store.count + ")"}><ShoppingCart size={20}/><span className="hidden sm:inline">Koszyk</span><b className="flex h-7 min-w-7 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold text-primary">{store.count}</b></button>
+        </div>
+      </div>
     </header>
     {store.status === "error" && <div className="catalog-error border-b border-destructive/30 bg-destructive/10"><div className="container flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><span>{store.error}</span><button className={pill} onClick={store.refresh}>Spróbuj ponownie</button></div></div>}
     {scannedCode && <div className="promo-toast fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-primary/30 bg-background p-3 text-sm shadow-lg" role="status"><Check size={18} className="shrink-0 text-primary"/><span>Kod rabatowy <strong>{scannedCode}</strong> zapisany. Naliczy się w koszyku przy zamówieniu.</span><Link href="/koszyk" className="ml-auto shrink-0 font-medium text-primary hover:underline" onClick={() => setScannedCode("")}>Koszyk</Link><button type="button" className="shrink-0 text-muted-foreground hover:text-foreground" aria-label="Zamknij" onClick={() => setScannedCode("")}><X size={16}/></button></div>}
     <main id="main-content" className="flex-1">{children}</main>
-    <footer className="mt-24 border-t border-border bg-muted/60">
+    <footer className="mt-24 border-t border-border bg-background">
       <div className="container grid gap-10 py-16 md:grid-cols-4 md:gap-8">
         <div className="footer-about space-y-4">
           <Link href="/" className="inline-flex"><img src="/assets/zastal-logo.svg" alt="Zastal Zielona Góra" className="h-14 w-auto" width={198} height={56}/></Link>
@@ -193,7 +196,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
         <FooterColumn title="Zakupy i pomoc"><Link href="/pomoc#dostawa">Dostawa i odbiór</Link><Link href="/karta-podarunkowa">Karta podarunkowa</Link><Link href="/pomoc#rozmiary">Wybór rozmiaru</Link><Link href="/pomoc#zamowienia">Zamówienia i płatności</Link><Link href="/konto">Moje konto</Link><Link href="/konto?mode=register">Utwórz konto</Link><Link href="/ulubione">Moje ulubione</Link><Link href="/pomoc#prywatnosc">Konto i prywatność</Link></FooterColumn>
         <FooterColumn title="Klub"><Link href="/kontakt">Kontakt</Link>{store.sales.pages.map(page => <Link key={page.slug} href={"/informacje/" + page.slug}>{page.title}</Link>)}<a href="https://basketzg.pl/" target="_blank" rel="noreferrer">Strona Zastalu <ArrowUpRight size={13} className="inline"/></a><a href="https://zastal.store/" target="_blank" rel="noreferrer">Aktualny sklep klubowy <ArrowUpRight size={13} className="inline"/></a>{store.sales.checkoutEnabled && store.sales.legal.terms && <a href={store.sales.legal.terms} target="_blank" rel="noreferrer">Regulamin</a>}{store.sales.checkoutEnabled && store.sales.legal.privacy && <a href={store.sales.legal.privacy} target="_blank" rel="noreferrer">Polityka prywatności</a>}{store.sales.checkoutEnabled && store.sales.legal.returns && <a href={store.sales.legal.returns} target="_blank" rel="noreferrer">Zwroty i reklamacje</a>}</FooterColumn>
       </div>
-      <div className="border-t border-border"><div className="container grid gap-6 py-10 md:grid-cols-[1fr_minmax(0,24rem)] md:items-center"><div><h3 className="text-base font-medium">Newsletter sklepu</h3><p className="mt-1 text-sm text-muted-foreground">Nowości, premiery i promocje. Piszemy rzadko, tylko gdy jest o czym.</p></div><NewsletterForm source="footer"/></div></div>
+      <div className="border-t border-border"><div className="container grid gap-6 py-10 md:grid-cols-[1fr_minmax(0,26rem)] md:items-center"><div><h3 className="text-base font-medium">Newsletter sklepu</h3><p className="mt-1 text-sm text-muted-foreground">Nowości, premiery i promocje. Piszemy rzadko, tylko gdy jest o czym.</p></div><NewsletterForm source="footer"/></div></div>
       <div className="border-t border-border"><div className="container flex flex-wrap items-center justify-between gap-3 py-5 text-xs text-muted-foreground"><span>© {year} Zastal Store</span><span>Polska · PLN · ceny brutto</span><Link href="/pomoc" className="hover:text-foreground">Informacje o sklepie</Link></div></div>
     </footer>
     {store.dialog === "menu" && <Modal title="Menu sklepu" onClose={() => store.setDialog(null)} drawer className="max-w-xs">
@@ -215,5 +218,5 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
 }
 
 function FooterColumn({ title, children }: { title: string; children: React.ReactNode }) {
-  return <div><h3 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-foreground">{title}</h3><div className="flex flex-col gap-2.5 text-sm text-muted-foreground [&_a:hover]:text-foreground">{children}</div></div>;
+  return <div><h3 className="mb-4 text-sm font-semibold text-foreground">{title}</h3><div className="flex flex-col gap-2.5 text-sm text-muted-foreground [&_a:hover]:text-foreground">{children}</div></div>;
 }

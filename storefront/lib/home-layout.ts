@@ -50,7 +50,7 @@ export const EDIT_FIELDS:Record<SectionKind,Field[]>={
    {key:"height",label:"Wysokość banera (px)",type:"number",min:400,max:850},
    {key:"overlay",label:"Przyciemnienie zdjęcia (%)",type:"number",min:0,max:95},align,
    {key:"slides_enabled",label:"Dodatkowe slajdy kolekcji",type:"toggle",defaultValue:true,hint:"Wyłącz, aby zachować tylko pierwszy baner."},
-   {key:"autoplay",label:"Automatyczna zmiana slajdów",type:"toggle",defaultValue:true,hint:"Zatrzymuje się podczas czytania, obsługi okien sklepu i przy ograniczonym ruchu."},
+   {key:"autoplay",label:"Automatyczna zmiana slajdów",type:"toggle",defaultValue:true,hint:"Slajdy zmieniają się same. Zatrzymuje je przycisk Pauza, nawigacja klawiaturą i otwarte okna sklepu."},
    {key:"interval_ms",label:"Czas slajdu (ms)",type:"number",min:3000,max:15000,defaultValue:6000,hint:"6000 ms = 6 sekund. Zakres od 3 do 15 sekund."},
    ...slideFields(2),...slideFields(3)],
  categories:[eyebrow,heading,{key:"cta_text",label:"Tekst linku",type:"short"},

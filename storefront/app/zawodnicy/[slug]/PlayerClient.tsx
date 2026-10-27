@@ -21,7 +21,7 @@ export default function PlayerClient({ player, source }: { player: Player; origi
       </div>
       <div className="flex flex-col gap-6">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">Zastal Zielona Góra{live.position ? " · " + live.position : ""}</p>
+          <p className="text-sm font-medium text-primary">Zastal Zielona Góra{live.position ? " · " + live.position : ""}</p>
           <h1 className="mt-2 text-4xl font-medium tracking-tight sm:text-5xl">{live.name}</h1>
           <p className="mt-3 text-muted-foreground">Nadruk na koszulce: <strong className="text-foreground">{live.print_name} {live.number}</strong>. Nazwisko i numer trafiają na produkt dokładnie w tej formie.</p>
         </div>

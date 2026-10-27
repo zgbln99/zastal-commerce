@@ -61,7 +61,7 @@ class PagesTests(unittest.TestCase):
         self.assertEqual(self.admin.request('PATCH', '/api/admin/pages/Bad_Slug', {'title': 'x', 'content': 'y'})[0], 404)
         customer = Client(self.port)
         customer.register()
-        self.assertEqual(customer.request('GET', '/api/admin/pages')[0], 403)
+        self.assertEqual(customer.request('GET', '/api/admin/pages')[0], 401)
 
 
 if __name__ == '__main__':

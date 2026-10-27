@@ -9,7 +9,7 @@
 .store-site .page-heading { @apply mb-8 mt-2 max-w-2xl; }
 .store-site .page-heading h1 { @apply text-3xl font-medium leading-[1.1] sm:text-4xl; }
 .store-site .page-heading p { @apply mt-3 text-base text-muted-foreground; }
-.store-site .eyebrow, .store-site .section-kicker { @apply text-xs font-medium uppercase tracking-[0.2em] text-primary; }
+.store-site .eyebrow, .store-site .section-kicker { @apply text-sm font-medium normal-case tracking-normal text-primary; }
 .store-site .breadcrumbs { @apply flex flex-wrap items-center gap-2 py-5 text-xs text-muted-foreground; }
 .store-site .breadcrumbs a:hover { @apply text-foreground; }
 .store-site .section-heading { @apply mb-6 flex flex-wrap items-end justify-between gap-4; }
@@ -78,3 +78,6 @@
 .store-site .modal-title { @apply mb-4 flex items-start justify-between gap-4; }
 .store-site .modal-title h2 { @apply text-xl font-medium; }
 .store-site .modal-title p { @apply mt-1 text-sm text-muted-foreground; }
+
+@keyframes hero-fade { from { opacity: 0; } to { opacity: 1; } }
+.store-site .animate-hero-fade { animation: hero-fade 700ms ease-out; }

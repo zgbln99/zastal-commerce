@@ -371,6 +371,54 @@ try {
   step('pos: kiosk layout hides admin chrome', await d.evaluate(() => document.body.classList.contains('staff-fullscreen') && getComputedStyle(document.querySelector('.admin-sidebar')).display === 'none'));
   await shot(d, '21-admin-pos-kiosk-1024');
   await desktop.close();
+  // ---------- Panel and shop account are separate sessions in the same browser
+  const both = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'pl-PL' });
+  const b = await both.newPage();
+  await b.goto(WEB + '/konto?mode=register', { waitUntil: 'networkidle' });
+  const registered = await b.evaluate(async () => {
+    const session = await (await fetch('/api/auth/session', { credentials: 'same-origin' })).json();
+    const reply = await fetch('/api/auth/register', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrf_token }, body: JSON.stringify({ email: 'separacja@example.test', name: 'Kibic Osobny', password: 'Customer password 2026' }) });
+    return reply.status;
+  });
+  step('sessions: customer account created in the shop', registered === 201);
+  await b.goto(WEB + '/admin', { waitUntil: 'networkidle' });
+  step('sessions: a shop login does not open the panel', (await b.locator('input[autocomplete="username"]').count()) === 1 && (await b.locator('.admin-shell').count()) === 0);
+  await b.fill('input[autocomplete="username"]', 'admin');
+  await b.fill('input[autocomplete="current-password"]', config.admin_password);
+  await b.getByRole('button', { name: 'Zaloguj się' }).click();
+  await b.waitForSelector('.admin-shell', { timeout: 15000 });
+  // A product with two real photographs shows the second one when the pointer is over its card.
+  const gallery = await b.evaluate(async () => {
+    const session = await (await fetch('/api/staff/auth/session', { credentials: 'same-origin' })).json();
+    const photo = (id, url, role, alt) => ({ id, url, role, alt, illustrative: false });
+    const reply = await fetch('/api/admin/products/8/gallery', { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrf_token }, body: JSON.stringify({ expected_revision: 0, images: [
+      photo('product-8-cover', '/assets/photos/product-8.webp', 'packshot', 'Worek sportowy Zastal'),
+      photo('product-8-detail', '/assets/photos/gallery/product-8-detail.webp', 'detail', 'Worek sportowy Zastal, detal'),
+      photo('product-8-back', '/assets/photos/gallery/product-8-back.webp', 'packshot', 'Worek sportowy Zastal, tył'),
+    ] }) });
+    return reply.status;
+  });
+  step('hover: gallery with two photographs saved for the bag', gallery === 200, String(gallery));
+  await b.goto(WEB + '/sklep', { waitUntil: 'networkidle' });
+  const bag = b.locator('article', { has: b.locator('a[href="/produkt/worek-sportowy-zastal"]') }).first();
+  await bag.scrollIntoViewIfNeeded();
+  const opacities = () => bag.evaluate(card => [...card.querySelectorAll('img')].slice(0, 2).map(img => Number(getComputedStyle(img).opacity)));
+  const resting = await opacities();
+  await bag.hover();
+  await b.waitForTimeout(900);
+  const hovered = await opacities();
+  step('hover: pointer over a product card fades to its second photo', resting[0] === 1 && resting[1] === 0 && hovered[0] === 0 && hovered[1] === 1, JSON.stringify({ resting, hovered }));
+  await shot(b, '22-card-second-photo-1440');
+  await b.goto(WEB + '/konto', { waitUntil: 'networkidle' });
+  await b.waitForSelector('.account-heading');
+  step('sessions: panel login keeps the customer signed in to the shop', (await b.locator('.account-heading').innerText()).includes('Kibic Osobny'));
+  await b.goto(WEB + '/admin', { waitUntil: 'networkidle' });
+  await b.waitForSelector('.admin-shell');
+  await b.getByRole('button', { name: 'Wyloguj' }).click();
+  await b.waitForSelector('input[autocomplete="username"]');
+  await b.goto(WEB + '/konto', { waitUntil: 'networkidle' });
+  step('sessions: signing out of the panel keeps the shop account', (await b.locator('.account-heading').count()) === 1);
+  await both.close();
 } finally {
   await browser.close();
 }

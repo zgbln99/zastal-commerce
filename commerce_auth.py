@@ -8,7 +8,20 @@ import time
 from collections import defaultdict, deque
 from http.cookies import CookieError, SimpleCookie
 
+# Two independent sessions in one browser: the shop account (customers) and the staff panel never share a cookie, so
+# signing in to /admin does not replace a customer login and signing out of one leaves the other untouched.
 COOKIE = '__Host-zastal_session'
+STAFF_COOKIE = '__Host-zastal_staff'
+STAFF_AUTH_PREFIX = '/api/staff/auth/'
+
+
+def scope_of(path):
+    """'staff' for the panel API (and its sign-in routes), 'customer' for everything else."""
+    return 'staff' if path.startswith(('/api/admin/', '/api/staff/')) else 'customer'
+
+
+def cookie_name(scope):
+    return STAFF_COOKIE if scope == 'staff' else COOKIE
 SITE_ORIGIN = os.environ.get('ZASTAL_SITE_ORIGIN', 'https://zastalstore.51-15-21-164.sslip.io').rstrip('/')
 STAFF_ROLES = ('admin', 'manager', 'warehouse', 'cashier', 'production', 'orders')
 ROLES = ('customer',) + STAFF_ROLES
@@ -227,9 +240,12 @@ def migrate_roles(c):
 
 def session(handler, c, create=False):
     handler.response_headers = getattr(handler, 'response_headers', [])
+    scope = scope_of(handler.path.split('?', 1)[0])
+    handler.auth_scope = scope
+    name = cookie_name(scope)
     try:
         cookies = SimpleCookie(handler.headers.get('Cookie', ''))
-        raw = cookies[COOKIE].value if COOKIE in cookies else ''
+        raw = cookies[name].value if name in cookies else ''
     except CookieError:
         raw = ''
     entry = c.execute('SELECT * FROM auth_sessions WHERE token_hash=? AND expires>?',
@@ -237,6 +253,9 @@ def session(handler, c, create=False):
     user = c.execute('SELECT * FROM users WHERE id=? AND active=1', (entry['user_id'],)).fetchone() if entry and entry['user_id'] else None
     if entry and entry['user_id'] and not user:
         entry = None
+    # A session only counts in its own scope: a staff account is never "the customer" of the shop, and the other way round.
+    if user and (user['role'] == 'customer') != (scope == 'customer'):
+        entry, user = None, None
     handler.request_session, handler.request_user = entry, user
     if create and entry is None:
         rate(handler, 'session', count=30, window=3600)
@@ -252,10 +271,11 @@ def rotate(handler, c, user, revoke_all=False):
         c.execute('DELETE FROM auth_sessions WHERE token_hash=?', (current['token_hash'],))
     c.execute('DELETE FROM auth_sessions WHERE expires<=?', (int(time.time()),))
     raw, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+    scope = getattr(handler, 'auth_scope', 'customer')
     seconds = TTL[user['role'] if user else None]
     c.execute('INSERT INTO auth_sessions VALUES(?,?,?,?,?)',
               (digest(raw), user['id'] if user else None, csrf, int(time.time()), int(time.time()) + seconds))
-    handler.response_headers.append(('Set-Cookie', f'{COOKIE}={raw}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age={seconds}'))
+    handler.response_headers.append(('Set-Cookie', f'{cookie_name(scope)}={raw}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age={seconds}'))
     entry = c.execute('SELECT * FROM auth_sessions WHERE token_hash=?', (digest(raw),)).fetchone()
     handler.request_session, handler.request_user = entry, user
     return entry, user
@@ -379,6 +399,16 @@ def staff_dispatch(handler, path, c):
 def dispatch(handler, path, c):
     """Returns True for a handled route; commit before sending successful replies."""
     method = handler.command
+    staff_scope = path.startswith(STAFF_AUTH_PREFIX)
+    if staff_scope:
+        # The panel signs in on its own routes with the same logic and its own cookie (see scope_of).
+        tail = path[len(STAFF_AUTH_PREFIX):]
+        if tail in ('session', 'login', 'logout', 'recover'):
+            path = '/api/auth/' + tail
+        elif tail in ('profile', 'password', 'recovery-key', 'logout-others'):
+            path = '/api/account/' + tail
+        else:
+            return False
     if method == 'GET' and path == '/api/auth/session':
         session(handler, c, create=True)
         c.commit()
@@ -415,7 +445,8 @@ def dispatch(handler, path, c):
         rate(handler, 'login', identifier)
         user = c.execute('SELECT * FROM users WHERE identifier=?', (identifier,)).fetchone()
         valid = verify_password(password, user['password_hash'] if user else None)
-        if not user or not valid or not user['active']:
+        # Same message for a wrong password and for the wrong door (a staff login on the shop or a customer in the panel).
+        if not user or not valid or not user['active'] or (user['role'] == 'customer') == staff_scope:
             raise AuthError(401, 'Nieprawidłowy login lub hasło.', 'credentials_invalid')
         verified_hash = user['password_hash']
         c.execute('BEGIN IMMEDIATE')
@@ -432,7 +463,8 @@ def dispatch(handler, path, c):
         if not isinstance(key, str) or len(key) > 128:
             raise AuthError(400, 'Nieprawidłowy login lub klucz odzyskiwania.')
         user = c.execute('SELECT * FROM users WHERE identifier=?', (identifier,)).fetchone()
-        if not user or not user['active'] or not user['recovery_hash'] or not secrets.compare_digest(digest(key), user['recovery_hash']):
+        if (not user or not user['active'] or not user['recovery_hash'] or (user['role'] == 'customer') == staff_scope
+                or not secrets.compare_digest(digest(key), user['recovery_hash'])):
             raise AuthError(400, 'Nieprawidłowy login lub klucz odzyskiwania.')
         encoded, new_key = hash_password(password), secrets.token_urlsafe(32)
         c.execute('BEGIN IMMEDIATE')

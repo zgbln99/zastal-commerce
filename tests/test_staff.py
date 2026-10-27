@@ -80,7 +80,7 @@ class StaffTests(unittest.TestCase):
         self.assertEqual(manager.request('GET', '/api/admin/home')[0], 200)
         customer = Client(self.port)
         self.assertEqual(customer.register()[0], 201)
-        self.assertEqual(customer.request('GET', '/api/admin/products')[0], 403)
+        self.assertEqual(customer.request('GET', '/api/admin/products')[0], 401)
 
     def test_cashier_can_record_pos_sale_and_warehouse_cannot(self):
         _, cashier = self.create('kasa', 'cashier')

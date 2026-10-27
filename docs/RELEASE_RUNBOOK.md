@@ -36,6 +36,7 @@ Wszystkie kroki wykonuje osoba z dostępem do serwera. Żaden krok nie kasuje ba
 | nowe tabele (2) | `subscribers` (newsletter, podwójne potwierdzenie), `contact_messages` (formularz kontaktowy), `site_brand` (podpis i logotypy rozgrywek); tabela `reviews` usuwana przy starcie | CREATE TABLE IF NOT EXISTS |
 | `order_details` (2) | kolumny: kod rabatowy, rabat, karta podarunkowa (kod, kwota, e-mail i wiadomość obdarowanego) | ALTER TABLE |
 | `pos_sales` (2) | kolumna: kwota z karty podarunkowej | ALTER TABLE |
+| sesje | brak migracji: panel dostaje własne ciasteczko `__Host-zastal_staff`. Po wdrożeniu pracownicy logują się do panelu ponownie (stare sesje w ciasteczku sklepu są ignorowane), klienci zostają zalogowani | bez utraty |
 | `payments` (2) | kolumna `pay_method` (kanał PayU: blik, c, jp, ap) | ALTER TABLE |
 | `players` (2) | kolumny `slug` (adres strony zawodnika, uzupełniany z nazwiska), `photo`, `position` | ALTER TABLE, bez utraty |
 | nowe tabele (3) | `account_favorites` (ulubione na koncie), `price_alerts` (powiadomienia o obniżce), `cart_drafts` (koszyki do przypomnienia) | CREATE TABLE IF NOT EXISTS |

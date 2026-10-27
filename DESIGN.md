@@ -32,7 +32,7 @@ typography:
   body: text-sm / text-base, tekst pomocniczy text-xs
 radius: "--radius: 0.7rem" (przyciski rounded-lg, karty rounded-xl, kafle kolekcji i panele rounded-2xl, pigułki nawigacji i filtrów rounded-full)
 container: max-w-7xl (1280px), 16px marginesu na telefonie, 24/32px wyżej
-header: stały (fixed) pasek 64px + rząd kategorii 44px na desktopie; strony zaczynają się pod nim, hero strony głównej wchodzi pod niego
+header: jeden stały (fixed) szklany pasek 64px (półprzezroczyste tło z rozmyciem, `backdrop-blur-xl`), menu wyśrodkowane od `xl`, panel „Sklep” też szklany; strony zaczynają się pod nim (`pt-16`), hero strony głównej wchodzi pod niego
 touch: min 44px wysokości dla przycisków i pól
 ```
 

@@ -154,7 +154,7 @@ class PersonalizationTests(unittest.TestCase):
         self.assertEqual(self.guest.request('POST', '/api/admin/products', {})[0], 401)
         self.assertEqual(self.guest.request('GET', '/api/admin/players')[0], 401)
         self.assertEqual(self.guest.register()[0], 201)
-        self.assertEqual(self.guest.request('POST', '/api/admin/players', {})[0], 403)
+        self.assertEqual(self.guest.request('POST', '/api/admin/players', {})[0], 401)
         self.privileged('GET', '/api/admin/players')
         self.assertEqual(self.admin.request('POST', '/api/admin/products', {}, csrf=False)[0], 403)
 

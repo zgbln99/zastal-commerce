@@ -59,7 +59,7 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(status,201,registered)
         self.assertEqual(registered['user']['role'],'customer')
         status,_=customer.request('GET','/api/admin/products')
-        self.assertEqual(status,403)
+        self.assertEqual(status,401)
         status,_=customer.request('POST','/api/orders',{'items':[{'id':1,'size':'L','quantity':1}]})
         self.assertEqual(status,503)
         with api.connect() as c:

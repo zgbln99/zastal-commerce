@@ -47,7 +47,7 @@ class StoreExtensionTests(unittest.TestCase):
             self.assertEqual(guest.request(method,path,body)[0],401)
         customer=Client(self.port);self.assertEqual(customer.register()[0],201)
         for method,path,body in [('GET','/api/admin/fulfillment',None),('GET','/api/admin/email',None),('POST','/api/admin/pos/sales',self.sale())]:
-            self.assertEqual(customer.request(method,path,body)[0],403)
+            self.assertEqual(customer.request(method,path,body)[0],401)
         self.assertEqual(self.admin.request('POST','/api/admin/pos/sales',self.sale(),csrf=False)[0],403)
         with api.connect() as c:self.assertEqual(c.execute('SELECT COUNT(*) FROM orders').fetchone()[0],0)
 
