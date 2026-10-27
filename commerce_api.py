@@ -10,6 +10,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import sqlite3
 import sys
 import threading
@@ -59,6 +60,19 @@ def connect():
     c.execute("PRAGMA foreign_keys=ON")
     c.execute("PRAGMA busy_timeout=20000")
     return c
+
+def storage_state():
+    """Can the API write to its database, and how much room is left on that volume? (reads work long after writes stop)"""
+    free=shutil.disk_usage(DATABASE.parent).free//1048576
+    try:
+        c=connect()
+        try:
+            c.execute("PRAGMA busy_timeout=1500")
+            c.execute("BEGIN IMMEDIATE");c.rollback()
+        finally:c.close()
+        return {"db_writable":True,"disk_free_mb":free}
+    except sqlite3.Error as ex:
+        return {"db_writable":False,"disk_free_mb":free,"db_error":f"{type(ex).__name__}: {ex}"[:160]}
 
 def ean13(identifier):
     """Prefix 200 = internal restricted circulation; not externally assigned GS1 GTIN."""
@@ -288,7 +302,11 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write(f"[db] {self.command} {self.path.split('?')[0]} failed: {sys.exc_info()[0].__name__}: {sys.exc_info()[1]}\n")
         traceback.print_exc(file=sys.stderr);sys.stderr.flush()
         if log_only:return None
-        return self.respond(500,{"error":message})
+        reply={"error":message}
+        if self.path.startswith(("/api/admin/","/api/staff/")):
+            # Staff-facing routes say what the database refused (locked, read-only, disk full) so the owner can act without the journal.
+            reply["detail"]=f"{sys.exc_info()[0].__name__}: {sys.exc_info()[1]}"[:160]
+        return self.respond(500,reply)
 
     def error(self,ex):
         self.respond(400,{"error":str(ex)})
@@ -296,10 +314,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path=urlparse(self.path).path
         if path=="/health":
+            storage=storage_state()
             try:
                 with connect() as c:phase=readiness(c)['mode']
-            except sqlite3.Error:self.db_failure("database",log_only=True);return self.respond(503,{"ok":False,"error":"database"})
-            return self.respond(200,{"ok":True,"version":"0.11","sales_phase":phase,"accounts":True,"cms":True,"pos":True,"email":True,"payments":payments.configuration()['configured']})
+            except sqlite3.Error:self.db_failure("database",log_only=True);return self.respond(503,{"ok":False,"error":"database",**storage})
+            if not storage["db_writable"] or storage["disk_free_mb"]<200:return self.respond(503,{"ok":False,"error":"storage",**storage})
+            return self.respond(200,{"ok":True,"version":"0.11","sales_phase":phase,"accounts":True,"cms":True,"pos":True,"email":True,"payments":payments.configuration()['configured'],**storage})
         if path.startswith("/api/store/media/"):
             data=cms.load_media(path.rsplit("/",1)[-1]);return self.respond(200,data,"image/webp") if data is not None else self.respond(404,{"error":"Nie znaleziono zdjęcia"})
         if not self.access(path):return

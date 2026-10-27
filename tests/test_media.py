@@ -58,8 +58,11 @@ class MediaIntegration(unittest.TestCase):
                 for table in tables}
 
     def test_health_reports_release_without_changing_prelaunch_flags(self):
-        self.assertEqual(self.guest.request('GET', '/health'), (200, {
-            'ok': True, 'version': '0.11', 'sales_phase': 'prelaunch', 'accounts': True, 'cms': True, 'pos': True, 'email': True, 'payments': False}))
+        code, health = self.guest.request('GET', '/health')
+        free = health.pop('disk_free_mb')
+        self.assertGreater(free, 0)
+        self.assertEqual((code, health), (200, {
+            'ok': True, 'version': '0.11', 'sales_phase': 'prelaunch', 'accounts': True, 'cms': True, 'pos': True, 'email': True, 'payments': False, 'db_writable': True}))
 
     def test_additive_schema_does_not_mutate_existing_records(self):
         with api.connect() as c:

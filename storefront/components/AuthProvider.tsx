@@ -27,7 +27,7 @@ export default function AuthProvider({children,scope="customer"}:{children:React
   if(pending.current)return pending.current;
   const before=generation.current;
   const promise=(async()=>{
-   try{const r=await fetch(base+"/session",{cache:"no-store",credentials:"same-origin",signal:AbortSignal.timeout(15000)});const data=await r.json();if(!r.ok||typeof data.csrf_token!=="string")throw new ApiError(data.error||"Nie można odczytać sesji konta.",r.status);if(before===generation.current)apply(data);return current.current;}
+   try{const r=await fetch(base+"/session",{cache:"no-store",credentials:"same-origin",signal:AbortSignal.timeout(15000)});const data=await r.json();if(!r.ok||typeof data.csrf_token!=="string")throw new ApiError((data.error||"Nie można odczytać sesji konta.")+(typeof data.detail==="string"&&data.detail?" — "+data.detail:""),r.status);if(before===generation.current)apply(data);return current.current;}
    catch(e){if(before===generation.current){const base=scope==="staff"?"Nie można połączyć się z panelem. Spróbuj ponownie.":"Nie można połączyć się z kontem. Spróbuj ponownie.";setError(e instanceof ApiError&&e.status>=400?base+" Serwer odpowiedział: "+e.message+" ("+e.status+").":base);}throw e;}
    finally{pending.current=null;setLoading(false);}
   })();pending.current=promise;return promise;
@@ -38,7 +38,7 @@ export default function AuthProvider({children,scope="customer"}:{children:React
   const headers=new Headers(options.headers);headers.set("Content-Type","application/json");if(method!=="GET")headers.set("X-CSRF-Token",csrf.current);
   let r:Response;try{r=await fetch(path,{...options,method,headers,cache:"no-store",credentials:"same-origin",signal:options.signal||AbortSignal.timeout(15000)});}catch{throw new ApiError("Nie otrzymaliśmy odpowiedzi serwera. Spróbuj ponownie.",0);}
   const data=await r.json().catch(()=>null);
-  if(!r.ok){if(r.status===401&&data?.code==="session_required")apply({user:null,csrf_token:""},true);if(data?.code==="csrf_invalid"){await refresh().catch(()=>{});throw new ApiError("Sesja została odświeżona. Spróbuj ponownie.",r.status,data.code);}throw new ApiError(data?.error||"Nie udało się wykonać operacji.",r.status,data?.code);}
+  if(!r.ok){if(r.status===401&&data?.code==="session_required")apply({user:null,csrf_token:""},true);if(data?.code==="csrf_invalid"){await refresh().catch(()=>{});throw new ApiError("Sesja została odświeżona. Spróbuj ponownie.",r.status,data.code);}throw new ApiError((data?.error||"Nie udało się wykonać operacji.")+(typeof data?.detail==="string"&&data.detail?" — "+data.detail:""),r.status,data?.code);}
   if(data&&typeof data.csrf_token==="string"&&"user"in data)apply(data,true);
   if(data===null)throw new ApiError("Niepoprawna odpowiedź serwera.",r.status);return data as T;
  },[apply,refresh]);

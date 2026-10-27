@@ -141,6 +141,29 @@ class AccountTests(unittest.TestCase):
             code, reply = fan.request('POST', '/api/auth/logout', {})
         self.assertEqual((code, reply['user']), (200, None))
 
+    def test_database_refusals_are_explained_on_staff_routes_and_in_health(self):
+        import sqlite3
+        from unittest.mock import patch
+        port = self.server.server_address[1]
+        browser = Client(port)
+        full = sqlite3.OperationalError('database or disk is full')
+        with patch.object(api.auth, 'rotate', side_effect=full):
+            code, reply = browser.request('GET', '/api/staff/auth/session')
+            shop_code, shop_reply = Client(port).request('GET', '/api/auth/session')
+        self.assertEqual(code, 500)
+        self.assertEqual(reply['error'], 'Błąd bazy danych')
+        self.assertIn('disk is full', reply['detail'])
+        # The public shop does not get internals.
+        self.assertEqual(shop_code, 500)
+        self.assertNotIn('detail', shop_reply)
+        code, health = browser.request('GET', '/health')
+        self.assertEqual((code, health['ok'], health['db_writable']), (200, True, True))
+        self.assertGreater(health['disk_free_mb'], 0)
+        with patch('shutil.disk_usage') as usage:
+            usage.return_value.free = 50 * 1048576
+            code, health = browser.request('GET', '/health')
+        self.assertEqual((code, health['ok'], health['error'], health['disk_free_mb']), (503, False, 'storage', 50))
+
     def test_csrf_and_cross_origin_mutations_fail_without_changing_identity(self):
         self.assertEqual(self.customer.register()[0], 201)
         self.assertEqual(self.customer.request('PATCH', '/api/account/profile', {'name': 'Wrong'}, csrf=False)[0], 403)
