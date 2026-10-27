@@ -407,6 +407,16 @@ try {
   await d.getByRole('button', { name: 'Opublikuj teraz' }).click();
   await d.waitForSelector('.home-builder-message.success:has-text("Opublikowano")');
   step('editor: the original heading is restored', true);
+  await d.locator('.home-builder-item-main').nth(0).click();
+  const heroHeight = d.locator('label.home-edit-field', { hasText: 'Wysokość banera' }).locator('input');
+  await heroHeight.fill('');
+  await heroHeight.type('700');
+  const typedHeight = await heroHeight.inputValue();
+  await heroHeight.fill('99999');
+  await heroHeight.blur();
+  step('editor: a number field can be typed freely and is corrected to its range on leaving', typedHeight === '700' && (await heroHeight.inputValue()) === '850');
+  await heroHeight.fill('620');
+  await heroHeight.blur();
   await d.getByRole('button', { name: 'Opublikuj' }).click();
   await d.getByRole('radio', { name: /Zaplanuj/ }).click();
   await d.getByRole('button', { name: 'Zaplanuj publikację' }).click();

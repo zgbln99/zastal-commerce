@@ -8,6 +8,7 @@ import {campaignReady,productImages,type ProductMedia} from "../../lib/product-m
 import {uploadMedia} from "../../lib/media-upload";
 import {buildHeroSlides} from "../../lib/carousel.mjs";
 import {describeDiff,diffHome} from "../../lib/home-diff.mjs";
+import {cleanNumber,normalizeNumbers} from "../../lib/home-normalize.mjs";
 import {CategoryPicker,ProductPicker} from "./home-pickers";
 import "./home-editor.css";
 
@@ -22,6 +23,18 @@ const FRAME={desktop:{width:1440,height:900},mobile:{width:390,height:844}};
 const typing=(target:EventTarget|null)=>target instanceof HTMLElement&&(target.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
 const sectionName=(type:string)=>SECTION_DESCRIPTIONS[type as SectionKind]?.name||type;
 const fieldName=(type:string,key:string)=>(EDIT_FIELDS[type as SectionKind]||[]).find(f=>f.key===key)?.label||key;
+/** Server messages name settings by key; show the label and the allowed range instead. */
+const friendly=(message:string)=>message.replace(/Nieprawidłowa wartość pola: (\w+)/,(whole,key:string)=>{
+ const f=Object.values(EDIT_FIELDS).flat().find(x=>x.key===key);
+ return f?`Pole „${f.label}” ma niedozwoloną wartość${f.min!==undefined&&f.max!==undefined?` (dozwolone ${f.min}–${f.max})`:""}. Popraw je i zapisz ponownie.`:whole;
+});
+/** Whole-number field: typing is free, a value inside the range applies at once, anything else is corrected when you leave the field. */
+function NumberField({value,field,onChange}:{value:number;field:Field;onChange:(value:number)=>void}){
+ const [text,setText]=useState(String(value));
+ useEffect(()=>{setText(String(value))},[value]);
+ const commit=()=>{const clean=cleanNumber(text,field);setText(String(clean));if(clean!==value)onChange(clean)};
+ return <input type="text" inputMode="numeric" value={text} onChange={e=>{const next=e.target.value.replace(/[^\d]/g,"");setText(next);if(next!==""){const n=Number(next);if(n>=(field.min??0)&&n<=(field.max??999999)&&n!==value)onChange(n)}}} onBlur={commit} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commit()}}} aria-describedby={undefined} title={field.min!==undefined?`${field.min}–${field.max}`:undefined}/>;
+}
 
 export default function HomeEditor(){
  const auth=useAuth(),store=useStore();
@@ -146,7 +159,7 @@ export default function HomeEditor(){
   if(!remote)return null;
   setSaving(true);setMessage("");setError("");
   try{
-   const result=await auth.request<HomeResponse>("/api/admin/home",{method:"PATCH",body:JSON.stringify({config:current,revision:remote.revision})});
+   const result=await auth.request<HomeResponse>("/api/admin/home",{method:"PATCH",body:JSON.stringify({config:normalizeNumbers(current,EDIT_FIELDS).config,revision:remote.revision})});
    setRemote(result);setDraft(clone(result.config));setUndo([]);setRedo([]);
    setMessage("Zapisano szkic. Zmiany nie są jeszcze widoczne w sklepie.");
    return result;
@@ -168,7 +181,7 @@ export default function HomeEditor(){
   try{
    let version=remote;
    if(isDirty){
-    version=await auth.request<HomeResponse>("/api/admin/home",{method:"PATCH",body:JSON.stringify({config:draft,revision:remote.revision})});
+    version=await auth.request<HomeResponse>("/api/admin/home",{method:"PATCH",body:JSON.stringify({config:normalizeNumbers(draft,EDIT_FIELDS).config,revision:remote.revision})});
     setRemote(version);setDraft(clone(version.config));
    }
    const out=await auth.request<HomeResponse>("/api/admin/home/publish",{method:"POST",body:JSON.stringify({revision:version.revision})});
@@ -185,7 +198,7 @@ export default function HomeEditor(){
   try{
    let version=remote;
    if(isDirty){
-    version=await auth.request<HomeResponse>("/api/admin/home",{method:"PATCH",body:JSON.stringify({config:draft,revision:remote.revision})});
+    version=await auth.request<HomeResponse>("/api/admin/home",{method:"PATCH",body:JSON.stringify({config:normalizeNumbers(draft,EDIT_FIELDS).config,revision:remote.revision})});
     setRemote(version);setDraft(clone(version.config));
    }
    const out=await auth.request<HomeResponse>("/api/admin/home/schedule",{method:"POST",body:JSON.stringify({revision:version.revision,at:moment.toISOString()})});
@@ -269,7 +282,7 @@ export default function HomeEditor(){
   return <label className="home-edit-field" key={f.key}><span>{f.label}</span>
    {f.type==="short"||f.type==="url"?<input value={String(val??"")} onChange={e=>change(e.target.value)} maxLength={f.type==="url"?390:250} placeholder={f.type==="url"?"/sklep":"Wpisz tekst"} spellCheck/>:null}
    {f.type==="long"?<textarea value={String(val??"")} onChange={e=>change(e.target.value)} maxLength={1300} rows={4}/>:null}
-   {f.type==="number"?<input type="number" value={Number(val??0)} min={f.min} max={f.max} onChange={e=>change(Math.max(f.min??0,Math.min(f.max??999,Number(e.target.value)||0)))}/>:null}
+   {f.type==="number"?<NumberField value={Number(val??f.defaultValue??f.min??0)} field={f} onChange={change}/>:null}
    {f.type==="color"?<div className="home-edit-color"><input type="color" value={String(val)} onChange={e=>change(e.target.value)}/><input value={String(val)} onChange={e=>change(e.target.value)} maxLength={7}/></div>:null}
    {f.type==="select"?<select value={String(val)} onChange={e=>change(typeof val==="number"?Number(e.target.value):e.target.value)}>{f.options?.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}</select>:null}
    {f.type==="toggle"?<button type="button" className={"home-edit-toggle "+(val?"on":"")} aria-pressed={val===true} onClick={()=>change(!val)}><span/>{val?"Włączone":"Wyłączone"}</button>:null}
@@ -308,7 +321,7 @@ export default function HomeEditor(){
    <button className="home-builder-save" onClick={()=>void save()} disabled={!loaded||saving||busy||!isDirty} title="Zapisz szkic (Ctrl+S)"><Save size={17}/><span>Zapisz szkic</span></button>
    <button className="home-builder-publish" onClick={()=>void openPublish()} disabled={!loaded||saving||busy}><Send size={17}/><span>Opublikuj</span></button></div>
   </header>
-  {error&&<div className="home-builder-message error" role="alert"><AlertCircle size={18}/>{error}<button aria-label="Zamknij komunikat" onClick={()=>setError("")}><X size={17}/></button></div>}
+  {error&&<div className="home-builder-message error" role="alert"><AlertCircle size={18}/>{friendly(error)}<button aria-label="Zamknij komunikat" onClick={()=>setError("")}><X size={17}/></button></div>}
   {message&&<div className="home-builder-message success" role="status"><CheckCircle2 size={18}/>{message}<button aria-label="Zamknij komunikat" onClick={()=>setMessage("")}><X size={17}/></button></div>}
   {recovery&&<div className="home-builder-message recover" role="status"><AlertCircle size={18}/><span>Znaleziono niezapisane zmiany z {FORMAT.format(new Date(recovery.at))}.</span><span className="home-builder-recover-actions"><button onClick={restoreLocal}>Przywróć</button><button onClick={discardLocal}>Odrzuć</button></span></div>}
   {remote?.scheduled_at&&<div className="home-builder-message schedule" role="status"><CalendarClock size={18}/><span>Zaplanowana publikacja: <b>{FORMAT.format(new Date(remote.scheduled_at))}</b> · wersja {remote.scheduled_revision}. Późniejsze zmiany szkicu nie wejdą do tej publikacji.</span><button className="home-builder-recover-actions" disabled={busy} onClick={()=>void cancelSchedule()}>Anuluj plan</button></div>}

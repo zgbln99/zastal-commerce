@@ -15,7 +15,7 @@ body.staff-editor .admin-page-heading{display:none}
 .home-builder-toolbar .home-builder-save{background:#fff;border-color:#86b99b;color:#146440}
 .home-builder-toolbar .home-builder-publish{background:#115d3e;border-color:#115d3e;color:white}
 .home-builder-toolbar .home-builder-publish:hover:not(:disabled){background:#0a7b4a}
-.home-builder-message{display:flex;align-items:center;gap:11px;padding:11px 14px;font-size:13px;margin:0 0 10px;border-radius:8px}
+.home-builder-message{position:sticky;top:8px;z-index:20;box-shadow:0 6px 18px #10291a1f;display:flex;align-items:center;gap:11px;padding:11px 14px;font-size:13px;margin:0 0 10px;border-radius:8px}
 .home-builder-message>button{margin-left:auto}
 .home-builder-message.error{background:#fff2ed;color:#994731;border:1px solid #ecd2c7}
 .home-builder-message.success{background:#edf8ee;color:#166743;border:1px solid #c6e1c8}
